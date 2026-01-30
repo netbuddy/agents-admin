@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agents-admin/schemas/canonical_event.v0.json",
+  "title": "CanonicalEvent",
+  "description": "统一事件格式 v0",
+  "type": "object",
+  "required": ["seq", "type", "timestamp", "run_id"],
+  "properties": {
+    "seq": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "事件序列号（单 Run 内递增）"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "run_started",
+        "run_completed",
+        "run_failed",
+        "message",
+        "tool_use_start",
+        "tool_result",
+        "command",
+        "command_output",
+        "file_read",
+        "file_write",
+        "error",
+        "heartbeat"
+      ],
+      "description": "事件类型"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "事件时间戳 (ISO 8601)"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^run-[a-z0-9]{12}$",
+      "description": "Run 唯一标识"
+    },
+    "payload": {
+      "type": "object",
+      "description": "事件负载（根据 type 不同结构不同）"
+    }
+  },
+  "$defs": {
+    "MessagePayload": {
+      "type": "object",
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": ["assistant", "user", "system"]
+        },
+        "content": {
+          "type": "string"
+        }
+      },
+      "required": ["role", "content"]
+    },
+    "ToolUseStartPayload": {
+      "type": "object",
+      "properties": {
+        "tool_id": {
+          "type": "string"
+        },
+        "tool_name": {
+          "type": "string"
+        },
+        "input": {
+          "type": "object"
+        }
+      },
+      "required": ["tool_id", "tool_name"]
+    },
+    "ToolResultPayload": {
+      "type": "object",
+      "properties": {
+        "tool_id": {
+          "type": "string"
+        },
+        "success": {
+          "type": "boolean"
+        },
+        "output": {},
+        "error": {
+          "type": "string"
+        }
+      },
+      "required": ["tool_id", "success"]
+    },
+    "CommandPayload": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "cwd": {
+          "type": "string"
+        }
+      },
+      "required": ["command"]
+    },
+    "CommandOutputPayload": {
+      "type": "object",
+      "properties": {
+        "stdout": {
+          "type": "string"
+        },
+        "stderr": {
+          "type": "string"
+        },
+        "exit_code": {
+          "type": "integer"
+        }
+      }
+    },
+    "FileReadPayload": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "lines": {
+          "type": "integer"
+        }
+      },
+      "required": ["path"]
+    },
+    "FileWritePayload": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "diff": {
+          "type": "string"
+        },
+        "lines_changed": {
+          "type": "integer"
+        }
+      },
+      "required": ["path"]
+    },
+    "RunCompletedPayload": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["success", "failed", "cancelled", "timeout"]
+        },
+        "duration_ms": {
+          "type": "integer"
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "path": { "type": "string" },
+              "size": { "type": "integer" }
+            }
+          }
+        }
+      },
+      "required": ["status"]
+    },
+    "ErrorPayload": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "recoverable": {
+          "type": "boolean"
+        }
+      },
+      "required": ["code", "message"]
+    }
+  }
+}

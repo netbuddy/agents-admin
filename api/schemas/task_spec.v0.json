@@ -1,0 +1,167 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agents-admin/schemas/task_spec.v0.json",
+  "title": "TaskSpec",
+  "description": "AI Agent 任务规格定义 v0",
+  "type": "object",
+  "required": ["id", "name", "repo", "prompt", "agent"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^task-[a-z0-9]{8}$",
+      "description": "任务唯一标识"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "任务名称"
+    },
+    "repo": {
+      "type": "object",
+      "description": "代码仓库配置",
+      "required": ["url"],
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Git 仓库地址"
+        },
+        "branch": {
+          "type": "string",
+          "default": "main",
+          "description": "分支名"
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$",
+          "description": "指定 commit SHA（可选）"
+        }
+      }
+    },
+    "prompt": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100000,
+      "description": "任务提示词"
+    },
+    "agent": {
+      "type": "object",
+      "description": "Agent 配置",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["claude", "gemini", "codex"],
+          "description": "Agent 类型"
+        },
+        "version": {
+          "type": "string",
+          "description": "Agent CLI 版本（可选）"
+        },
+        "config": {
+          "type": "object",
+          "description": "Agent 特定配置",
+          "properties": {
+            "max_turns": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 10
+            },
+            "allowed_tools": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "disallowed_tools": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "sandbox": {
+              "type": "boolean",
+              "default": true
+            }
+          }
+        }
+      }
+    },
+    "security": {
+      "type": "object",
+      "description": "安全策略",
+      "properties": {
+        "policy": {
+          "type": "string",
+          "enum": ["strict", "standard", "trusted"],
+          "default": "standard"
+        },
+        "network": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": false
+            },
+            "allowlist": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 86400,
+          "default": 3600
+        }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "description": "资源限制",
+      "properties": {
+        "memory": {
+          "type": "string",
+          "pattern": "^[0-9]+(Mi|Gi)$",
+          "default": "4Gi"
+        },
+        "cpu": {
+          "type": "string",
+          "pattern": "^[0-9]+(m|)$",
+          "default": "2000m"
+        }
+      }
+    },
+    "labels": {
+      "type": "object",
+      "description": "标签（用于调度）",
+      "additionalProperties": { "type": "string" }
+    },
+    "credentials": {
+      "type": "array",
+      "description": "凭据引用",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "凭据名称（引用 Vault）"
+          },
+          "mount_path": {
+            "type": "string",
+            "description": "挂载路径"
+          },
+          "env_var": {
+            "type": "string",
+            "description": "环境变量名"
+          }
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "description": "用户自定义元数据",
+      "additionalProperties": true
+    }
+  }
+}

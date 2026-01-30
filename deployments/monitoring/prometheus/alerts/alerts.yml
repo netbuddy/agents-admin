@@ -1,0 +1,71 @@
+# 告警规则
+groups:
+  - name: api-server
+    rules:
+      # P0: API Server 不可用
+      - alert: APIServerDown
+        expr: up{job="api-server"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "API Server 不可用"
+          description: "API Server {{ $labels.instance }} 已离线超过 1 分钟"
+
+      # P1: 高错误率
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(api_http_requests_total{status=~"5.."}[5m])) 
+          / sum(rate(api_http_requests_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: high
+        annotations:
+          summary: "API 错误率过高"
+          description: "当前错误率超过 5%"
+
+      # P2: 请求延迟高
+      - alert: HighRequestLatency
+        expr: |
+          histogram_quantile(0.95, 
+            rate(api_http_request_duration_seconds_bucket[5m])
+          ) > 1
+        for: 10m
+        labels:
+          severity: medium
+        annotations:
+          summary: "API 响应延迟过高"
+          description: "P95 延迟超过 1 秒"
+
+  - name: executor
+    rules:
+      # P0: 所有执行器离线
+      - alert: AllExecutorsDown
+        expr: count(up{job="executor"} == 1) == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "所有执行器离线"
+          description: "没有任何执行器在线，任务无法执行"
+
+      # P1: 执行器心跳失败
+      - alert: ExecutorHeartbeatFailed
+        expr: |
+          increase(executor_heartbeat_errors_total[5m]) > 5
+        for: 5m
+        labels:
+          severity: high
+        annotations:
+          summary: "执行器心跳失败"
+          description: "执行器心跳错误次数过多"
+
+      # P2: 任务积压
+      - alert: TaskBacklog
+        expr: executor_tasks_pending > 10
+        for: 15m
+        labels:
+          severity: medium
+        annotations:
+          summary: "任务积压"
+          description: "待执行任务数超过 10"

@@ -1,0 +1,619 @@
+'use client';
+
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { 
+  Activity, Clock, CheckCircle2, XCircle, AlertCircle, 
+  RefreshCw, Search, Filter, ChevronRight, Zap,
+  TrendingUp, Timer, BarChart3
+} from 'lucide-react';
+
+interface WorkflowSummary {
+  id: string;
+  type: string;
+  name: string;
+  state: string;
+  progress: number;
+  event_count: number;
+  start_time: string | null;
+  update_time: string | null;
+  end_time: string | null;
+  duration_ms: number | null;
+  node_id: string;
+  error: string;
+  metadata: Record<string, any>;
+}
+
+interface MonitorStats {
+  total_workflows: number;
+  active_workflows: number;
+  completed_today: number;
+  failed_today: number;
+  avg_duration_ms: number;
+  workflows_by_type: Record<string, number>;
+  workflows_by_state: Record<string, number>;
+}
+
+// 自动推断 API 地址：如果通过外网访问，使用相同主机的 8080 端口
+const getApiBase = () => {
+  if (typeof window === 'undefined') return 'http://localhost:8080';
+  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
+  const host = window.location.hostname;
+  return `http://${host}:8080`;
+};
+
+const getWsBase = () => {
+  if (typeof window === 'undefined') return 'ws://localhost:8080';
+  if (process.env.NEXT_PUBLIC_WS_URL) return process.env.NEXT_PUBLIC_WS_URL;
+  const host = window.location.hostname;
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${host}:8080`;
+};
+
+const stateConfig: Record<string, { color: string; bgColor: string; icon: any; label: string }> = {
+  pending: { color: 'text-gray-500', bgColor: 'bg-gray-100', icon: Clock, label: '等待中' },
+  running: { color: 'text-blue-500', bgColor: 'bg-blue-100', icon: Activity, label: '运行中' },
+  waiting: { color: 'text-yellow-500', bgColor: 'bg-yellow-100', icon: AlertCircle, label: '等待用户' },
+  completed: { color: 'text-green-500', bgColor: 'bg-green-100', icon: CheckCircle2, label: '已完成' },
+  failed: { color: 'text-red-500', bgColor: 'bg-red-100', icon: XCircle, label: '失败' },
+  unknown: { color: 'text-gray-400', bgColor: 'bg-gray-50', icon: AlertCircle, label: '未知' },
+};
+
+const typeLabels: Record<string, string> = {
+  auth: 'OAuth 认证',
+  run: '任务执行',
+};
+
+function formatDuration(ms: number | null): string {
+  if (!ms) return '-';
+  if (ms < 1000) return `${ms}ms`;
+  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+  return `${(ms / 60000).toFixed(1)}m`;
+}
+
+function formatTime(time: string | null): string {
+  if (!time) return '-';
+  const date = new Date(time);
+  return date.toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
+
+function StatCard({ title, value, icon: Icon, trend, color }: { 
+  title: string; 
+  value: string | number; 
+  icon: any; 
+  trend?: string;
+  color: string;
+}) {
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm text-gray-500 font-medium">{title}</p>
+          <p className="text-2xl font-bold mt-1">{value}</p>
+          {trend && <p className="text-xs text-gray-400 mt-1">{trend}</p>}
+        </div>
+        <div className={`p-3 rounded-xl ${color}`}>
+          <Icon className="w-6 h-6 text-white" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WorkflowCard({ workflow, onClick }: { workflow: WorkflowSummary; onClick: () => void }) {
+  const config = stateConfig[workflow.state] || stateConfig.unknown;
+  const StateIcon = config.icon;
+
+  return (
+    <div 
+      className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md hover:border-blue-200 transition-all cursor-pointer"
+      onClick={onClick}
+    >
+      <div className="flex items-start justify-between">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${config.bgColor} ${config.color}`}>
+              {typeLabels[workflow.type] || workflow.type}
+            </span>
+            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${config.bgColor} ${config.color}`}>
+              <StateIcon className="w-3 h-3 inline mr-1" />
+              {config.label}
+            </span>
+          </div>
+          <h3 className="font-semibold text-gray-900 mt-2 truncate">{workflow.name}</h3>
+          <p className="text-xs text-gray-500 mt-1 font-mono">{workflow.id}</p>
+        </div>
+        <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
+      </div>
+
+      {/* Progress Bar */}
+      <div className="mt-4">
+        <div className="flex justify-between text-xs text-gray-500 mb-1">
+          <span>进度</span>
+          <span>{workflow.progress}%</span>
+        </div>
+        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+          <div 
+            className={`h-full rounded-full transition-all ${
+              workflow.state === 'failed' ? 'bg-red-500' :
+              workflow.state === 'completed' ? 'bg-green-500' :
+              workflow.state === 'waiting' ? 'bg-yellow-500' :
+              'bg-blue-500'
+            }`}
+            style={{ width: `${workflow.progress}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Meta Info */}
+      <div className="flex items-center gap-4 mt-4 text-xs text-gray-500">
+        <div className="flex items-center gap-1">
+          <Zap className="w-3 h-3" />
+          <span>{workflow.event_count} 事件</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <Timer className="w-3 h-3" />
+          <span>{formatDuration(workflow.duration_ms)}</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <Clock className="w-3 h-3" />
+          <span>{formatTime(workflow.update_time)}</span>
+        </div>
+      </div>
+
+      {workflow.error && (
+        <div className="mt-3 p-2 bg-red-50 rounded-lg text-xs text-red-600 truncate">
+          {workflow.error}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function MonitorPage() {
+  const [workflows, setWorkflows] = useState<WorkflowSummary[]>([]);
+  const [stats, setStats] = useState<MonitorStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [selectedWorkflow, setSelectedWorkflow] = useState<string | null>(null);
+  const [filterType, setFilterType] = useState<string>('');
+  const [filterState, setFilterState] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [wsConnected, setWsConnected] = useState(false);
+  const wsRef = useRef<WebSocket | null>(null);
+
+  const fetchData = useCallback(async () => {
+    try {
+      const params = new URLSearchParams();
+      if (filterType) params.append('type', filterType);
+      if (filterState) params.append('state', filterState);
+
+      const [workflowsRes, statsRes] = await Promise.all([
+        fetch(`${getApiBase()}/api/v1/monitor/workflows?${params}`),
+        fetch(`${getApiBase()}/api/v1/monitor/stats`),
+      ]);
+
+      if (workflowsRes.ok) {
+        const data = await workflowsRes.json();
+        setWorkflows(data.workflows || []);
+      }
+
+      if (statsRes.ok) {
+        const data = await statsRes.json();
+        setStats(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch monitor data:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [filterType, filterState]);
+
+  // WebSocket 连接
+  useEffect(() => {
+    if (!autoRefresh) {
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+        setWsConnected(false);
+      }
+      return;
+    }
+
+    const connectWebSocket = () => {
+      const ws = new WebSocket(`${getWsBase()}/ws/monitor`);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        console.log('[Monitor WS] Connected');
+        setWsConnected(true);
+        setLoading(false);
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'workflows') {
+            setWorkflows(msg.data || []);
+          } else if (msg.type === 'stats') {
+            setStats(msg.data);
+          }
+        } catch (e) {
+          console.error('[Monitor WS] Parse error:', e);
+        }
+      };
+
+      ws.onclose = () => {
+        console.log('[Monitor WS] Disconnected');
+        setWsConnected(false);
+        // 自动重连
+        if (autoRefresh) {
+          setTimeout(connectWebSocket, 3000);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('[Monitor WS] Error:', error);
+      };
+    };
+
+    connectWebSocket();
+
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+    };
+  }, [autoRefresh]);
+
+  // 初始加载（作为 WebSocket 的后备）
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const filteredWorkflows = workflows.filter(w => {
+    if (!searchTerm) return true;
+    return w.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           w.id.toLowerCase().includes(searchTerm.toLowerCase());
+  });
+
+  if (selectedWorkflow) {
+    const workflow = workflows.find(w => w.id === selectedWorkflow);
+    if (workflow) {
+      return (
+        <WorkflowDetail 
+          workflow={workflow} 
+          onBack={() => setSelectedWorkflow(null)} 
+        />
+      );
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl">
+                <BarChart3 className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-gray-900">工作流监控中心</h1>
+                <p className="text-xs text-gray-500">实时监控认证与任务执行流程</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              {/* WebSocket 状态指示 */}
+              <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs ${
+                wsConnected ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+              }`}>
+                <span className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
+                {wsConnected ? '实时' : '离线'}
+              </div>
+              <button
+                onClick={() => setAutoRefresh(!autoRefresh)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  autoRefresh 
+                    ? 'bg-green-100 text-green-700' 
+                    : 'bg-gray-100 text-gray-600'
+                }`}
+              >
+                <RefreshCw className={`w-4 h-4 ${autoRefresh && wsConnected ? 'animate-spin' : ''}`} />
+                {autoRefresh ? '自动刷新' : '已暂停'}
+              </button>
+              <button
+                onClick={fetchData}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <RefreshCw className="w-5 h-5 text-gray-600" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Stats Grid */}
+        {stats && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <StatCard 
+              title="总工作流" 
+              value={stats.total_workflows} 
+              icon={BarChart3}
+              color="bg-gradient-to-br from-blue-500 to-blue-600"
+            />
+            <StatCard 
+              title="活跃中" 
+              value={stats.active_workflows} 
+              icon={Activity}
+              trend="实时运行"
+              color="bg-gradient-to-br from-green-500 to-green-600"
+            />
+            <StatCard 
+              title="今日完成" 
+              value={stats.completed_today} 
+              icon={CheckCircle2}
+              color="bg-gradient-to-br from-emerald-500 to-emerald-600"
+            />
+            <StatCard 
+              title="今日失败" 
+              value={stats.failed_today} 
+              icon={XCircle}
+              color="bg-gradient-to-br from-red-500 to-red-600"
+            />
+          </div>
+        )}
+
+        {/* Filters */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex-1 min-w-[200px]">
+              <div className="relative">
+                <Search className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="搜索工作流..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Filter className="w-4 h-4 text-gray-500" />
+              <select
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+                className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              >
+                <option value="">所有类型</option>
+                <option value="auth">OAuth 认证</option>
+                <option value="run">任务执行</option>
+              </select>
+              <select
+                value={filterState}
+                onChange={(e) => setFilterState(e.target.value)}
+                className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              >
+                <option value="">所有状态</option>
+                <option value="pending">等待中</option>
+                <option value="running">运行中</option>
+                <option value="waiting">等待用户</option>
+                <option value="completed">已完成</option>
+                <option value="failed">失败</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Workflow List */}
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <RefreshCw className="w-8 h-8 text-blue-500 animate-spin" />
+          </div>
+        ) : filteredWorkflows.length === 0 ? (
+          <div className="text-center py-20">
+            <Activity className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+            <p className="text-gray-500">暂无工作流数据</p>
+            <p className="text-sm text-gray-400 mt-1">发起认证或任务后，数据将在此显示</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredWorkflows.map(workflow => (
+              <WorkflowCard 
+                key={workflow.id} 
+                workflow={workflow} 
+                onClick={() => setSelectedWorkflow(workflow.id)}
+              />
+            ))}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+
+// Workflow Detail Component
+function WorkflowDetail({ workflow, onBack }: { workflow: WorkflowSummary; onBack: () => void }) {
+  const [events, setEvents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchEvents() {
+      try {
+        const res = await fetch(
+          `${getApiBase()}/api/v1/monitor/workflows/${workflow.type}/${workflow.id}/events`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setEvents(data.events || []);
+        }
+      } catch (error) {
+        console.error('Failed to fetch events:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchEvents();
+  }, [workflow.id, workflow.type]);
+
+  const config = stateConfig[workflow.state] || stateConfig.unknown;
+  const StateIcon = config.icon;
+
+  const levelConfig: Record<string, { color: string; bgColor: string }> = {
+    info: { color: 'text-blue-600', bgColor: 'bg-blue-100' },
+    success: { color: 'text-green-600', bgColor: 'bg-green-100' },
+    warning: { color: 'text-yellow-600', bgColor: 'bg-yellow-100' },
+    error: { color: 'text-red-600', bgColor: 'bg-red-100' },
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center h-16">
+            <button
+              onClick={onBack}
+              className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mr-4"
+            >
+              <ChevronRight className="w-5 h-5 rotate-180" />
+              <span>返回</span>
+            </button>
+            <div className="flex-1">
+              <h1 className="text-lg font-bold text-gray-900">{workflow.name}</h1>
+              <p className="text-xs text-gray-500 font-mono">{workflow.id}</p>
+            </div>
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full ${config.bgColor} ${config.color}`}>
+              <StateIcon className="w-4 h-4" />
+              <span className="text-sm font-medium">{config.label}</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Info Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+            <p className="text-sm text-gray-500">开始时间</p>
+            <p className="text-lg font-semibold mt-1">{formatTime(workflow.start_time)}</p>
+          </div>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+            <p className="text-sm text-gray-500">持续时间</p>
+            <p className="text-lg font-semibold mt-1">{formatDuration(workflow.duration_ms)}</p>
+          </div>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+            <p className="text-sm text-gray-500">执行节点</p>
+            <p className="text-lg font-semibold mt-1 font-mono">{workflow.node_id || '-'}</p>
+          </div>
+        </div>
+
+        {/* Progress */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
+          <div className="flex justify-between text-sm mb-2">
+            <span className="font-medium">执行进度</span>
+            <span className="text-gray-500">{workflow.progress}%</span>
+          </div>
+          <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+            <div 
+              className={`h-full rounded-full transition-all ${
+                workflow.state === 'failed' ? 'bg-red-500' :
+                workflow.state === 'completed' ? 'bg-green-500' :
+                workflow.state === 'waiting' ? 'bg-yellow-500' :
+                'bg-blue-500'
+              }`}
+              style={{ width: `${workflow.progress}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Metadata */}
+        {workflow.metadata && Object.keys(workflow.metadata).length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
+            <h3 className="font-semibold text-gray-900 mb-3">元数据</h3>
+            <div className="grid grid-cols-2 gap-3">
+              {Object.entries(workflow.metadata).map(([key, value]) => (
+                <div key={key} className="bg-gray-50 rounded-lg p-3">
+                  <p className="text-xs text-gray-500">{key}</p>
+                  <p className="text-sm font-mono mt-1 truncate" title={String(value)}>
+                    {String(value)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Error */}
+        {workflow.error && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
+            <h3 className="font-semibold text-red-800 mb-2">错误信息</h3>
+            <p className="text-sm text-red-600 font-mono">{workflow.error}</p>
+          </div>
+        )}
+
+        {/* Event Timeline */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+          <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Zap className="w-5 h-5 text-blue-500" />
+            事件时间线
+            <span className="text-sm font-normal text-gray-500">({events.length} 个事件)</span>
+          </h3>
+
+          {loading ? (
+            <div className="flex items-center justify-center py-10">
+              <RefreshCw className="w-6 h-6 text-blue-500 animate-spin" />
+            </div>
+          ) : events.length === 0 ? (
+            <div className="text-center py-10 text-gray-500">
+              暂无事件记录
+            </div>
+          ) : (
+            <div className="relative">
+              <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-200" />
+              <div className="space-y-4">
+                {events.map((event, index) => {
+                  const lc = levelConfig[event.level] || levelConfig.info;
+                  return (
+                    <div key={event.id || index} className="relative pl-10">
+                      <div className={`absolute left-2 w-5 h-5 rounded-full ${lc.bgColor} flex items-center justify-center`}>
+                        <div className={`w-2 h-2 rounded-full ${lc.color.replace('text-', 'bg-')}`} />
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className={`text-sm font-medium ${lc.color}`}>{event.type}</span>
+                          <span className="text-xs text-gray-400">
+                            {formatTime(event.timestamp)}
+                          </span>
+                        </div>
+                        {event.data && Object.keys(event.data).length > 0 && (
+                          <pre className="text-xs text-gray-600 bg-white rounded p-2 overflow-x-auto">
+                            {JSON.stringify(event.data, null, 2)}
+                          </pre>
+                        )}
+                        {event.producer_id && (
+                          <p className="text-xs text-gray-400 mt-2">
+                            节点: {event.producer_id}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </main>
+    </div>
+  );
+}

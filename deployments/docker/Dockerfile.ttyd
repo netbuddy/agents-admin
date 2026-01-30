@@ -1,0 +1,12 @@
+# ttyd 服务镜像 - 用于 Web 终端
+# 基于官方 ttyd 镜像，添加 docker CLI
+FROM tsl0922/ttyd:latest
+
+# 安装 docker CLI
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends docker.io && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# 默认命令
+CMD ["tail", "-f", "/dev/null"]

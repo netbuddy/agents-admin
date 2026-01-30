@@ -1,0 +1,122 @@
+version: "3.9"
+
+services:
+  # PostgreSQL 数据库
+  postgres:
+    image: postgres:16-alpine
+    container_name: agents-postgres
+    environment:
+      POSTGRES_USER: agents
+      POSTGRES_PASSWORD: agents_dev_password
+      POSTGRES_DB: agents_admin
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agents -d agents_admin"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Redis (事件流 + 缓存)
+  redis:
+    image: redis:7-alpine
+    container_name: agents-redis
+    command: redis-server --appendonly yes
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # MinIO (对象存储)
+  minio:
+    image: minio/minio:latest
+    container_name: agents-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # API Server (Control Plane)
+  api-server:
+    build:
+      context: ..
+      dockerfile: deployments/Dockerfile.api
+    container_name: agents-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://agents:agents_dev_password@postgres:5432/agents_admin?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin123
+      LOG_LEVEL: debug
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../:/app:ro
+    profiles:
+      - full
+
+  # Node Agent (本地开发模式)
+  node-agent:
+    build:
+      context: ..
+      dockerfile: deployments/Dockerfile.agent
+    container_name: agents-node
+    depends_on:
+      - api-server
+    environment:
+      API_SERVER_URL: http://api-server:8080
+      NODE_ID: dev-node-01
+      WORKSPACE_DIR: /workspaces
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - workspaces:/workspaces
+    profiles:
+      - full
+
+  # Qwen-Code Runner 模板容器（用于动态创建账户容器）
+  qwencode-runner:
+    build:
+      context: ..
+      dockerfile: deployments/Dockerfile.runner-qwencode
+    image: runners/qwencode:latest
+    container_name: qwencode-template
+    profiles:
+      - build-only
+    volumes:
+      - qwencode_auth:/home/node/.qwen
+      - workspaces:/workspace
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  workspaces:
+  qwencode_auth:
+
+networks:
+  default:
+    name: agents-network

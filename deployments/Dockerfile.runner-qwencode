@@ -1,0 +1,48 @@
+# Qwen-Code CLI Runner Dockerfile
+# 
+# Qwen-Code 是基于 Gemini CLI 的开源 AI Agent
+# 支持 Qwen OAuth 免费认证（2000 请求/天）
+#
+# 官方文档: https://github.com/QwenLM/qwen-code
+#
+# 认证方式:
+#   1. Qwen OAuth（推荐）: 免费 2000 请求/天，需设备码登录
+#   2. OpenAI 兼容 API: 设置 OPENAI_API_KEY 环境变量
+#
+# 数据持久化:
+#   挂载 /home/node/.qwen 目录以保存认证缓存
+
+FROM node:22-slim
+
+# 设置环境变量
+ENV DEBIAN_FRONTEND=noninteractive \
+    QWEN_UNSAFE_ALLOW_NO_SANDBOX=1
+
+# 安装 Qwen-Code CLI
+RUN npm install -g @qwen-code/qwen-code@latest
+
+# 使用 node:22-slim 镜像自带的 node 用户（UID 1000）
+# 创建必要目录
+RUN mkdir -p /home/node/.qwen && \
+    mkdir -p /workspace && \
+    chown -R node:node /home/node/.qwen /workspace
+
+# 切换到非 root 用户
+USER node
+
+# 更新 HOME 环境变量
+ENV HOME=/home/node
+
+# 工作目录
+WORKDIR /workspace
+
+# OAuth 回调端口（用于 Web 登录流程）
+EXPOSE 1455
+
+# 健康检查：检查认证文件是否存在
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD test -f /home/node/.qwen/auth.json || exit 1
+
+# 默认入口点：保持容器运行
+# 实际任务执行通过 docker exec 调用
+ENTRYPOINT ["/bin/bash"]

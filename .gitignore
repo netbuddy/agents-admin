@@ -1,0 +1,57 @@
+# Binaries
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Output of go coverage
+*.out
+coverage.html
+
+# Dependency directories
+vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+*.local
+
+# Logs
+*.log
+logs/
+
+# Build
+dist/
+
+# Temporary files
+tmp/
+temp/
+
+# Node modules (for web UI)
+node_modules/
+
+# Next.js build output
+.next/
+out/
+
+# Go workspace
+go.work
+go.work.sum
+
+docs

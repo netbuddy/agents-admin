@@ -1,0 +1,21 @@
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  async rewrites() {
+    return [
+      {
+        source: '/api/:path*',
+        destination: 'http://localhost:8080/api/:path*',
+      },
+      {
+        source: '/ws/:path*',
+        destination: 'http://localhost:8080/ws/:path*',
+      },
+      {
+        source: '/ttyd/:path*',
+        destination: 'http://localhost:8080/ttyd/:path*',
+      },
+    ]
+  },
+}
+
+module.exports = nextConfig
