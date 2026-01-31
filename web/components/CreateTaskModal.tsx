@@ -14,10 +14,10 @@ interface Instance {
   id: string
   name: string
   account_id: string
-  agent_type: string
-  container: string
+  agent_type_id: string
+  container_name?: string | null
   status: string
-  node: string
+  node_id?: string | null
 }
 
 interface Props {
@@ -72,13 +72,13 @@ export default function CreateTaskModal({ onClose, onCreated }: Props) {
 
   // 根据选择的 Agent 类型过滤运行中的实例
   const filteredInstances = instances.filter(
-    inst => inst.agent_type === agentType && inst.status === 'running'
+    inst => inst.agent_type_id === agentType && inst.status === 'running'
   )
 
   // 当 Agent 类型改变时，重置实例选择
   useEffect(() => {
     const available = instances.filter(
-      inst => inst.agent_type === agentType && inst.status === 'running'
+      inst => inst.agent_type_id === agentType && inst.status === 'running'
     )
     if (available.length > 0) {
       setInstanceId(available[0].id)
@@ -250,7 +250,7 @@ export default function CreateTaskModal({ onClose, onCreated }: Props) {
                           <span>账号: {getAccountName(inst.account_id)}</span>
                           <span className="flex items-center gap-1">
                             <Server className="w-3 h-3" />
-                            {inst.node}
+                            {inst.node_id || '-'}
                           </span>
                         </p>
                       </div>

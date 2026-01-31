@@ -83,36 +83,51 @@ type AuthTask struct {
 type InstanceStatus string
 
 const (
+	InstanceStatusPending  InstanceStatus = "pending"  // 待创建（等待 Executor 处理）
 	InstanceStatusCreating InstanceStatus = "creating" // 创建中
 	InstanceStatusRunning  InstanceStatus = "running"  // 运行中
+	InstanceStatusStopping InstanceStatus = "stopping" // 停止中（等待 Executor 处理）
 	InstanceStatusStopped  InstanceStatus = "stopped"  // 已停止
 	InstanceStatusError    InstanceStatus = "error"    // 错误
 )
 
 // Instance 表示运行中的 Agent 实例
+// P2-2 重构：状态持久化到 PostgreSQL
 type Instance struct {
-	ID          string            `json:"id"`
-	Name        string            `json:"name"`       // 显示名称
-	AccountID   string            `json:"account_id"` // 使用的账号 ID
-	AgentTypeID string            `json:"agent_type"` // Agent 类型
-	Container   string            `json:"container"`  // Docker 容器名
-	Status      InstanceStatus    `json:"status"`     // 实例状态
-	Node        string            `json:"node"`       // 所在节点
-	CreatedAt   time.Time         `json:"created_at"` // 创建时间
-	Metadata    map[string]string `json:"metadata,omitempty"`
+	ID            string         `json:"id" db:"id"`
+	Name          string         `json:"name" db:"name"`                         // 显示名称
+	AccountID     string         `json:"account_id" db:"account_id"`             // 使用的账号 ID
+	AgentTypeID   string         `json:"agent_type_id" db:"agent_type_id"`       // Agent 类型 ID
+	ContainerName *string        `json:"container_name" db:"container_name"`     // Docker 容器名（Executor 回填）
+	NodeID        *string        `json:"node_id" db:"node_id"`                   // 所在节点 ID
+	Status        InstanceStatus `json:"status" db:"status"`                     // 实例状态
+	CreatedAt     time.Time      `json:"created_at" db:"created_at"`             // 创建时间
+	UpdatedAt     time.Time      `json:"updated_at" db:"updated_at"`             // 更新时间
 }
 
+// TerminalSessionStatus 终端会话状态
+type TerminalSessionStatus string
+
+const (
+	TerminalStatusPending  TerminalSessionStatus = "pending"  // 待创建（等待 Executor 处理）
+	TerminalStatusStarting TerminalSessionStatus = "starting" // 启动中
+	TerminalStatusRunning  TerminalSessionStatus = "running"  // 运行中
+	TerminalStatusClosed   TerminalSessionStatus = "closed"   // 已关闭
+	TerminalStatusError    TerminalSessionStatus = "error"    // 错误
+)
+
 // TerminalSession 终端会话
+// P2-2 重构：状态持久化到 PostgreSQL
 type TerminalSession struct {
-	ID         string    `json:"id"`
-	InstanceID string    `json:"instance_id"` // 目标实例
-	Container  string    `json:"container"`   // 目标容器
-	Node       string    `json:"node"`        // 节点
-	Port       int       `json:"port"`        // ttyd 端口
-	URL        string    `json:"url"`         // 终端访问 URL
-	Status     string    `json:"status"`      // running, closed
-	CreatedAt  time.Time `json:"created_at"`
-	ExpiresAt  time.Time `json:"expires_at"`
+	ID            string                `json:"id" db:"id"`
+	InstanceID    *string               `json:"instance_id" db:"instance_id"`       // 目标实例 ID（可选）
+	ContainerName string                `json:"container_name" db:"container_name"` // 目标容器名
+	NodeID        *string               `json:"node_id" db:"node_id"`               // 节点 ID
+	Port          *int                  `json:"port" db:"port"`                     // ttyd 端口（Executor 回填）
+	URL           *string               `json:"url" db:"url"`                       // 终端访问 URL（Executor 回填）
+	Status        TerminalSessionStatus `json:"status" db:"status"`                 // 会话状态
+	CreatedAt     time.Time             `json:"created_at" db:"created_at"`
+	ExpiresAt     *time.Time            `json:"expires_at" db:"expires_at"` // 过期时间（可选）
 }
 
 // AuthSession 认证会话（兼容旧 API，实际映射到 AuthTask）

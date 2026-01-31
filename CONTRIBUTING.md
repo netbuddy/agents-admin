@@ -23,8 +23,8 @@ make dev-up
 # 运行 API Server（开发模式）
 make run-api
 
-# 运行 Node Agent（开发模式）
-make run-agent
+# 运行 Executor（开发模式）
+make run-executor
 
 # 运行测试
 make test
@@ -111,16 +111,22 @@ agents-admin/
 │   └── schemas/          # JSON Schema 定义
 ├── cmd/
 │   ├── api-server/       # API Server 入口
-│   └── node-agent/       # Node Agent 入口
+│   ├── executor/         # Executor（节点执行器）入口
+│   └── mock-runner/      # Mock Runner（测试用）
 ├── deployments/          # Docker、K8s 配置
 ├── docs/                 # 文档
 ├── internal/             # 内部包（不导出）
-│   ├── api/              # HTTP handlers
-│   ├── scheduler/        # 调度器
-│   └── storage/          # 存储层
+│   ├── api/              # HTTP handlers、调度器、WebSocket
+│   ├── executor/         # 执行器核心逻辑
+│   ├── model/            # 数据模型
+│   └── storage/          # 存储层（PostgreSQL、Redis、etcd）
 ├── pkg/                  # 公共包（可导出）
-│   └── driver/           # Driver 接口与实现
-└── web/                  # 前端代码
+│   ├── auth/             # 认证相关
+│   ├── docker/           # Docker 客户端
+│   ├── driver/           # Driver 接口与实现（Claude、Gemini、QwenCode）
+│   └── logging/          # 日志工具
+├── tests/                # 集成测试和 E2E 测试
+└── web/                  # 前端代码 (Next.js 14)
 ```
 
 ## 联系方式

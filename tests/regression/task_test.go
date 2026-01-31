@@ -1,0 +1,294 @@
+package regression
+
+import (
+	"context"
+	"net/http"
+	"testing"
+)
+
+// ============================================================================
+// Task 生命周期回归测试
+// ============================================================================
+
+// TestTask_Create 测试创建任务
+func TestTask_Create(t *testing.T) {
+	skipIfNoDatabase(t)
+	ctx := context.Background()
+
+	tests := []struct {
+		name       string
+		body       string
+		wantStatus int
+	}{
+		{
+			name:       "基本创建",
+			body:       `{"name":"Test Task","spec":{"prompt":"test","agent":{"type":"gemini"}}}`,
+			wantStatus: http.StatusCreated,
+		},
+		{
+			name:       "带完整 spec",
+			body:       `{"name":"Full Spec Task","spec":{"prompt":"test prompt","agent":{"type":"qwencode","model":"qwen-coder"}}}`,
+			wantStatus: http.StatusCreated,
+		},
+		{
+			name:       "仅名称",
+			body:       `{"name":"Simple Task"}`,
+			wantStatus: http.StatusCreated,
+		},
+		{
+			name:       "空请求（缺少 name）",
+			body:       `{}`,
+			wantStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := makeRequestWithString("POST", "/api/v1/tasks", tt.body)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("Create task status = %d, want %d, body: %s", w.Code, tt.wantStatus, w.Body.String())
+				return
+			}
+
+			if w.Code == http.StatusCreated {
+				resp := parseJSONResponse(w)
+				if resp["id"] == nil {
+					t.Error("Task ID not returned")
+				}
+				if resp["status"] != "pending" {
+					t.Errorf("Initial status = %v, want pending", resp["status"])
+				}
+				// 清理
+				if id, ok := resp["id"].(string); ok {
+					testStore.DeleteTask(ctx, id)
+				}
+			}
+		})
+	}
+}
+
+// TestTask_Get 测试获取任务详情
+func TestTask_Get(t *testing.T) {
+	skipIfNoDatabase(t)
+	ctx := context.Background()
+
+	// 创建测试任务
+	w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Get Test Task","spec":{"prompt":"test","agent":{"type":"gemini"}}}`)
+	if w.Code != http.StatusCreated {
+		t.Fatal("Failed to create test task")
+	}
+	resp := parseJSONResponse(w)
+	taskID := resp["id"].(string)
+	defer testStore.DeleteTask(ctx, taskID)
+
+	t.Run("获取存在的任务", func(t *testing.T) {
+		w := makeRequest("GET", "/api/v1/tasks/"+taskID, nil)
+		if w.Code != http.StatusOK {
+			t.Errorf("Get task status = %d, want %d", w.Code, http.StatusOK)
+		}
+
+		resp := parseJSONResponse(w)
+		if resp["id"] != taskID {
+			t.Errorf("Task ID = %v, want %v", resp["id"], taskID)
+		}
+		if resp["name"] != "Get Test Task" {
+			t.Errorf("Task name = %v, want Get Test Task", resp["name"])
+		}
+	})
+
+	t.Run("获取不存在的任务", func(t *testing.T) {
+		w := makeRequest("GET", "/api/v1/tasks/nonexistent-id", nil)
+		if w.Code != http.StatusNotFound {
+			t.Errorf("Get nonexistent task status = %d, want %d", w.Code, http.StatusNotFound)
+		}
+	})
+}
+
+// TestTask_List 测试列表查询
+func TestTask_List(t *testing.T) {
+	skipIfNoDatabase(t)
+	ctx := context.Background()
+
+	// 创建多个测试任务
+	var taskIDs []string
+	for i := 0; i < 5; i++ {
+		w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"List Test Task","spec":{"prompt":"test","agent":{"type":"gemini"}}}`)
+		if w.Code == http.StatusCreated {
+			resp := parseJSONResponse(w)
+			taskIDs = append(taskIDs, resp["id"].(string))
+		}
+	}
+	defer func() {
+		for _, id := range taskIDs {
+			testStore.DeleteTask(ctx, id)
+		}
+	}()
+
+	t.Run("基本列表", func(t *testing.T) {
+		w := makeRequest("GET", "/api/v1/tasks", nil)
+		if w.Code != http.StatusOK {
+			t.Fatalf("List tasks status = %d, want %d", w.Code, http.StatusOK)
+		}
+
+		resp := parseJSONResponse(w)
+		if resp["tasks"] == nil {
+			t.Error("Tasks list not returned")
+		}
+	})
+
+	t.Run("分页查询", func(t *testing.T) {
+		w := makeRequest("GET", "/api/v1/tasks?limit=3&offset=0", nil)
+		if w.Code != http.StatusOK {
+			t.Fatalf("Paginated list status = %d", w.Code)
+		}
+
+		resp := parseJSONResponse(w)
+		tasks := resp["tasks"].([]interface{})
+		if len(tasks) > 3 {
+			t.Errorf("Expected max 3 tasks, got %d", len(tasks))
+		}
+	})
+
+	t.Run("状态过滤", func(t *testing.T) {
+		w := makeRequest("GET", "/api/v1/tasks?status=pending", nil)
+		if w.Code != http.StatusOK {
+			t.Fatalf("Filtered list status = %d", w.Code)
+		}
+
+		resp := parseJSONResponse(w)
+		tasks := resp["tasks"].([]interface{})
+		for _, task := range tasks {
+			taskMap := task.(map[string]interface{})
+			if taskMap["status"] != "pending" {
+				t.Errorf("Task status = %v, want pending", taskMap["status"])
+			}
+		}
+	})
+
+	t.Run("无效状态过滤", func(t *testing.T) {
+		w := makeRequest("GET", "/api/v1/tasks?status=invalid_status", nil)
+		// 应该返回空列表或全部任务，不应报错
+		if w.Code != http.StatusOK {
+			t.Errorf("Invalid status filter should not fail, got %d", w.Code)
+		}
+	})
+}
+
+// TestTask_Delete 测试删除任务
+func TestTask_Delete(t *testing.T) {
+	skipIfNoDatabase(t)
+	ctx := context.Background()
+
+	t.Run("删除存在的任务", func(t *testing.T) {
+		// 创建任务
+		w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Delete Test Task","spec":{"prompt":"test","agent":{"type":"gemini"}}}`)
+		resp := parseJSONResponse(w)
+		taskID := resp["id"].(string)
+
+		// 删除任务
+		w = makeRequest("DELETE", "/api/v1/tasks/"+taskID, nil)
+		if w.Code != http.StatusNoContent {
+			t.Errorf("Delete task status = %d, want %d", w.Code, http.StatusNoContent)
+		}
+
+		// 验证已删除
+		w = makeRequest("GET", "/api/v1/tasks/"+taskID, nil)
+		if w.Code != http.StatusNotFound {
+			t.Error("Task should be deleted")
+		}
+	})
+
+	t.Run("删除不存在的任务", func(t *testing.T) {
+		w := makeRequest("DELETE", "/api/v1/tasks/nonexistent-id", nil)
+		// 删除不存在的资源通常返回 204 或 404
+		if w.Code != http.StatusNoContent && w.Code != http.StatusNotFound {
+			t.Errorf("Delete nonexistent task status = %d", w.Code)
+		}
+	})
+
+	t.Run("删除带 Run 的任务（级联删除）", func(t *testing.T) {
+		// 创建任务
+		w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Cascade Delete Test","spec":{"prompt":"test","agent":{"type":"gemini"}}}`)
+		resp := parseJSONResponse(w)
+		taskID := resp["id"].(string)
+
+		// 创建 Run
+		w = makeRequest("POST", "/api/v1/tasks/"+taskID+"/runs", nil)
+		if w.Code != http.StatusCreated {
+			t.Fatal("Failed to create run")
+		}
+		runResp := parseJSONResponse(w)
+		runID := runResp["id"].(string)
+
+		// 删除任务
+		w = makeRequest("DELETE", "/api/v1/tasks/"+taskID, nil)
+		if w.Code != http.StatusNoContent {
+			testStore.DeleteTask(ctx, taskID)
+			t.Fatalf("Delete task with run failed: %d", w.Code)
+		}
+
+		// 验证 Run 也被删除
+		w = makeRequest("GET", "/api/v1/runs/"+runID, nil)
+		if w.Code != http.StatusNotFound {
+			t.Error("Run should be cascade deleted")
+		}
+	})
+}
+
+// TestTask_EdgeCases 测试边界情况
+func TestTask_EdgeCases(t *testing.T) {
+	skipIfNoDatabase(t)
+	ctx := context.Background()
+
+	t.Run("创建超长名称任务", func(t *testing.T) {
+		longName := make([]byte, 500)
+		for i := range longName {
+			longName[i] = 'a'
+		}
+		body := `{"name":"` + string(longName) + `","spec":{"prompt":"test","agent":{"type":"gemini"}}}`
+		w := makeRequestWithString("POST", "/api/v1/tasks", body)
+		// 应该成功或返回 400
+		if w.Code == http.StatusCreated {
+			resp := parseJSONResponse(w)
+			testStore.DeleteTask(ctx, resp["id"].(string))
+		}
+	})
+
+	t.Run("创建特殊字符名称任务", func(t *testing.T) {
+		body := `{"name":"Test 任务 🚀 <script>","spec":{"prompt":"test","agent":{"type":"gemini"}}}`
+		w := makeRequestWithString("POST", "/api/v1/tasks", body)
+		if w.Code == http.StatusCreated {
+			resp := parseJSONResponse(w)
+			testStore.DeleteTask(ctx, resp["id"].(string))
+		}
+	})
+
+	t.Run("创建复杂 spec 任务", func(t *testing.T) {
+		body := `{
+			"name":"Complex Spec Task",
+			"spec":{
+				"prompt":"Fix the bug in src/main.go",
+				"agent":{
+					"type":"qwencode",
+					"model":"qwen-coder-32b",
+					"parameters":{
+						"temperature":0.7,
+						"max_tokens":4096
+					}
+				},
+				"workspace":{
+					"path":"/workspace/project",
+					"git_url":"https://github.com/example/repo.git"
+				}
+			}
+		}`
+		w := makeRequestWithString("POST", "/api/v1/tasks", body)
+		if w.Code == http.StatusCreated {
+			resp := parseJSONResponse(w)
+			testStore.DeleteTask(ctx, resp["id"].(string))
+		} else {
+			t.Logf("Complex spec task creation: %d", w.Code)
+		}
+	})
+}

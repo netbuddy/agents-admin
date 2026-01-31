@@ -6,16 +6,22 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ============================================================
 -- 任务表
--- 存储任务定义（TaskSpec），支持多种任务类型
+-- 存储任务定义（TaskSpec），支持多种任务类型和层级结构
 -- ============================================================
 CREATE TABLE IF NOT EXISTS tasks (
     id VARCHAR(20) PRIMARY KEY,
+    -- 父任务 ID，用于任务层级结构（顶层任务为空）
+    parent_id VARCHAR(20) REFERENCES tasks(id) ON DELETE SET NULL,
     name VARCHAR(200) NOT NULL,
     -- 任务类型：general, development, operation, research, automation, review
     type VARCHAR(20) NOT NULL DEFAULT 'general',
     status VARCHAR(20) NOT NULL DEFAULT 'pending',
     -- spec 存储完整的 TaskSpec JSON，包含 Agent、Workspace、Security 配置
     spec JSONB NOT NULL,
+    -- context 存储任务上下文（继承的上下文、产出的上下文、对话历史）
+    context JSONB DEFAULT '{}',
+    -- 关联的执行实例 ID
+    instance_id VARCHAR(64),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -96,6 +102,9 @@ CREATE TABLE IF NOT EXISTS artifacts (
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_type ON tasks(type);
 CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tasks_parent_id ON tasks(parent_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_instance_id ON tasks(instance_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_context ON tasks USING GIN (context);
 CREATE INDEX IF NOT EXISTS idx_runs_task_id ON runs(task_id);
 CREATE INDEX IF NOT EXISTS idx_runs_status ON runs(status);
 CREATE INDEX IF NOT EXISTS idx_runs_node_id ON runs(node_id);
@@ -193,3 +202,57 @@ CREATE TRIGGER accounts_updated_at
 CREATE TRIGGER auth_tasks_updated_at
     BEFORE UPDATE ON auth_tasks
     FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- ============================================================
+-- 实例表
+-- 存储容器实例状态（替代全局 map，支持持久化和横向扩展）
+-- ============================================================
+CREATE TABLE IF NOT EXISTS instances (
+    id VARCHAR(64) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    account_id VARCHAR(64) NOT NULL,
+    agent_type_id VARCHAR(32) NOT NULL,
+    container_name VARCHAR(255),
+    node_id VARCHAR(64),
+    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    -- pending: 待创建
+    -- creating: 创建中
+    -- running: 运行中
+    -- stopped: 已停止
+    -- error: 错误
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_instances_account ON instances(account_id);
+CREATE INDEX IF NOT EXISTS idx_instances_status ON instances(status);
+CREATE INDEX IF NOT EXISTS idx_instances_node ON instances(node_id);
+
+CREATE TRIGGER instances_updated_at
+    BEFORE UPDATE ON instances
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- ============================================================
+-- 终端会话表
+-- 存储终端会话状态（替代全局 map，支持持久化和横向扩展）
+-- ============================================================
+CREATE TABLE IF NOT EXISTS terminal_sessions (
+    id VARCHAR(64) PRIMARY KEY,
+    instance_id VARCHAR(64),
+    container_name VARCHAR(255) NOT NULL,
+    node_id VARCHAR(64),
+    port INTEGER,
+    url VARCHAR(512),
+    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    -- pending: 待创建
+    -- starting: 启动中
+    -- running: 运行中
+    -- closed: 已关闭
+    -- error: 错误
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_terminal_sessions_instance ON terminal_sessions(instance_id);
+CREATE INDEX IF NOT EXISTS idx_terminal_sessions_status ON terminal_sessions(status);
+CREATE INDEX IF NOT EXISTS idx_terminal_sessions_node ON terminal_sessions(node_id);

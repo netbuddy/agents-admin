@@ -89,6 +89,11 @@ func (g *EventGateway) SetEventBus(eventBus *storage.EtcdEventBus) {
 // 客户端消息：
 //
 //	心跳：{"type": "ping"} -> 响应 {"type": "pong"}
+//
+// 事件驱动优先级（P2-3）：
+//   1. Redis Streams（推荐，统一方案）
+//   2. etcd EventBus（已弃用，保留兼容）
+//   3. 轮询模式（降级方案）
 func (g *EventGateway) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	runID := r.PathValue("id")
 	if runID == "" {
@@ -115,13 +120,20 @@ func (g *EventGateway) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	go g.readPump(conn, cancel)
 
-	// 如果有 EventBus，使用事件驱动模式
+	// P2-3: 优先使用 Redis Streams 事件驱动
+	if g.redisStore != nil {
+		g.writePumpRedisStreams(ctx, conn, runID, fromSeq)
+		return
+	}
+
+	// 降级：使用 etcd EventBus（已弃用）
 	if g.eventBus != nil {
 		g.writePumpEventDriven(ctx, conn, runID, fromSeq)
-	} else {
-		// 降级到轮询模式
-		g.writePump(ctx, conn, runID, fromSeq)
+		return
 	}
+
+	// 最后降级：轮询模式
+	g.writePump(ctx, conn, runID, fromSeq)
 }
 
 // addClient 添加客户端连接
@@ -265,9 +277,110 @@ func (g *EventGateway) writePump(ctx context.Context, conn *websocket.Conn, runI
 	}
 }
 
-// writePumpEventDriven 事件驱动模式的写入循环
+// writePumpRedisStreams Redis Streams 事件驱动模式
 //
-// 使用 etcd Watch 接收实时事件，实现毫秒级推送延迟。
+// P2-3 统一方案：使用 Redis Streams 接收实时事件
+// 相比 etcd Watch，Redis Streams 更适合高吞吐事件流场景
+//
+// 参数：
+//   - ctx: 上下文
+//   - conn: WebSocket 连接
+//   - runID: Run ID
+//   - fromSeq: 起始事件序号
+func (g *EventGateway) writePumpRedisStreams(ctx context.Context, conn *websocket.Conn, runID string, fromSeq int) {
+	pingTicker := time.NewTicker(30 * time.Second)
+	defer pingTicker.Stop()
+
+	// 首先推送历史事件（如果需要恢复）
+	if fromSeq > 0 {
+		events, err := g.store.GetEventsByRun(ctx, runID, fromSeq, 100)
+		if err == nil {
+			for _, event := range events {
+				conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+				msg := map[string]interface{}{
+					"type": "event",
+					"data": event,
+				}
+				if err := conn.WriteJSON(msg); err != nil {
+					log.Printf("WebSocket write error: %v", err)
+					return
+				}
+			}
+		}
+	}
+
+	// 订阅 Redis Streams 事件流
+	eventCh, err := g.redisStore.SubscribeRunEvents(ctx, runID)
+	if err != nil {
+		log.Printf("Failed to subscribe to Redis Streams: %v", err)
+		// 降级到轮询模式
+		g.writePump(ctx, conn, runID, fromSeq)
+		return
+	}
+
+	log.Printf("WebSocket using Redis Streams for run %s", runID)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-pingTicker.C:
+			conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
+		case event, ok := <-eventCh:
+			if !ok {
+				// 事件通道关闭，检查 Run 状态
+				run, err := g.store.GetRun(ctx, runID)
+				if err == nil && run != nil {
+					if run.Status == "done" || run.Status == "failed" || run.Status == "cancelled" {
+						conn.WriteJSON(map[string]interface{}{
+							"type": "status",
+							"data": map[string]interface{}{
+								"status":      run.Status,
+								"finished_at": run.FinishedAt,
+							},
+						})
+					}
+				}
+				return
+			}
+
+			// 推送事件
+			conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			msg := map[string]interface{}{
+				"type": "event",
+				"data": map[string]interface{}{
+					"seq":       event.Seq,
+					"type":      event.Type,
+					"timestamp": event.Timestamp,
+					"payload":   event.Payload,
+				},
+			}
+			if err := conn.WriteJSON(msg); err != nil {
+				log.Printf("WebSocket write error: %v", err)
+				return
+			}
+
+			// 检查是否是终止事件
+			if event.Type == "run_completed" || event.Type == "run_failed" {
+				conn.WriteJSON(map[string]interface{}{
+					"type": "status",
+					"data": map[string]interface{}{
+						"status": event.Type,
+					},
+				})
+				return
+			}
+		}
+	}
+}
+
+// writePumpEventDriven etcd 事件驱动模式的写入循环
+//
+// Deprecated: P2-3 后使用 writePumpRedisStreams 替代
+// 保留此方法用于兼容，使用 etcd Watch 接收实时事件
 //
 // 参数：
 //   - ctx: 上下文

@@ -115,7 +115,7 @@ export default function TaskDetailPage() {
     }
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const ws = new WebSocket(`${protocol}//${window.location.host}/api/v1/runs/${runId}/stream`)
+    const ws = new WebSocket(`${protocol}//${window.location.host}/ws/runs/${runId}/events`)
     
     ws.onopen = () => {
       setWsConnected(true)
@@ -124,8 +124,11 @@ export default function TaskDetailPage() {
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data)
-        if (data.type === 'event') {
-          setEvents(prev => [...prev, data.event])
+        if (data.type === 'event' && data.data) {
+          setEvents(prev => [...prev, data.data])
+        } else if (data.type === 'status') {
+          // 处理状态更新消息
+          console.log('Run status update:', data.data)
         }
       } catch (err) {
         console.error('Failed to parse WS message:', err)

@@ -14,7 +14,7 @@ RUN go mod download
 COPY . .
 
 # 构建
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /node-agent ./cmd/node-agent
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /executor ./cmd/executor
 
 # 运行时镜像
 FROM alpine:3.19
@@ -29,6 +29,6 @@ USER appuser
 
 WORKDIR /app
 
-COPY --from=builder /node-agent .
+COPY --from=builder /executor .
 
-ENTRYPOINT ["./node-agent"]
+ENTRYPOINT ["./executor"]

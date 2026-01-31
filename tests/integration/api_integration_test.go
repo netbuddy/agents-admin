@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"agents-admin/internal/api"
+	"agents-admin/internal/model"
 	"agents-admin/internal/storage"
 )
 
@@ -33,7 +35,7 @@ func TestMain(m *testing.M) {
 	}
 	defer testStore.Close()
 
-	testHandler = api.NewHandler(testStore, nil) // etcd 在测试中可选
+	testHandler = api.NewHandler(testStore, nil, nil) // redis 和 etcd 在测试中可选
 
 	os.Exit(m.Run())
 }
@@ -745,5 +747,189 @@ func TestHeartbeatValidation_Integration(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Expected 400 for invalid JSON, got %d", w.Code)
+	}
+}
+
+// TestTaskContext_Integration 测试任务上下文功能
+func TestTaskContext_Integration(t *testing.T) {
+	if testStore == nil {
+		t.Skip("Database not available")
+	}
+
+	router := testHandler.Router()
+	ctx := context.Background()
+
+	// 1. 创建父任务（带初始上下文）
+	createBody := `{
+		"name": "Parent Task",
+		"spec": {"prompt": "parent task prompt"},
+		"context": {
+			"produced_context": [
+				{"type": "file", "name": "config.yaml", "content": "key: value", "source": "parent"}
+			]
+		}
+	}`
+	req := httptest.NewRequest("POST", "/api/v1/tasks", bytes.NewBufferString(createBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("Create parent task failed: %d - %s", w.Code, w.Body.String())
+	}
+
+	var parentResp map[string]interface{}
+	json.NewDecoder(w.Body).Decode(&parentResp)
+	parentID := parentResp["id"].(string)
+	defer testStore.DeleteTask(ctx, parentID)
+
+	t.Logf("Created parent task: %s", parentID)
+
+	// 2. 创建子任务（继承父任务上下文）
+	createChildBody := `{
+		"name": "Child Task",
+		"spec": {"prompt": "child task prompt"},
+		"parent_id": "` + parentID + `"
+	}`
+	req = httptest.NewRequest("POST", "/api/v1/tasks", bytes.NewBufferString(createChildBody))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("Create child task failed: %d - %s", w.Code, w.Body.String())
+	}
+
+	var childResp map[string]interface{}
+	json.NewDecoder(w.Body).Decode(&childResp)
+	childID := childResp["id"].(string)
+
+	t.Logf("Created child task: %s", childID)
+
+	// 验证子任务的 parent_id
+	if childResp["parent_id"] != parentID {
+		t.Errorf("Child parent_id = %v, want %v", childResp["parent_id"], parentID)
+	}
+
+	// 3. 获取子任务列表
+	req = httptest.NewRequest("GET", "/api/v1/tasks/"+parentID+"/subtasks", nil)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("List subtasks failed: %d - %s", w.Code, w.Body.String())
+	}
+
+	var subtasksResp map[string]interface{}
+	json.NewDecoder(w.Body).Decode(&subtasksResp)
+	count := int(subtasksResp["count"].(float64))
+	if count != 1 {
+		t.Errorf("Expected 1 subtask, got %d", count)
+	}
+
+	// 4. 获取任务树
+	req = httptest.NewRequest("GET", "/api/v1/tasks/"+parentID+"/tree", nil)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Get task tree failed: %d - %s", w.Code, w.Body.String())
+	}
+
+	var treeResp map[string]interface{}
+	json.NewDecoder(w.Body).Decode(&treeResp)
+	treeCount := int(treeResp["count"].(float64))
+	if treeCount != 2 { // parent + child
+		t.Errorf("Expected 2 tasks in tree, got %d", treeCount)
+	}
+
+	// 5. 更新任务上下文
+	updateContextBody := `{
+		"produced_context": [
+			{"type": "summary", "name": "result", "content": "task completed successfully", "source": "child"}
+		],
+		"conversation_history": [
+			{"role": "user", "content": "do something", "timestamp": "2026-01-30T10:00:00Z"},
+			{"role": "assistant", "content": "done", "timestamp": "2026-01-30T10:00:01Z"}
+		]
+	}`
+	req = httptest.NewRequest("PUT", "/api/v1/tasks/"+childID+"/context", bytes.NewBufferString(updateContextBody))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Update task context failed: %d - %s", w.Code, w.Body.String())
+	}
+
+	// 6. 验证上下文已更新
+	req = httptest.NewRequest("GET", "/api/v1/tasks/"+childID, nil)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Get child task failed: %d", w.Code)
+	}
+
+	var getChildResp map[string]interface{}
+	json.NewDecoder(w.Body).Decode(&getChildResp)
+
+	// 验证 context 字段存在
+	if getChildResp["context"] == nil {
+		t.Error("Expected context field in response")
+	}
+
+	t.Log("TaskContext integration test passed")
+}
+
+// TestTaskWithInstanceID_Integration 测试任务与实例关联
+func TestTaskWithInstanceID_Integration(t *testing.T) {
+	if testStore == nil {
+		t.Skip("Database not available")
+	}
+
+	router := testHandler.Router()
+	ctx := context.Background()
+
+	// 先创建对应实例记录（兼容 tasks.instance_id 可能存在的外键约束）
+	instanceID := fmt.Sprintf("inst-test-%d", time.Now().UnixNano())
+	_ = testStore.DeleteInstance(ctx, instanceID) // 幂等清理
+	now := time.Now()
+	if err := testStore.CreateInstance(ctx, &model.Instance{
+		ID:          instanceID,
+		Name:        "Test Instance",
+		AccountID:   "acc-test-001",
+		AgentTypeID: "qwen-code",
+		Status:      model.InstanceStatusRunning,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}); err != nil {
+		t.Fatalf("Create instance failed: %v", err)
+	}
+	defer testStore.DeleteInstance(ctx, instanceID)
+
+	// 创建带 instance_id 的任务
+	createBody := fmt.Sprintf(`{
+		"name": "Task with Instance",
+		"spec": {"prompt": "test"},
+		"instance_id": %q
+	}`, instanceID)
+	req := httptest.NewRequest("POST", "/api/v1/tasks", bytes.NewBufferString(createBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("Create task failed: %d - %s", w.Code, w.Body.String())
+	}
+
+	var taskResp map[string]interface{}
+	json.NewDecoder(w.Body).Decode(&taskResp)
+	taskID := taskResp["id"].(string)
+	defer testStore.DeleteTask(ctx, taskID)
+
+	// 验证 instance_id
+	if taskResp["instance_id"] != instanceID {
+		t.Errorf("instance_id = %v, want %q", taskResp["instance_id"], instanceID)
 	}
 }

@@ -139,5 +139,16 @@ func (h *Handler) PostEvents(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to create events")
 		return
 	}
+
+	// 写入 DB 后，立即广播到 WebSocket 客户端（实时推送）
+	for _, e := range req.Events {
+		h.eventGateway.Broadcast(runID, map[string]interface{}{
+			"seq":       e.Seq,
+			"type":      e.Type,
+			"timestamp": e.Timestamp,
+			"payload":   e.Payload,
+		})
+	}
+
 	writeJSON(w, http.StatusCreated, map[string]int{"created": len(events)})
 }

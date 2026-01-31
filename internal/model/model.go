@@ -346,3 +346,8 @@ type Artifact struct {
 	ContentType *string   `json:"content_type,omitempty" db:"content_type"` // MIME 类型
 	CreatedAt   time.Time `json:"created_at" db:"created_at"`               // 创建时间
 }
+
+// ============================================================================
+// Instance 和 TerminalSession 定义在 agent_type.go 中
+// 以保持与 Account/AuthTask 等相关类型的组织一致性
+// ============================================================================

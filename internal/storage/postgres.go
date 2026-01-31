@@ -46,20 +46,22 @@ func (s *PostgresStore) Close() error {
 // CreateTask 创建任务
 func (s *PostgresStore) CreateTask(ctx context.Context, task *model.Task) error {
 	query := `
-		INSERT INTO tasks (id, name, status, spec, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO tasks (id, parent_id, name, status, spec, context, instance_id, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`
 	_, err := s.db.ExecContext(ctx, query,
-		task.ID, task.Name, task.Status, task.Spec, task.CreatedAt, task.UpdatedAt)
+		task.ID, task.ParentID, task.Name, task.Status, task.Spec,
+		task.Context, task.InstanceID, task.CreatedAt, task.UpdatedAt)
 	return err
 }
 
 // GetTask 获取任务
 func (s *PostgresStore) GetTask(ctx context.Context, id string) (*model.Task, error) {
-	query := `SELECT id, name, status, spec, created_at, updated_at FROM tasks WHERE id = $1`
+	query := `SELECT id, parent_id, name, status, spec, context, instance_id, created_at, updated_at FROM tasks WHERE id = $1`
 	task := &model.Task{}
 	err := s.db.QueryRowContext(ctx, query, id).Scan(
-		&task.ID, &task.Name, &task.Status, &task.Spec, &task.CreatedAt, &task.UpdatedAt)
+		&task.ID, &task.ParentID, &task.Name, &task.Status, &task.Spec,
+		&task.Context, &task.InstanceID, &task.CreatedAt, &task.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -72,12 +74,12 @@ func (s *PostgresStore) ListTasks(ctx context.Context, status string, limit, off
 	var args []interface{}
 
 	if status != "" {
-		query = `SELECT id, name, status, spec, created_at, updated_at 
+		query = `SELECT id, parent_id, name, status, spec, context, instance_id, created_at, updated_at 
 				 FROM tasks WHERE status = $1 
 				 ORDER BY created_at DESC LIMIT $2 OFFSET $3`
 		args = []interface{}{status, limit, offset}
 	} else {
-		query = `SELECT id, name, status, spec, created_at, updated_at 
+		query = `SELECT id, parent_id, name, status, spec, context, instance_id, created_at, updated_at 
 				 FROM tasks ORDER BY created_at DESC LIMIT $1 OFFSET $2`
 		args = []interface{}{limit, offset}
 	}
@@ -91,8 +93,8 @@ func (s *PostgresStore) ListTasks(ctx context.Context, status string, limit, off
 	var tasks []*model.Task
 	for rows.Next() {
 		task := &model.Task{}
-		if err := rows.Scan(&task.ID, &task.Name, &task.Status, &task.Spec,
-			&task.CreatedAt, &task.UpdatedAt); err != nil {
+		if err := rows.Scan(&task.ID, &task.ParentID, &task.Name, &task.Status, &task.Spec,
+			&task.Context, &task.InstanceID, &task.CreatedAt, &task.UpdatedAt); err != nil {
 			return nil, err
 		}
 		tasks = append(tasks, task)
@@ -140,6 +142,68 @@ func (s *PostgresStore) DeleteTask(ctx context.Context, id string) error {
 	}
 
 	return tx.Commit()
+}
+
+// UpdateTaskContext 更新任务上下文
+func (s *PostgresStore) UpdateTaskContext(ctx context.Context, id string, taskContext json.RawMessage) error {
+	query := `UPDATE tasks SET context = $1, updated_at = $2 WHERE id = $3`
+	_, err := s.db.ExecContext(ctx, query, taskContext, time.Now(), id)
+	return err
+}
+
+// ListSubTasks 列出子任务
+func (s *PostgresStore) ListSubTasks(ctx context.Context, parentID string) ([]*model.Task, error) {
+	query := `SELECT id, parent_id, name, status, spec, context, instance_id, created_at, updated_at 
+			  FROM tasks WHERE parent_id = $1 ORDER BY created_at ASC`
+	rows, err := s.db.QueryContext(ctx, query, parentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tasks []*model.Task
+	for rows.Next() {
+		task := &model.Task{}
+		if err := rows.Scan(&task.ID, &task.ParentID, &task.Name, &task.Status, &task.Spec,
+			&task.Context, &task.InstanceID, &task.CreatedAt, &task.UpdatedAt); err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, task)
+	}
+	return tasks, rows.Err()
+}
+
+// GetTaskTree 获取任务树（包含所有子任务）
+func (s *PostgresStore) GetTaskTree(ctx context.Context, rootID string) ([]*model.Task, error) {
+	// 使用递归 CTE 查询任务树
+	query := `
+		WITH RECURSIVE task_tree AS (
+			SELECT id, parent_id, name, status, spec, context, instance_id, created_at, updated_at, 0 as depth
+			FROM tasks WHERE id = $1
+			UNION ALL
+			SELECT t.id, t.parent_id, t.name, t.status, t.spec, t.context, t.instance_id, t.created_at, t.updated_at, tt.depth + 1
+			FROM tasks t
+			INNER JOIN task_tree tt ON t.parent_id = tt.id
+		)
+		SELECT id, parent_id, name, status, spec, context, instance_id, created_at, updated_at
+		FROM task_tree ORDER BY depth, created_at ASC
+	`
+	rows, err := s.db.QueryContext(ctx, query, rootID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tasks []*model.Task
+	for rows.Next() {
+		task := &model.Task{}
+		if err := rows.Scan(&task.ID, &task.ParentID, &task.Name, &task.Status, &task.Spec,
+			&task.Context, &task.InstanceID, &task.CreatedAt, &task.UpdatedAt); err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, task)
+	}
+	return tasks, rows.Err()
 }
 
 // === Run 操作 ===
@@ -214,6 +278,31 @@ func (s *PostgresStore) ListRunsByNode(ctx context.Context, nodeID string) ([]*m
 	return runs, rows.Err()
 }
 
+// ListRunningRuns 列出所有 running 状态的 Run（可选 limit）
+func (s *PostgresStore) ListRunningRuns(ctx context.Context, limit int) ([]*model.Run, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	query := `SELECT id, task_id, status, node_id, started_at, finished_at, snapshot, error, created_at, updated_at
+			  FROM runs WHERE status = 'running' ORDER BY started_at ASC NULLS LAST, created_at ASC LIMIT $1`
+	rows, err := s.db.QueryContext(ctx, query, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var runs []*model.Run
+	for rows.Next() {
+		run := &model.Run{}
+		if err := rows.Scan(&run.ID, &run.TaskID, &run.Status, &run.NodeID, &run.StartedAt,
+			&run.FinishedAt, &run.Snapshot, &run.Error, &run.CreatedAt, &run.UpdatedAt); err != nil {
+			return nil, err
+		}
+		runs = append(runs, run)
+	}
+	return runs, rows.Err()
+}
+
 // ListQueuedRuns 列出待执行的 Run
 func (s *PostgresStore) ListQueuedRuns(ctx context.Context, limit int) ([]*model.Run, error) {
 	query := `SELECT id, task_id, status, node_id, started_at, finished_at, snapshot, error, created_at, updated_at 
@@ -234,6 +323,19 @@ func (s *PostgresStore) ListQueuedRuns(ctx context.Context, limit int) ([]*model
 		runs = append(runs, run)
 	}
 	return runs, rows.Err()
+}
+
+// ResetRunToQueued 将已分配（running）的 Run 重置为 queued，并清空分配信息。
+//
+// 使用场景：
+// - Run 被调度到离线节点（无 etcd 心跳），且尚未产生任何事件：说明 Executor 从未实际执行。
+// - 为避免 Run 永久卡在 running 状态，将其回退到 queued 以便重新调度。
+func (s *PostgresStore) ResetRunToQueued(ctx context.Context, id string) error {
+	query := `UPDATE runs 
+			  SET status = 'queued', node_id = NULL, started_at = NULL, error = NULL, updated_at = $2
+			  WHERE id = $1 AND status = 'running'`
+	_, err := s.db.ExecContext(ctx, query, id, time.Now())
+	return err
 }
 
 // UpdateRunStatus 更新 Run 状态
@@ -330,6 +432,16 @@ func (s *PostgresStore) CreateEvents(ctx context.Context, events []*model.Event)
 	}
 
 	return tx.Commit()
+}
+
+// CountEventsByRun 统计 Run 的事件数量
+func (s *PostgresStore) CountEventsByRun(ctx context.Context, runID string) (int, error) {
+	query := `SELECT COUNT(1) FROM events WHERE run_id = $1`
+	var cnt int
+	if err := s.db.QueryRowContext(ctx, query, runID).Scan(&cnt); err != nil {
+		return 0, err
+	}
+	return cnt, nil
 }
 
 // GetEventsByRun 获取 Run 的事件
@@ -778,4 +890,256 @@ func (s *PostgresStore) ClearDefaultProxy(ctx context.Context) error {
 func (s *PostgresStore) DeleteProxy(ctx context.Context, id string) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM proxies WHERE id = $1`, id)
 	return err
+}
+
+// === Instance 操作 ===
+
+// CreateInstance 创建实例
+func (s *PostgresStore) CreateInstance(ctx context.Context, instance *model.Instance) error {
+	query := `
+		INSERT INTO instances (id, name, account_id, agent_type_id, container_name, node_id, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+	`
+	_, err := s.db.ExecContext(ctx, query,
+		instance.ID, instance.Name, instance.AccountID, instance.AgentTypeID,
+		instance.ContainerName, instance.NodeID, instance.Status,
+		instance.CreatedAt, instance.UpdatedAt)
+	return err
+}
+
+// GetInstance 获取实例
+func (s *PostgresStore) GetInstance(ctx context.Context, id string) (*model.Instance, error) {
+	query := `SELECT id, name, account_id, agent_type_id, container_name, node_id, status, created_at, updated_at 
+			  FROM instances WHERE id = $1`
+	instance := &model.Instance{}
+	err := s.db.QueryRowContext(ctx, query, id).Scan(
+		&instance.ID, &instance.Name, &instance.AccountID, &instance.AgentTypeID,
+		&instance.ContainerName, &instance.NodeID, &instance.Status,
+		&instance.CreatedAt, &instance.UpdatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return instance, err
+}
+
+// ListInstances 列出所有实例
+func (s *PostgresStore) ListInstances(ctx context.Context) ([]*model.Instance, error) {
+	query := `SELECT id, name, account_id, agent_type_id, container_name, node_id, status, created_at, updated_at 
+			  FROM instances ORDER BY created_at DESC`
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var instances []*model.Instance
+	for rows.Next() {
+		instance := &model.Instance{}
+		if err := rows.Scan(&instance.ID, &instance.Name, &instance.AccountID, &instance.AgentTypeID,
+			&instance.ContainerName, &instance.NodeID, &instance.Status,
+			&instance.CreatedAt, &instance.UpdatedAt); err != nil {
+			return nil, err
+		}
+		instances = append(instances, instance)
+	}
+	return instances, rows.Err()
+}
+
+// ListInstancesByNode 列出指定节点的实例
+func (s *PostgresStore) ListInstancesByNode(ctx context.Context, nodeID string) ([]*model.Instance, error) {
+	query := `SELECT id, name, account_id, agent_type_id, container_name, node_id, status, created_at, updated_at 
+			  FROM instances WHERE node_id = $1 ORDER BY created_at DESC`
+	rows, err := s.db.QueryContext(ctx, query, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var instances []*model.Instance
+	for rows.Next() {
+		instance := &model.Instance{}
+		if err := rows.Scan(&instance.ID, &instance.Name, &instance.AccountID, &instance.AgentTypeID,
+			&instance.ContainerName, &instance.NodeID, &instance.Status,
+			&instance.CreatedAt, &instance.UpdatedAt); err != nil {
+			return nil, err
+		}
+		instances = append(instances, instance)
+	}
+	return instances, rows.Err()
+}
+
+// ListPendingInstances 列出待处理的实例（Executor 轮询用）
+// 返回 pending、creating、stopping 状态的实例
+func (s *PostgresStore) ListPendingInstances(ctx context.Context, nodeID string) ([]*model.Instance, error) {
+	query := `SELECT id, name, account_id, agent_type_id, container_name, node_id, status, created_at, updated_at 
+			  FROM instances WHERE node_id = $1 AND status IN ('pending', 'creating', 'stopping') ORDER BY created_at ASC`
+	rows, err := s.db.QueryContext(ctx, query, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var instances []*model.Instance
+	for rows.Next() {
+		instance := &model.Instance{}
+		if err := rows.Scan(&instance.ID, &instance.Name, &instance.AccountID, &instance.AgentTypeID,
+			&instance.ContainerName, &instance.NodeID, &instance.Status,
+			&instance.CreatedAt, &instance.UpdatedAt); err != nil {
+			return nil, err
+		}
+		instances = append(instances, instance)
+	}
+	return instances, rows.Err()
+}
+
+// UpdateInstance 更新实例
+func (s *PostgresStore) UpdateInstance(ctx context.Context, id string, status model.InstanceStatus, containerName *string) error {
+	if containerName != nil {
+		query := `UPDATE instances SET status = $1, container_name = $2 WHERE id = $3`
+		result, err := s.db.ExecContext(ctx, query, status, *containerName, id)
+		if err != nil {
+			return err
+		}
+		if rows, err := result.RowsAffected(); err == nil && rows == 0 {
+			return sql.ErrNoRows
+		}
+		return nil
+	}
+	query := `UPDATE instances SET status = $1 WHERE id = $2`
+	result, err := s.db.ExecContext(ctx, query, status, id)
+	if err != nil {
+		return err
+	}
+	if rows, err := result.RowsAffected(); err == nil && rows == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+// DeleteInstance 删除实例
+func (s *PostgresStore) DeleteInstance(ctx context.Context, id string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM instances WHERE id = $1`, id)
+	return err
+}
+
+// === TerminalSession 操作 ===
+
+// CreateTerminalSession 创建终端会话
+func (s *PostgresStore) CreateTerminalSession(ctx context.Context, session *model.TerminalSession) error {
+	query := `
+		INSERT INTO terminal_sessions (id, instance_id, container_name, node_id, port, url, status, created_at, expires_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+	`
+	_, err := s.db.ExecContext(ctx, query,
+		session.ID, session.InstanceID, session.ContainerName, session.NodeID,
+		session.Port, session.URL, session.Status, session.CreatedAt, session.ExpiresAt)
+	return err
+}
+
+// GetTerminalSession 获取终端会话
+func (s *PostgresStore) GetTerminalSession(ctx context.Context, id string) (*model.TerminalSession, error) {
+	query := `SELECT id, instance_id, container_name, node_id, port, url, status, created_at, expires_at 
+			  FROM terminal_sessions WHERE id = $1`
+	session := &model.TerminalSession{}
+	err := s.db.QueryRowContext(ctx, query, id).Scan(
+		&session.ID, &session.InstanceID, &session.ContainerName, &session.NodeID,
+		&session.Port, &session.URL, &session.Status, &session.CreatedAt, &session.ExpiresAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return session, err
+}
+
+// ListTerminalSessions 列出所有终端会话
+func (s *PostgresStore) ListTerminalSessions(ctx context.Context) ([]*model.TerminalSession, error) {
+	query := `SELECT id, instance_id, container_name, node_id, port, url, status, created_at, expires_at 
+			  FROM terminal_sessions ORDER BY created_at DESC`
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var sessions []*model.TerminalSession
+	for rows.Next() {
+		session := &model.TerminalSession{}
+		if err := rows.Scan(&session.ID, &session.InstanceID, &session.ContainerName, &session.NodeID,
+			&session.Port, &session.URL, &session.Status, &session.CreatedAt, &session.ExpiresAt); err != nil {
+			return nil, err
+		}
+		sessions = append(sessions, session)
+	}
+	return sessions, rows.Err()
+}
+
+// ListTerminalSessionsByNode 列出指定节点的终端会话
+func (s *PostgresStore) ListTerminalSessionsByNode(ctx context.Context, nodeID string) ([]*model.TerminalSession, error) {
+	query := `SELECT id, instance_id, container_name, node_id, port, url, status, created_at, expires_at 
+			  FROM terminal_sessions WHERE node_id = $1 ORDER BY created_at DESC`
+	rows, err := s.db.QueryContext(ctx, query, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var sessions []*model.TerminalSession
+	for rows.Next() {
+		session := &model.TerminalSession{}
+		if err := rows.Scan(&session.ID, &session.InstanceID, &session.ContainerName, &session.NodeID,
+			&session.Port, &session.URL, &session.Status, &session.CreatedAt, &session.ExpiresAt); err != nil {
+			return nil, err
+		}
+		sessions = append(sessions, session)
+	}
+	return sessions, rows.Err()
+}
+
+// ListPendingTerminalSessions 列出待处理的终端会话（Executor 轮询用）
+func (s *PostgresStore) ListPendingTerminalSessions(ctx context.Context, nodeID string) ([]*model.TerminalSession, error) {
+	query := `SELECT id, instance_id, container_name, node_id, port, url, status, created_at, expires_at 
+			  FROM terminal_sessions WHERE node_id = $1 AND status IN ('pending', 'starting') ORDER BY created_at ASC`
+	rows, err := s.db.QueryContext(ctx, query, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var sessions []*model.TerminalSession
+	for rows.Next() {
+		session := &model.TerminalSession{}
+		if err := rows.Scan(&session.ID, &session.InstanceID, &session.ContainerName, &session.NodeID,
+			&session.Port, &session.URL, &session.Status, &session.CreatedAt, &session.ExpiresAt); err != nil {
+			return nil, err
+		}
+		sessions = append(sessions, session)
+	}
+	return sessions, rows.Err()
+}
+
+// UpdateTerminalSession 更新终端会话
+func (s *PostgresStore) UpdateTerminalSession(ctx context.Context, id string, status model.TerminalSessionStatus, port *int, url *string) error {
+	query := `UPDATE terminal_sessions SET status = $1, port = $2, url = $3 WHERE id = $4`
+	result, err := s.db.ExecContext(ctx, query, status, port, url, id)
+	if err != nil {
+		return err
+	}
+	if rows, err := result.RowsAffected(); err == nil && rows == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+// DeleteTerminalSession 删除终端会话
+func (s *PostgresStore) DeleteTerminalSession(ctx context.Context, id string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM terminal_sessions WHERE id = $1`, id)
+	return err
+}
+
+// CleanupExpiredTerminalSessions 清理过期的终端会话
+func (s *PostgresStore) CleanupExpiredTerminalSessions(ctx context.Context) (int64, error) {
+	result, err := s.db.ExecContext(ctx, `DELETE FROM terminal_sessions WHERE expires_at < NOW() AND status != 'closed'`)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }

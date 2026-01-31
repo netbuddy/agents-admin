@@ -37,6 +37,31 @@ func NewRedisStore(addr, password string, db int) (*RedisStore, error) {
 	return &RedisStore{client: client}, nil
 }
 
+// NewRedisStoreFromURL 从 URL 创建 Redis 存储实例
+// URL 格式: redis://[:password@]host:port[/db]
+// 示例:
+//   - redis://localhost:6379/0
+//   - redis://:mypassword@localhost:6379/1
+func NewRedisStoreFromURL(redisURL string) (*RedisStore, error) {
+	opts, err := redis.ParseURL(redisURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse Redis URL: %w", err)
+	}
+
+	client := redis.NewClient(opts)
+
+	// 测试连接
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := client.Ping(ctx).Err(); err != nil {
+		return nil, fmt.Errorf("failed to connect to Redis: %w", err)
+	}
+
+	log.Printf("[Redis] Connected to %s", opts.Addr)
+	return &RedisStore{client: client}, nil
+}
+
 // Close 关闭 Redis 连接
 func (s *RedisStore) Close() error {
 	return s.client.Close()
@@ -579,4 +604,196 @@ func (s *RedisStore) SubscribeEvents(ctx context.Context, wfType, wfID string) (
 func (s *RedisStore) DeleteEvents(ctx context.Context, wfType, wfID string) error {
 	key := fmt.Sprintf("%s%s:%s", keyWorkflowEvents, wfType, wfID)
 	return s.client.Del(ctx, key).Err()
+}
+
+// ============================================================================
+// P2-3: 统一事件驱动 - Run 事件流 API
+// ============================================================================
+
+const (
+	// Run 事件流 key 前缀
+	keyRunEvents = "run_events:"
+)
+
+// RunEvent Run 执行事件
+type RunEvent struct {
+	ID        string                 `json:"id"`         // Redis Stream 消息 ID
+	RunID     string                 `json:"run_id"`     // Run ID
+	Seq       int                    `json:"seq"`        // 事件序号
+	Type      string                 `json:"type"`       // 事件类型
+	Timestamp time.Time              `json:"timestamp"`  // 事件时间
+	Payload   map[string]interface{} `json:"payload"`    // 事件载荷
+	Raw       string                 `json:"raw,omitempty"` // 原始输出（可选）
+}
+
+// PublishRunEvent 发布 Run 事件到 Redis Streams
+func (s *RedisStore) PublishRunEvent(ctx context.Context, runID string, event *RunEvent) error {
+	key := keyRunEvents + runID
+
+	// 序列化 payload
+	payloadJSON, err := json.Marshal(event.Payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal event payload: %w", err)
+	}
+
+	values := map[string]interface{}{
+		"seq":       event.Seq,
+		"type":      event.Type,
+		"timestamp": event.Timestamp.Format(time.RFC3339Nano),
+		"payload":   string(payloadJSON),
+	}
+
+	if event.Raw != "" {
+		values["raw"] = event.Raw
+	}
+
+	args := &redis.XAddArgs{
+		Stream: key,
+		MaxLen: maxStreamLength,
+		Approx: true,
+		Values: values,
+	}
+
+	id, err := s.client.XAdd(ctx, args).Result()
+	if err != nil {
+		return fmt.Errorf("failed to publish run event: %w", err)
+	}
+
+	event.ID = id
+	log.Printf("[Redis] Published run event: run=%s seq=%d type=%s", runID, event.Seq, event.Type)
+	return nil
+}
+
+// GetRunEvents 获取 Run 事件列表
+func (s *RedisStore) GetRunEvents(ctx context.Context, runID string, fromSeq int, count int64) ([]*RunEvent, error) {
+	key := keyRunEvents + runID
+
+	// 获取所有事件
+	msgs, err := s.client.XRange(ctx, key, "-", "+").Result()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get run events: %w", err)
+	}
+
+	var events []*RunEvent
+	for _, msg := range msgs {
+		event, err := parseRunEvent(runID, msg)
+		if err != nil {
+			continue
+		}
+
+		// 按 fromSeq 过滤
+		if event.Seq <= fromSeq {
+			continue
+		}
+
+		events = append(events, event)
+
+		if count > 0 && int64(len(events)) >= count {
+			break
+		}
+	}
+
+	return events, nil
+}
+
+// SubscribeRunEvents 订阅 Run 事件（实时推送）
+// 返回一个 channel，调用方从中读取事件
+func (s *RedisStore) SubscribeRunEvents(ctx context.Context, runID string) (<-chan *RunEvent, error) {
+	key := keyRunEvents + runID
+	ch := make(chan *RunEvent, 100)
+
+	go func() {
+		defer close(ch)
+		lastID := "$" // 只获取新事件
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
+			// 使用 XREAD BLOCK 等待新事件
+			streams, err := s.client.XRead(ctx, &redis.XReadArgs{
+				Streams: []string{key, lastID},
+				Count:   10,
+				Block:   5 * time.Second,
+			}).Result()
+
+			if err != nil {
+				if err == redis.Nil {
+					continue // 超时，继续等待
+				}
+				log.Printf("[Redis] Run event subscription error: %v", err)
+				return
+			}
+
+			for _, stream := range streams {
+				for _, msg := range stream.Messages {
+					event, err := parseRunEvent(runID, msg)
+					if err != nil {
+						continue
+					}
+
+					select {
+					case ch <- event:
+						lastID = msg.ID
+					case <-ctx.Done():
+						return
+					}
+				}
+			}
+		}
+	}()
+
+	return ch, nil
+}
+
+// parseRunEvent 解析 Redis Stream 消息为 RunEvent
+func parseRunEvent(runID string, msg redis.XMessage) (*RunEvent, error) {
+	event := &RunEvent{
+		ID:    msg.ID,
+		RunID: runID,
+	}
+
+	if seqStr, ok := msg.Values["seq"].(string); ok {
+		if seq, err := strconv.Atoi(seqStr); err == nil {
+			event.Seq = seq
+		}
+	}
+
+	if eventType, ok := msg.Values["type"].(string); ok {
+		event.Type = eventType
+	}
+
+	if ts, ok := msg.Values["timestamp"].(string); ok {
+		if t, err := time.Parse(time.RFC3339Nano, ts); err == nil {
+			event.Timestamp = t
+		}
+	}
+
+	if payloadStr, ok := msg.Values["payload"].(string); ok {
+		var payload map[string]interface{}
+		if err := json.Unmarshal([]byte(payloadStr), &payload); err == nil {
+			event.Payload = payload
+		}
+	}
+
+	if raw, ok := msg.Values["raw"].(string); ok {
+		event.Raw = raw
+	}
+
+	return event, nil
+}
+
+// DeleteRunEvents 删除 Run 事件流
+func (s *RedisStore) DeleteRunEvents(ctx context.Context, runID string) error {
+	key := keyRunEvents + runID
+	return s.client.Del(ctx, key).Err()
+}
+
+// GetRunEventCount 获取 Run 事件数量
+func (s *RedisStore) GetRunEventCount(ctx context.Context, runID string) (int64, error) {
+	key := keyRunEvents + runID
+	return s.client.XLen(ctx, key).Result()
 }

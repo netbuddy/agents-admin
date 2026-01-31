@@ -41,6 +41,14 @@ interface TaskDetailPanelProps {
   onRefresh: () => void
 }
 
+// 用于记录耗时计算的基准点（解决客户端/服务器时间不同步问题）
+interface DurationBase {
+  runId: string
+  serverStartTime: number  // run_started 事件的服务器时间戳
+  serverLatestTime: number // 最新事件的服务器时间戳
+  localCaptureTime: number // 捕获 serverLatestTime 时的本地时间
+}
+
 const statusConfig: Record<string, { icon: React.ReactNode; color: string; bgColor: string; label: string }> = {
   pending: {
     icon: <Clock className="w-4 h-4" />,
@@ -79,6 +87,8 @@ export default function TaskDetailPanel({ task, onClose, onStartRun, onRefresh }
   const [viewMode, setViewMode] = useState<ViewMode>('formatted')
   const [, setTick] = useState(0) // 用于强制刷新耗时显示
   const wsRef = useRef<WebSocket | null>(null)
+  const lastRunIDRef = useRef<string | null>(null)
+  const durationBaseRef = useRef<DurationBase | null>(null)
 
   // 运行中任务每秒刷新耗时显示
   useEffect(() => {
@@ -149,7 +159,7 @@ export default function TaskDetailPanel({ task, onClose, onStartRun, onRefresh }
     }
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const ws = new WebSocket(`${protocol}//${window.location.host}/api/v1/runs/${runId}/stream`)
+    const ws = new WebSocket(`${protocol}//${window.location.host}/ws/runs/${runId}/events`)
     
     ws.onopen = () => {
       setWsConnected(true)
@@ -158,8 +168,11 @@ export default function TaskDetailPanel({ task, onClose, onStartRun, onRefresh }
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data)
-        if (data.type === 'event') {
-          setEvents(prev => [...prev, data.event])
+        if (data.type === 'event' && data.data) {
+          setEvents(prev => [...prev, data.data])
+        } else if (data.type === 'status') {
+          // 处理状态更新消息
+          console.log('Run status update:', data.data)
         }
       } catch (err) {
         console.error('Failed to parse WS message:', err)
@@ -182,6 +195,7 @@ export default function TaskDetailPanel({ task, onClose, onStartRun, onRefresh }
     setLoading(true)
     setWsConnected(false)
     wsRef.current?.close()
+    durationBaseRef.current = null // 切换任务时清空耗时基准
     
     // 获取新任务的数据（强制选择第一个 run）
     fetchRuns(true)
@@ -196,6 +210,13 @@ export default function TaskDetailPanel({ task, onClose, onStartRun, onRefresh }
 
   useEffect(() => {
     if (selectedRun) {
+      // 切换 run 时，先清空旧事件和耗时基准，避免 UI 短暂展示"上一条 run 的事件/耗时"
+      if (lastRunIDRef.current !== selectedRun.id) {
+        setEvents([])
+        durationBaseRef.current = null // 切换 run 时清空耗时基准
+        lastRunIDRef.current = selectedRun.id
+      }
+
       fetchEvents(selectedRun.id)
       if (selectedRun.status === 'running') {
         connectWebSocket(selectedRun.id)
@@ -223,6 +244,36 @@ export default function TaskDetailPanel({ task, onClose, onStartRun, onRefresh }
     }
   }
 
+  // 获取 run_started 事件的服务器时间戳
+  const getRunStartedAtFromEvents = (runID: string): number | null => {
+    const e = events.find(evt => evt.run_id === runID && evt.type === 'run_started')
+    if (!e?.timestamp) return null
+    const ms = Date.parse(e.timestamp)
+    return Number.isFinite(ms) ? ms : null
+  }
+
+  // 获取最新事件的服务器时间戳
+  const getLatestEventTime = (runID: string): number | null => {
+    const runEvents = events.filter(evt => evt.run_id === runID)
+    if (runEvents.length === 0) return null
+    // 事件按 seq 排序，取最后一个
+    const latest = runEvents[runEvents.length - 1]
+    if (!latest?.timestamp) return null
+    const ms = Date.parse(latest.timestamp)
+    return Number.isFinite(ms) ? ms : null
+  }
+
+  const formatSeconds = (seconds: number) => {
+    if (!Number.isFinite(seconds) || seconds <= 0) return '0秒'
+    if (seconds < 60) return `${seconds}秒`
+    const minutes = Math.floor(seconds / 60)
+    const remainingSeconds = seconds % 60
+    if (minutes < 60) return `${minutes}分${remainingSeconds}秒`
+    const hours = Math.floor(minutes / 60)
+    const remainingMinutes = minutes % 60
+    return `${hours}小时${remainingMinutes}分${remainingSeconds}秒`
+  }
+
   const formatDuration = (run: Run | null) => {
     if (!run) return '-'
     
@@ -230,47 +281,70 @@ export default function TaskDetailPanel({ task, onClose, onStartRun, onRefresh }
     if (run.status === 'queued') {
       return '等待中'
     }
+
+    // running 状态下，优先使用 run_started 事件时间作为"真正开始执行"的起点
+    const runStartedAt = getRunStartedAtFromEvents(run.id)
     
-    // 使用 started_at，如果没有则使用 created_at
+    // 使用 started_at，如果没有则使用 created_at（用于已完成任务的兜底）
     const startTimeStr = run.started_at || run.created_at
     if (!startTimeStr) return '-'
     
     const startTime = new Date(startTimeStr).getTime()
     const createdTime = new Date(run.created_at).getTime()
     
-    // 如果任务正在运行，使用当前时间计算
+    // 如果任务正在运行
     if (run.status === 'running') {
+      // 没有任何 run_started 事件时，显示"启动中"
+      if (runStartedAt == null) {
+        return '启动中'
+      }
+
+      // 获取最新事件的服务器时间戳
+      const latestEventTime = getLatestEventTime(run.id)
+      
+      // 如果没有最新事件，显示启动中
+      if (latestEventTime == null) {
+        return '启动中'
+      }
+
       const now = Date.now()
       
-      // 验证时间合理性：started_at 不应该早于 created_at 太多
-      // 如果 started_at 比 created_at 早超过 1 分钟，使用 created_at
-      let effectiveStart = startTime
-      if (startTime < createdTime - 60000) {
-        effectiveStart = createdTime
+      // 核心修复：使用服务器时间差 + 本地时间增量
+      // 这样可以避免客户端/服务器时间不同步的问题
+      const base = durationBaseRef.current
+      
+      // 检查是否需要更新基准点（run 切换或有新事件）
+      if (!base || base.runId !== run.id || latestEventTime > base.serverLatestTime) {
+        durationBaseRef.current = {
+          runId: run.id,
+          serverStartTime: runStartedAt,
+          serverLatestTime: latestEventTime,
+          localCaptureTime: now
+        }
       }
       
-      // 如果是未来时间，显示刚开始
-      if (effectiveStart > now) {
-        return '0秒'
-      }
+      // 计算耗时：服务器时间差（稳定基准） + 本地时间增量（实时递增）
+      const currentBase = durationBaseRef.current!
+      const serverElapsed = currentBase.serverLatestTime - currentBase.serverStartTime
+      const localIncrement = now - currentBase.localCaptureTime
+      const totalMs = serverElapsed + localIncrement
       
-      const seconds = Math.floor((now - effectiveStart) / 1000)
+      const seconds = Math.floor(totalMs / 1000)
       if (seconds < 0) return '0秒'
-      if (seconds < 60) return `${seconds}秒`
-      const minutes = Math.floor(seconds / 60)
-      const remainingSeconds = seconds % 60
-      return `${minutes}分${remainingSeconds}秒`
+      return formatSeconds(seconds)
     }
     
-    // 任务已完成，使用 finished_at
+    // 任务已完成，使用 finished_at（全部使用服务器时间，不受本地时间影响）
     if (run.finished_at) {
       const endTime = new Date(run.finished_at).getTime()
-      const seconds = Math.floor((endTime - startTime) / 1000)
+      let effectiveStart = runStartedAt ?? startTime
+      // 兜底：如果 started_at 明显早于 created_at（脏数据/迁移残留），则用 created_at
+      if (runStartedAt == null && startTime < createdTime - 60000) {
+        effectiveStart = createdTime
+      }
+      const seconds = Math.floor((endTime - effectiveStart) / 1000)
       if (seconds < 0) return '-'
-      if (seconds < 60) return `${seconds}秒`
-      const minutes = Math.floor(seconds / 60)
-      const remainingSeconds = seconds % 60
-      return `${minutes}分${remainingSeconds}秒`
+      return formatSeconds(seconds)
     }
     
     return '-'

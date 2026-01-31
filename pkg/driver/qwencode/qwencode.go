@@ -60,7 +60,12 @@ func (d *Driver) BuildCommand(ctx context.Context, spec *driver.TaskSpec, agent 
 	args := []string{
 		"-p", spec.Prompt,
 		"--output-format", "stream-json", // 使用流式 JSON 输出以便实时解析
-		"--yolo", // 自动批准所有操作，适用于自动化场景
+	}
+
+	// yolo 模式（可选，仅在明确指定时启用）
+	// 自动批准所有操作，适用于 CI/自动化场景
+	if yolo, ok := agent.Parameters["yolo"].(bool); ok && yolo {
+		args = append(args, "--yolo")
 	}
 
 	// 最大轮次（可选）
@@ -113,14 +118,8 @@ func (d *Driver) ParseEvent(line string) (*driver.CanonicalEvent, error) {
 
 	var raw map[string]interface{}
 	if err := json.Unmarshal([]byte(line), &raw); err != nil {
-		// 非 JSON 行，作为普通文本消息处理
-		return &driver.CanonicalEvent{
-			Type: driver.EventMessage,
-			Payload: map[string]interface{}{
-				"type":    "text",
-				"content": line,
-			},
-		}, nil
+		// 非 JSON 行，忽略（符合 Driver 契约）
+		return nil, nil
 	}
 
 	eventType, _ := raw["type"].(string)
@@ -149,13 +148,13 @@ func mapEventType(eventType string, raw map[string]interface{}) driver.EventType
 		// 系统消息（init 等），作为系统信息处理，不作为 run_started
 		// run_started 由 executor 单独上报
 		return driver.EventSystemInfo
-	case "assistant":
+	case "assistant", "message":
 		// 助手消息
 		return driver.EventMessage
-	case "result":
+	case "result", "done":
 		// 结果消息，作为结果信息处理，不作为 run_completed
 		// run_completed 由 executor 单独上报
-		return driver.EventResult
+		return driver.EventRunCompleted
 	case "tool_use", "tool_call":
 		return driver.EventToolUseStart
 	case "tool_result":
@@ -171,10 +170,11 @@ func mapEventType(eventType string, raw map[string]interface{}) driver.EventType
 	case "error":
 		return driver.EventError
 	case "thinking", "plan":
+		// thinking 事件作为消息处理
 		return driver.EventMessage
 	default:
-		// 未知类型，作为消息处理
-		return driver.EventMessage
+		// 未知类型，忽略（符合 Driver 契约）
+		return ""
 	}
 }
 

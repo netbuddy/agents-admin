@@ -20,8 +20,7 @@ func main() {
 
 	port := getEnv("PORT", "8080")
 	databaseURL := getEnv("DATABASE_URL", "postgres://agents:agents_dev_password@localhost:5432/agents_admin?sslmode=disable")
-	redisAddr := getEnv("REDIS_ADDR", "localhost:6380")
-	redisPassword := getEnv("REDIS_PASSWORD", "")
+	redisURL := getEnv("REDIS_URL", "redis://localhost:6380/0")
 	etcdEndpoints := getEnv("ETCD_ENDPOINTS", "localhost:2379")
 
 	// 初始化 PostgreSQL（持久化业务数据）
@@ -33,7 +32,7 @@ func main() {
 	log.Println("Connected to PostgreSQL")
 
 	// 初始化 Redis（运行时状态、事件流）
-	redisStore, err := storage.NewRedisStore(redisAddr, redisPassword, 0)
+	redisStore, err := storage.NewRedisStoreFromURL(redisURL)
 	if err != nil {
 		log.Fatalf("Failed to connect to Redis: %v", err)
 	}

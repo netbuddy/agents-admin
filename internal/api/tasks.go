@@ -19,9 +19,15 @@ import (
 // 字段说明：
 //   - Name: 任务名称，必填，用户可读的任务描述
 //   - Spec: 任务规格，可选，包含 prompt、agent 配置等
+//   - ParentID: 父任务 ID，可选，用于创建子任务
+//   - Context: 初始上下文，可选
+//   - InstanceID: 执行实例 ID，可选
 type CreateTaskRequest struct {
-	Name string                 `json:"name"` // 任务名称（必填）
-	Spec map[string]interface{} `json:"spec"` // 任务规格（可选）
+	Name       string                 `json:"name"`                  // 任务名称（必填）
+	Spec       map[string]interface{} `json:"spec"`                  // 任务规格（可选）
+	ParentID   *string                `json:"parent_id,omitempty"`   // 父任务 ID（可选）
+	Context    map[string]interface{} `json:"context,omitempty"`     // 初始上下文（可选）
+	InstanceID *string                `json:"instance_id,omitempty"` // 执行实例 ID（可选）
 }
 
 // UpdateTaskRequest 更新任务的请求体
@@ -70,14 +76,48 @@ func (h *Handler) CreateTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	specJSON, _ := json.Marshal(req.Spec)
+	contextJSON, _ := json.Marshal(req.Context)
+	if req.Context == nil {
+		contextJSON = json.RawMessage("{}")
+	}
+
 	now := time.Now()
 	task := &model.Task{
-		ID:        generateID("task"),
-		Name:      req.Name,
-		Status:    model.TaskStatusPending,
-		Spec:      specJSON,
-		CreatedAt: now,
-		UpdatedAt: now,
+		ID:         generateID("task"),
+		ParentID:   req.ParentID,
+		Name:       req.Name,
+		Status:     model.TaskStatusPending,
+		Spec:       specJSON,
+		Context:    contextJSON,
+		InstanceID: req.InstanceID,
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	}
+
+	// 如果有父任务，继承父任务的上下文
+	if req.ParentID != nil && *req.ParentID != "" {
+		parentTask, err := h.store.GetTask(r.Context(), *req.ParentID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to get parent task")
+			return
+		}
+		if parentTask == nil {
+			writeError(w, http.StatusBadRequest, "parent task not found")
+			return
+		}
+		// 将父任务的 produced_context 添加到子任务的 inherited_context
+		if len(parentTask.Context) > 0 {
+			var parentContext model.TaskContext
+			if err := json.Unmarshal(parentTask.Context, &parentContext); err == nil {
+				var childContext model.TaskContext
+				if len(task.Context) > 0 {
+					_ = json.Unmarshal(task.Context, &childContext)
+				}
+				// 继承父任务产出的上下文
+				childContext.InheritedContext = append(childContext.InheritedContext, parentContext.ProducedContext...)
+				task.Context, _ = json.Marshal(childContext)
+			}
+		}
 	}
 
 	if err := h.store.CreateTask(r.Context(), task); err != nil {
@@ -165,4 +205,83 @@ func (h *Handler) DeleteTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// ListSubTasks 列出子任务
+//
+// 路由: GET /api/v1/tasks/{id}/subtasks
+//
+// 路径参数:
+//   - id: 父任务 ID
+//
+// 响应:
+//
+//	{
+//	  "tasks": [...],
+//	  "count": 10
+//	}
+func (h *Handler) ListSubTasks(w http.ResponseWriter, r *http.Request) {
+	parentID := r.PathValue("id")
+	tasks, err := h.store.ListSubTasks(r.Context(), parentID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list subtasks")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"tasks": tasks, "count": len(tasks)})
+}
+
+// GetTaskTree 获取任务树
+//
+// 路由: GET /api/v1/tasks/{id}/tree
+//
+// 路径参数:
+//   - id: 根任务 ID
+//
+// 响应:
+//
+//	{
+//	  "tasks": [...],  // 按深度和创建时间排序
+//	  "count": 10
+//	}
+func (h *Handler) GetTaskTree(w http.ResponseWriter, r *http.Request) {
+	rootID := r.PathValue("id")
+	tasks, err := h.store.GetTaskTree(r.Context(), rootID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to get task tree")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"tasks": tasks, "count": len(tasks)})
+}
+
+// UpdateTaskContext 更新任务上下文
+//
+// 路由: PUT /api/v1/tasks/{id}/context
+//
+// 请求体:
+//
+//	{
+//	  "produced_context": [...],
+//	  "conversation_history": [...]
+//	}
+func (h *Handler) UpdateTaskContext(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	var context model.TaskContext
+	if err := json.NewDecoder(r.Body).Decode(&context); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	contextJSON, err := json.Marshal(context)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to marshal context")
+		return
+	}
+
+	if err := h.store.UpdateTaskContext(r.Context(), id, contextJSON); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to update task context")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{"message": "context updated"})
 }

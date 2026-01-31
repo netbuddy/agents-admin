@@ -33,13 +33,16 @@ type Config struct {
 // Executor 执行器核心结构
 // 负责与 API Server 通信、执行任务、上报事件
 type Executor struct {
-	config         Config                        // 配置
-	httpClient     *http.Client                  // HTTP 客户端
-	drivers        *driver.Registry              // Driver 注册表
-	mu             sync.Mutex                    // 保护 running map
-	running        map[string]context.CancelFunc // 运行中的任务
-	authController *AuthControllerV2             // 认证任务控制器
-	eventBus       *storage.EtcdEventBus         // 事件总线（可选，用于事件驱动模式）
+	config           Config                        // 配置
+	httpClient       *http.Client                  // HTTP 客户端
+	drivers          *driver.Registry              // Driver 注册表
+	mu               sync.Mutex                    // 保护 running map
+	running          map[string]context.CancelFunc // 运行中的任务
+	authController   *AuthControllerV2             // 认证任务控制器
+	eventBus         *storage.EtcdEventBus         // 事件总线（可选，用于事件驱动模式）
+	instanceWorker   *InstanceWorker               // Instance 工作线程（P2-1）
+	terminalWorker   *TerminalWorker               // Terminal 工作线程（P2-1）
+	workspaceManager *WorkspaceManager             // Workspace 管理器
 }
 
 // NewExecutor 创建执行器实例
@@ -54,9 +57,12 @@ func NewExecutor(cfg Config) (*Executor, error) {
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
-		drivers:        driver.NewRegistry(),
-		running:        make(map[string]context.CancelFunc),
-		authController: authController,
+		drivers:          driver.NewRegistry(),
+		running:          make(map[string]context.CancelFunc),
+		authController:   authController,
+		instanceWorker:   NewInstanceWorker(cfg),                // P2-1: Instance 工作线程
+		terminalWorker:   NewTerminalWorker(cfg),                // P2-1: Terminal 工作线程
+		workspaceManager: NewWorkspaceManager(cfg.WorkspaceDir), // Workspace 管理器
 	}, nil
 }
 
@@ -98,6 +104,24 @@ func (e *Executor) Start(ctx context.Context) {
 		go func() {
 			defer wg.Done()
 			e.authController.Start(ctx)
+		}()
+	}
+
+	// P2-1: Instance 工作线程（处理容器创建/启动/停止）
+	if e.instanceWorker != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			e.instanceWorker.Start(ctx)
+		}()
+	}
+
+	// P2-1: Terminal 工作线程（处理终端会话启动/关闭）
+	if e.terminalWorker != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			e.terminalWorker.Start(ctx)
 		}()
 	}
 
@@ -221,17 +245,37 @@ func (e *Executor) executeRun(ctx context.Context, run map[string]interface{}) {
 
 	log.Printf("执行任务: %s", runID)
 
-	// 解析 snapshot 中的任务配置
-	snapshot, _ := run["snapshot"].(map[string]interface{})
-	agentConfig, _ := snapshot["agent"].(map[string]interface{})
-	agentType, _ := agentConfig["type"].(string)
+	// 解析 snapshot 中的任务配置（带类型安全检查）
+	snapshot, ok := run["snapshot"].(map[string]interface{})
+	if !ok || snapshot == nil {
+		e.reportError(ctx, runID, "任务快照 (snapshot) 缺失或格式错误")
+		return
+	}
+
+	agentConfig, ok := snapshot["agent"].(map[string]interface{})
+	if !ok || agentConfig == nil {
+		e.reportError(ctx, runID, "Agent 配置 (snapshot.agent) 缺失或格式错误")
+		return
+	}
+
+	agentType, ok := agentConfig["type"].(string)
+	if !ok || agentType == "" {
+		e.reportError(ctx, runID, "Agent 类型 (snapshot.agent.type) 缺失或格式错误")
+		return
+	}
+
+	prompt, ok := snapshot["prompt"].(string)
+	if !ok || prompt == "" {
+		e.reportError(ctx, runID, "任务提示 (snapshot.prompt) 缺失或格式错误")
+		return
+	}
 
 	// 获取对应的 Driver
 	// Agent type 到 driver name 的映射
 	// 支持多种格式：qwen-code -> qwencode-v1, qwencode -> qwencode-v1
 	driverName := normalizeDriverName(agentType)
-	d, ok := e.drivers.Get(driverName)
-	if !ok {
+	d, driverOk := e.drivers.Get(driverName)
+	if !driverOk {
 		e.reportError(ctx, runID, fmt.Sprintf("找不到驱动: %s (原始类型: %s)", driverName, agentType))
 		return
 	}
@@ -239,7 +283,7 @@ func (e *Executor) executeRun(ctx context.Context, run map[string]interface{}) {
 	// 构建 TaskSpec（任务描述）
 	spec := &driver.TaskSpec{
 		ID:     runID,
-		Prompt: snapshot["prompt"].(string),
+		Prompt: prompt,
 	}
 
 	// 构建 AgentConfig（执行者配置）
@@ -264,10 +308,25 @@ func (e *Executor) executeRun(ctx context.Context, run map[string]interface{}) {
 		return
 	}
 
+	// 准备 Workspace（如果配置了）
+	var workspace *PreparedWorkspace
+	wsConfig := ParseWorkspaceConfig(snapshot)
+	if wsConfig != nil {
+		log.Printf("任务 %s 需要准备 Workspace: type=%s", runID, wsConfig.Type)
+		workspace, err = e.workspaceManager.Prepare(ctx, runID, wsConfig)
+		if err != nil {
+			e.reportError(ctx, runID, fmt.Sprintf("准备 Workspace 失败: %v", err))
+			return
+		}
+		if workspace != nil && workspace.Cleanup != nil {
+			defer workspace.Cleanup()
+		}
+	}
+
 	// 优先使用 instance_id 获取容器，回退到 account_id
 	instanceID, _ := agentConfig["instance_id"].(string)
 	accountID, _ := agentConfig["account_id"].(string)
-	
+
 	var containerName string
 	if instanceID != "" {
 		// 直接通过 instance_id 获取容器名
@@ -290,26 +349,47 @@ func (e *Executor) executeRun(ctx context.Context, run map[string]interface{}) {
 
 	log.Printf("任务 %s 将在容器 %s 中执行", runID, containerName)
 
+	// 如果有 Workspace，复制到容器中
+	if workspace != nil && workspace.Path != "" && wsConfig.Type == "git" {
+		log.Printf("[Workspace] 复制文件到容器: %s -> %s:/workspace", workspace.Path, containerName)
+		if err := e.copyToContainer(ctx, workspace.Path, containerName, "/workspace"); err != nil {
+			e.reportError(ctx, runID, fmt.Sprintf("复制 Workspace 到容器失败: %v", err))
+			return
+		}
+	}
+
 	// 上报 run_started 事件
-	e.reportEvent(ctx, runID, 1, "run_started", map[string]interface{}{
+	startPayload := map[string]interface{}{
 		"node_id":   e.config.NodeID,
 		"container": containerName,
-	})
+	}
+	if workspace != nil {
+		startPayload["workspace"] = map[string]interface{}{
+			"type":        wsConfig.Type,
+			"path":        workspace.Path,
+			"working_dir": workspace.WorkingDir,
+		}
+	}
+	e.reportEvent(ctx, runID, 1, "run_started", startPayload)
 
 	// 构建 docker exec 命令
 	// docker exec <container> <command> <args...>
 	dockerArgs := []string{"exec"}
-	
+
 	// 添加环境变量
 	for k, v := range runConfig.Env {
 		dockerArgs = append(dockerArgs, "-e", k+"="+v)
 	}
-	
-	// 设置工作目录
-	if runConfig.WorkingDir != "" {
-		dockerArgs = append(dockerArgs, "-w", runConfig.WorkingDir)
+
+	// 设置工作目录（优先使用 Workspace 的工作目录）
+	workingDir := runConfig.WorkingDir
+	if workspace != nil && workspace.WorkingDir != "" {
+		workingDir = workspace.WorkingDir
 	}
-	
+	if workingDir != "" {
+		dockerArgs = append(dockerArgs, "-w", workingDir)
+	}
+
 	dockerArgs = append(dockerArgs, containerName)
 	dockerArgs = append(dockerArgs, runConfig.Command...)
 	dockerArgs = append(dockerArgs, runConfig.Args...)
@@ -371,7 +451,7 @@ func (e *Executor) streamOutput(ctx context.Context, runID string, r io.Reader, 
 	// 增大缓冲区以处理大行（如长 JSON）
 	buf := make([]byte, 0, 64*1024)
 	scanner.Buffer(buf, 1024*1024)
-	
+
 	seq := startSeq
 
 	for scanner.Scan() {
@@ -407,7 +487,7 @@ func (e *Executor) reportEventWithRaw(ctx context.Context, runID string, seq int
 		"timestamp": time.Now().Format(time.RFC3339Nano),
 		"payload":   payload,
 	}
-	
+
 	// 如果有原始数据，添加到事件中
 	if raw != "" {
 		event["raw"] = raw
@@ -505,7 +585,9 @@ func (e *Executor) getContainerForInstance(ctx context.Context, instanceID strin
 	}
 
 	var instance struct {
-		ID        string `json:"id"`
+		ID            string `json:"id"`
+		ContainerName string `json:"container_name"`
+		// 兼容旧字段（避免历史数据/旧 API 返回）
 		Container string `json:"container"`
 		Status    string `json:"status"`
 	}
@@ -513,7 +595,11 @@ func (e *Executor) getContainerForInstance(ctx context.Context, instanceID strin
 		return "", fmt.Errorf("解析响应失败: %w", err)
 	}
 
-	if instance.Container == "" {
+	container := instance.ContainerName
+	if container == "" {
+		container = instance.Container
+	}
+	if container == "" {
 		return "", fmt.Errorf("实例 %s 没有关联的容器", instanceID)
 	}
 
@@ -521,7 +607,7 @@ func (e *Executor) getContainerForInstance(ctx context.Context, instanceID strin
 		log.Printf("警告: 实例 %s 状态为 %s，可能无法执行", instanceID, instance.Status)
 	}
 
-	return instance.Container, nil
+	return container, nil
 }
 
 // getContainerForAccount 根据 account_id 获取对应的容器名称
@@ -563,7 +649,9 @@ func (e *Executor) getContainerFromAPI(ctx context.Context, accountID string) (s
 
 	var result struct {
 		Instances []struct {
-			ID        string `json:"id"`
+			ID            string `json:"id"`
+			ContainerName string `json:"container_name"`
+			// 兼容旧字段（避免历史数据/旧 API 返回）
 			Container string `json:"container"`
 			Status    string `json:"status"`
 		} `json:"instances"`
@@ -574,14 +662,24 @@ func (e *Executor) getContainerFromAPI(ctx context.Context, accountID string) (s
 
 	// 查找运行中的实例
 	for _, inst := range result.Instances {
-		if inst.Status == "running" && inst.Container != "" {
-			return inst.Container, nil
+		container := inst.ContainerName
+		if container == "" {
+			container = inst.Container
+		}
+		if inst.Status == "running" && container != "" {
+			return container, nil
 		}
 	}
 
 	// 如果没有运行中的实例，返回第一个实例
-	if len(result.Instances) > 0 && result.Instances[0].Container != "" {
-		return result.Instances[0].Container, nil
+	if len(result.Instances) > 0 {
+		container := result.Instances[0].ContainerName
+		if container == "" {
+			container = result.Instances[0].Container
+		}
+		if container != "" {
+			return container, nil
+		}
 	}
 
 	return "", fmt.Errorf("没有找到实例")
@@ -593,7 +691,7 @@ func (e *Executor) findContainerByAccountID(ctx context.Context, accountID strin
 	// 使用 docker ps 查找匹配的容器
 	// 容器名包含 account_id（已 sanitize）
 	sanitized := sanitizeAccountID(accountID)
-	
+
 	cmd := exec.CommandContext(ctx, "docker", "ps", "--format", "{{.Names}}", "--filter", "status=running")
 	output, err := cmd.Output()
 	if err != nil {
@@ -618,4 +716,38 @@ func sanitizeAccountID(accountID string) string {
 	s := strings.ReplaceAll(accountID, "@", "_at_")
 	s = strings.ReplaceAll(s, ".", "_")
 	return s
+}
+
+// copyToContainer 将本地目录复制到容器中
+func (e *Executor) copyToContainer(ctx context.Context, srcPath, containerName, destPath string) error {
+	// 先在容器中创建目标目录
+	mkdirCmd := exec.CommandContext(ctx, "docker", "exec", containerName, "mkdir", "-p", destPath)
+	if output, err := mkdirCmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("创建目录失败: %w, 输出: %s", err, string(output))
+	}
+
+	// 使用 docker cp 复制文件
+	// docker cp <src>/ <container>:<dest>
+	// 注意：srcPath 后面加 /. 表示复制目录内容而不是目录本身
+	cmd := exec.CommandContext(ctx, "docker", "cp", srcPath+"/.", containerName+":"+destPath)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("docker cp 失败: %w, 输出: %s", err, string(output))
+	}
+
+	log.Printf("[Workspace] 复制完成: %s -> %s:%s", srcPath, containerName, destPath)
+	return nil
+}
+
+// copyFromContainer 从容器中复制文件到本地
+func (e *Executor) copyFromContainer(ctx context.Context, containerName, srcPath, destPath string) error {
+	// 使用 docker cp 复制文件
+	cmd := exec.CommandContext(ctx, "docker", "cp", containerName+":"+srcPath, destPath)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("docker cp 失败: %w, 输出: %s", err, string(output))
+	}
+
+	log.Printf("[Workspace] 复制完成: %s:%s -> %s", containerName, srcPath, destPath)
+	return nil
 }

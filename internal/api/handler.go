@@ -61,6 +61,9 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /api/v1/tasks", h.CreateTask)
 	mux.HandleFunc("GET /api/v1/tasks/{id}", h.GetTask)
 	mux.HandleFunc("DELETE /api/v1/tasks/{id}", h.DeleteTask)
+	mux.HandleFunc("GET /api/v1/tasks/{id}/subtasks", h.ListSubTasks)
+	mux.HandleFunc("GET /api/v1/tasks/{id}/tree", h.GetTaskTree)
+	mux.HandleFunc("PUT /api/v1/tasks/{id}/context", h.UpdateTaskContext)
 
 	// Run 接口
 	mux.HandleFunc("POST /api/v1/tasks/{id}/runs", h.CreateRun)
@@ -119,15 +122,29 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("GET /api/v1/instances", h.ListInstances)
 	mux.HandleFunc("POST /api/v1/instances", h.CreateInstance)
 	mux.HandleFunc("GET /api/v1/instances/{id}", h.GetInstance)
+	mux.HandleFunc("PATCH /api/v1/instances/{id}", h.UpdateInstanceStatus)
 	mux.HandleFunc("DELETE /api/v1/instances/{id}", h.DeleteInstance)
 	mux.HandleFunc("POST /api/v1/instances/{id}/start", h.StartInstance)
 	mux.HandleFunc("POST /api/v1/instances/{id}/stop", h.StopInstance)
 
+	// Executor 实例轮询接口
+	mux.HandleFunc("GET /api/v1/nodes/{node_id}/instances", h.ListPendingInstances)
+
 	// 终端会话接口
+	mux.HandleFunc("GET /api/v1/terminal-sessions", h.ListTerminalSessions)
+	mux.HandleFunc("POST /api/v1/terminal-sessions", h.CreateTerminalSession)
+	mux.HandleFunc("GET /api/v1/terminal-sessions/{id}", h.GetTerminalSession)
+	mux.HandleFunc("PATCH /api/v1/terminal-sessions/{id}", h.UpdateTerminalSessionStatus)
+	mux.HandleFunc("DELETE /api/v1/terminal-sessions/{id}", h.DeleteTerminalSession)
+	mux.HandleFunc("/terminal/{id}/", h.ProxyTerminalSession)
+
+	// Executor 终端会话轮询接口
+	mux.HandleFunc("GET /api/v1/nodes/{node_id}/terminal-sessions", h.ListPendingTerminalSessions)
+
+	// 兼容旧路径（将废弃）
 	mux.HandleFunc("POST /api/v1/terminal/session", h.CreateTerminalSession)
 	mux.HandleFunc("GET /api/v1/terminal/session/{id}", h.GetTerminalSession)
 	mux.HandleFunc("DELETE /api/v1/terminal/session/{id}", h.DeleteTerminalSession)
-	mux.HandleFunc("/terminal/{id}/", h.ProxyTerminalSession)
 
 	// ========== 旧 Runner API（兼容，将废弃）==========
 	mux.HandleFunc("GET /api/v1/runners", h.ListRunners)

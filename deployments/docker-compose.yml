@@ -79,12 +79,12 @@ services:
     profiles:
       - full
 
-  # Node Agent (本地开发模式)
-  node-agent:
+  # Executor (节点执行器，本地开发模式)
+  executor:
     build:
       context: ..
       dockerfile: deployments/Dockerfile.agent
-    container_name: agents-node
+    container_name: agents-executor
     depends_on:
       - api-server
     environment:

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { Plus, Trash2, Play, Square, Terminal, Server, CheckCircle, Clock, AlertCircle, X } from 'lucide-react'
 import { AdminLayout } from '@/components/layout'
 
@@ -21,17 +21,17 @@ interface Instance {
   id: string
   name: string
   account_id: string
-  agent_type: string
-  container: string
+  agent_type_id: string
+  container_name: string | null
   status: string
-  node: string
+  node_id: string | null
   created_at: string
 }
 
 interface TerminalSession {
   id: string
-  url: string
-  port: number
+  url?: string | null
+  port?: number | null
   status: string
 }
 
@@ -42,6 +42,15 @@ export default function InstancesPage() {
   const [loading, setLoading] = useState(true)
   const [showCreateWizard, setShowCreateWizard] = useState(false)
   const [terminalSession, setTerminalSession] = useState<TerminalSession | null>(null)
+
+  // 固定实例展示顺序：避免状态变更导致 UI “跳动”
+  const sortedInstances = useMemo(() => {
+    return [...instances].sort((a, b) => {
+      const byName = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+      if (byName !== 0) return byName
+      return a.id.localeCompare(b.id)
+    })
+  }, [instances])
 
   const fetchData = useCallback(async () => {
     try {
@@ -128,12 +137,59 @@ export default function InstancesPage() {
       })
       if (res.ok) {
         const data = await res.json()
-        setTerminalSession(data)
+        // 先打开弹窗（此时通常还是 pending），再轮询直到 running
+        setTerminalSession({
+          id: data.id,
+          status: data.status || 'pending',
+          port: data.port ?? null,
+          url: data.url ?? null,
+        })
+
+        const startedAt = Date.now()
+        const timeoutMs = 20000
+        while (Date.now() - startedAt < timeoutMs) {
+          const sRes = await fetch(`/api/v1/terminal/session/${data.id}`)
+          if (sRes.ok) {
+            const s = await sRes.json()
+
+            if (s.status === 'running' && s.port) {
+              setTerminalSession({
+                id: s.id,
+                status: s.status,
+                port: s.port,
+                url: s.url ?? null,
+              })
+              return
+            }
+
+            if (s.status === 'error') {
+              throw new Error('terminal error')
+            }
+
+            // 逐步更新状态，让用户知道正在启动
+            setTerminalSession(prev =>
+              prev
+                ? {
+                    ...prev,
+                    status: s.status || prev.status,
+                    port: s.port ?? prev.port,
+                    url: s.url ?? prev.url,
+                  }
+                : prev
+            )
+          }
+
+          await new Promise<void>(resolve => setTimeout(resolve, 600))
+        }
+
+        throw new Error('terminal timeout')
       } else {
         alert('无法打开终端')
       }
     } catch (err) {
       console.error('Failed to open terminal:', err)
+      alert('终端启动失败或超时，请重试')
+      setTerminalSession(null)
     }
   }
 
@@ -203,14 +259,14 @@ export default function InstancesPage() {
           </div>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {instances.map(instance => (
+            {sortedInstances.map(instance => (
               <div key={instance.id} className="bg-white rounded-lg border p-4">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-2">
                     {statusIcon(instance.status)}
                     <div>
                       <h3 className="font-medium">{instance.name}</h3>
-                      <p className="text-xs text-gray-500">{instance.container}</p>
+                      <p className="text-xs text-gray-500">{instance.container_name || '-'}</p>
                     </div>
                   </div>
                   <button
@@ -222,16 +278,24 @@ export default function InstancesPage() {
                 </div>
 
                 <div className="space-y-1 text-sm text-gray-600 mb-3">
-                  <p><span className="text-gray-400">类型:</span> {getAgentTypeName(instance.agent_type)}</p>
+                  <p><span className="text-gray-400">类型:</span> {getAgentTypeName(instance.agent_type_id)}</p>
                   <p><span className="text-gray-400">账号:</span> {getAccountName(instance.account_id)}</p>
-                  <p><span className="text-gray-400">节点:</span> {instance.node}</p>
+                  <p><span className="text-gray-400">节点:</span> {instance.node_id || '-'}</p>
                 </div>
 
                 <div className="flex items-center gap-2 text-sm mb-3">
                   <span className={`px-2 py-0.5 rounded text-xs ${
-                    instance.status === 'running' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                    instance.status === 'running' ? 'bg-green-100 text-green-800' : 
+                    instance.status === 'stopping' ? 'bg-yellow-100 text-yellow-800' :
+                    instance.status === 'pending' || instance.status === 'creating' ? 'bg-blue-100 text-blue-800' :
+                    'bg-gray-100 text-gray-800'
                   }`}>
-                    {instance.status === 'running' ? '运行中' : instance.status === 'stopped' ? '已停止' : instance.status}
+                    {instance.status === 'running' ? '运行中' : 
+                     instance.status === 'stopped' ? '已停止' : 
+                     instance.status === 'stopping' ? '停止中...' :
+                     instance.status === 'pending' ? '等待创建...' :
+                     instance.status === 'creating' ? '创建中...' :
+                     instance.status}
                   </span>
                 </div>
 
@@ -424,7 +488,8 @@ function CreateInstanceWizard({
 
 function TerminalModal({ session, onClose }: { session: TerminalSession, onClose: () => void }) {
   const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost'
-  const iframeUrl = `http://${host}:${session.port}/`
+  const ready = session.status === 'running' && !!session.port
+  const iframeUrl = ready ? `http://${host}:${session.port}/` : 'about:blank'
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
@@ -436,13 +501,22 @@ function TerminalModal({ session, onClose }: { session: TerminalSession, onClose
           </div>
           <button
             onClick={onClose}
+            aria-label="关闭终端"
             className="p-1 text-gray-400 hover:text-white hover:bg-gray-700 rounded"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="flex-1 bg-black">
+        <div className="flex-1 bg-black relative">
+          {!ready && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="text-gray-200 text-sm">
+                终端启动中…（{session.status || 'pending'}）
+              </div>
+            </div>
+          )}
           <iframe
+            key={`${session.id}-${ready ? 'ready' : 'pending'}`}
             src={iframeUrl}
             className="w-full h-full border-0"
             title="Terminal"

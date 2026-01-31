@@ -50,9 +50,9 @@ type TaskSpec struct {
 	// 例如：{"priority": "high", "team": "platform"}
 	Labels map[string]string `json:"labels,omitempty"`
 
-	// Context 上下文信息（可选）
-	// 用于传递额外的背景信息给 Agent
-	Context *TaskContext `json:"context,omitempty"`
+	// Context 执行上下文（可选）
+	// 用于传递额外的背景信息给 Agent，包括继承的上下文、对话历史等
+	Context *ExecutionContext `json:"context,omitempty"`
 }
 
 // ============================================================================
@@ -211,16 +211,21 @@ type ResourceLimits struct {
 }
 
 // ============================================================================
-// TaskContext - 任务上下文
+// ExecutionContext - 执行上下文（运行时使用）
 // ============================================================================
 
-// TaskContext 提供任务执行的额外上下文
+// ExecutionContext 提供任务执行的运行时上下文
+//
+// 与 model.TaskContext 的区别：
+//   - model.TaskContext：持久化存储，用于任务层级的上下文传递
+//   - ExecutionContext：运行时使用，传递给 Driver 执行
 //
 // 用于传递：
 //   - 相关文档和参考资料
 //   - 前序任务的输出
-//   - 用户偏好和约定
-type TaskContext struct {
+//   - 继承的上下文信息
+//   - 对话历史
+type ExecutionContext struct {
 	// Documents 相关文档列表
 	Documents []ContextDocument `json:"documents,omitempty"`
 
@@ -229,6 +234,12 @@ type TaskContext struct {
 
 	// Instructions 额外指令
 	Instructions string `json:"instructions,omitempty"`
+
+	// InheritedContext 从父任务继承的上下文
+	InheritedContext []ContextItem `json:"inherited_context,omitempty"`
+
+	// ConversationHistory 对话历史（来自 Session）
+	ConversationHistory []ConversationMessage `json:"conversation_history,omitempty"`
 }
 
 // ContextDocument 上下文文档
@@ -241,4 +252,31 @@ type ContextDocument struct {
 
 	// Type 文档类型（markdown/code/json 等）
 	Type string `json:"type,omitempty"`
+}
+
+// ContextItem 上下文项（与 model.ContextItem 对应）
+type ContextItem struct {
+	// Type 上下文类型（file, summary, reference）
+	Type string `json:"type"`
+
+	// Name 名称
+	Name string `json:"name"`
+
+	// Content 内容
+	Content string `json:"content,omitempty"`
+
+	// Source 来源任务 ID
+	Source string `json:"source,omitempty"`
+}
+
+// ConversationMessage 对话消息
+type ConversationMessage struct {
+	// Role 角色（user, assistant, system）
+	Role string `json:"role"`
+
+	// Content 消息内容
+	Content string `json:"content"`
+
+	// Timestamp 时间戳
+	Timestamp time.Time `json:"timestamp"`
 }

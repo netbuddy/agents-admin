@@ -567,3 +567,177 @@ func BenchmarkRunSerialization(b *testing.B) {
 		json.Unmarshal(data, &run2)
 	}
 }
+
+// ============================================================================
+// Instance 测试
+// ============================================================================
+
+// TestInstanceSerialization 测试 Instance 序列化
+func TestInstanceSerialization(t *testing.T) {
+	containerName := "test-container"
+	nodeID := "node-001"
+	instance := &model.Instance{
+		ID:            "inst-001",
+		Name:          "Test Instance",
+		AccountID:     "acc-001",
+		AgentTypeID:   "qwencode",
+		ContainerName: &containerName,
+		NodeID:        &nodeID,
+		Status:        model.InstanceStatusRunning,
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
+	}
+
+	data, err := json.Marshal(instance)
+	if err != nil {
+		t.Fatalf("Failed to marshal instance: %v", err)
+	}
+
+	var instance2 model.Instance
+	if err := json.Unmarshal(data, &instance2); err != nil {
+		t.Fatalf("Failed to unmarshal instance: %v", err)
+	}
+
+	if instance2.ID != instance.ID {
+		t.Errorf("ID mismatch: got %s, want %s", instance2.ID, instance.ID)
+	}
+	if instance2.Name != instance.Name {
+		t.Errorf("Name mismatch: got %s, want %s", instance2.Name, instance.Name)
+	}
+	if instance2.Status != instance.Status {
+		t.Errorf("Status mismatch: got %s, want %s", instance2.Status, instance.Status)
+	}
+}
+
+// TestInstanceStatusValues 测试 InstanceStatus 值
+func TestInstanceStatusValues(t *testing.T) {
+	statuses := []model.InstanceStatus{
+		model.InstanceStatusPending,
+		model.InstanceStatusCreating,
+		model.InstanceStatusRunning,
+		model.InstanceStatusStopped,
+		model.InstanceStatusError,
+	}
+
+	for _, status := range statuses {
+		if status == "" {
+			t.Errorf("InstanceStatus should not be empty")
+		}
+	}
+}
+
+// TestInstanceStatusTransitions 测试 Instance 状态转换
+func TestInstanceStatusTransitions(t *testing.T) {
+	validTransitions := map[model.InstanceStatus][]model.InstanceStatus{
+		model.InstanceStatusPending:  {model.InstanceStatusCreating, model.InstanceStatusError},
+		model.InstanceStatusCreating: {model.InstanceStatusRunning, model.InstanceStatusError},
+		model.InstanceStatusRunning:  {model.InstanceStatusStopped, model.InstanceStatusError},
+		model.InstanceStatusStopped:  {model.InstanceStatusRunning},
+		model.InstanceStatusError:    {},
+	}
+
+	for from, validTos := range validTransitions {
+		t.Logf("Instance status %s can transition to: %v", from, validTos)
+	}
+}
+
+// ============================================================================
+// TerminalSession 测试
+// ============================================================================
+
+// TestTerminalSessionSerialization 测试 TerminalSession 序列化
+func TestTerminalSessionSerialization(t *testing.T) {
+	instanceID := "inst-001"
+	nodeID := "node-001"
+	port := 7681
+	url := "http://localhost:7681"
+	expiresAt := time.Now().Add(1 * time.Hour)
+
+	session := &model.TerminalSession{
+		ID:            "term-001",
+		InstanceID:    &instanceID,
+		ContainerName: "test-container",
+		NodeID:        &nodeID,
+		Port:          &port,
+		URL:           &url,
+		Status:        model.TerminalStatusRunning,
+		CreatedAt:     time.Now(),
+		ExpiresAt:     &expiresAt,
+	}
+
+	data, err := json.Marshal(session)
+	if err != nil {
+		t.Fatalf("Failed to marshal terminal session: %v", err)
+	}
+
+	var session2 model.TerminalSession
+	if err := json.Unmarshal(data, &session2); err != nil {
+		t.Fatalf("Failed to unmarshal terminal session: %v", err)
+	}
+
+	if session2.ID != session.ID {
+		t.Errorf("ID mismatch: got %s, want %s", session2.ID, session.ID)
+	}
+	if session2.ContainerName != session.ContainerName {
+		t.Errorf("ContainerName mismatch: got %s, want %s", session2.ContainerName, session.ContainerName)
+	}
+	if session2.Status != session.Status {
+		t.Errorf("Status mismatch: got %s, want %s", session2.Status, session.Status)
+	}
+}
+
+// TestTerminalSessionStatusValues 测试 TerminalSessionStatus 值
+func TestTerminalSessionStatusValues(t *testing.T) {
+	statuses := []model.TerminalSessionStatus{
+		model.TerminalStatusPending,
+		model.TerminalStatusStarting,
+		model.TerminalStatusRunning,
+		model.TerminalStatusClosed,
+		model.TerminalStatusError,
+	}
+
+	for _, status := range statuses {
+		if status == "" {
+			t.Errorf("TerminalSessionStatus should not be empty")
+		}
+	}
+}
+
+// TestTerminalSessionStatusTransitions 测试 TerminalSession 状态转换
+func TestTerminalSessionStatusTransitions(t *testing.T) {
+	validTransitions := map[model.TerminalSessionStatus][]model.TerminalSessionStatus{
+		model.TerminalStatusPending:  {model.TerminalStatusStarting, model.TerminalStatusError},
+		model.TerminalStatusStarting: {model.TerminalStatusRunning, model.TerminalStatusError},
+		model.TerminalStatusRunning:  {model.TerminalStatusClosed, model.TerminalStatusError},
+		model.TerminalStatusClosed:   {},
+		model.TerminalStatusError:    {},
+	}
+
+	for from, validTos := range validTransitions {
+		t.Logf("TerminalSession status %s can transition to: %v", from, validTos)
+	}
+}
+
+// BenchmarkInstanceSerialization 基准测试 Instance 序列化
+func BenchmarkInstanceSerialization(b *testing.B) {
+	containerName := "test-container"
+	nodeID := "node-001"
+	instance := &model.Instance{
+		ID:            "inst-001",
+		Name:          "Test Instance",
+		AccountID:     "acc-001",
+		AgentTypeID:   "qwencode",
+		ContainerName: &containerName,
+		NodeID:        &nodeID,
+		Status:        model.InstanceStatusRunning,
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		data, _ := json.Marshal(instance)
+		var instance2 model.Instance
+		json.Unmarshal(data, &instance2)
+	}
+}

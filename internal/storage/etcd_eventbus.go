@@ -1,5 +1,16 @@
 // Package storage etcd 事件总线实现
 //
+// Deprecated: P2-3 架构重构后，事件总线统一使用 Redis Streams。
+// 本实现保留用于兼容，新功能请使用 RedisStore 的事件流 API：
+//   - PublishRunEvent()
+//   - SubscribeRunEvents()
+//   - GetRunEvents()
+//
+// 迁移指南：
+//   1. 替换 EtcdEventBus.PublishEvent() → RedisStore.PublishRunEvent()
+//   2. 替换 EtcdEventBus.Subscribe() → RedisStore.SubscribeRunEvents()
+//   3. 移除 etcd 相关配置
+//
 // 基于 etcd 实现事件驱动协同架构，提供：
 //   - 事件发布/订阅
 //   - 状态同步
