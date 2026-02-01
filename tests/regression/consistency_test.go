@@ -18,9 +18,9 @@ func TestConsistency_TaskStatusFollowsRun(t *testing.T) {
 	ctx := context.Background()
 
 	// 创建 Task
-	w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Consistency Test","spec":{"prompt":"test","agent":{"type":"gemini"}}}`)
+	w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Consistency Test","prompt":"test","type":"general"}`)
 	if w.Code != http.StatusCreated {
-		t.Fatal("Failed to create task")
+		t.Fatalf("Failed to create task: %d - %s", w.Code, w.Body.String())
 	}
 	taskResp := parseJSONResponse(w)
 	taskID := taskResp["id"].(string)
@@ -72,7 +72,7 @@ func TestConsistency_CascadeDelete(t *testing.T) {
 
 	t.Run("删除 Task 会删除关联的 Runs", func(t *testing.T) {
 		// 创建 Task
-		w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Cascade Delete Test","spec":{"prompt":"test","agent":{"type":"gemini"}}}`)
+		w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Cascade Delete Test","prompt":"test","type":"general"}`)
 		taskResp := parseJSONResponse(w)
 		taskID := taskResp["id"].(string)
 
@@ -104,7 +104,7 @@ func TestConsistency_CascadeDelete(t *testing.T) {
 
 	t.Run("删除 Task 会删除关联的 Events", func(t *testing.T) {
 		// 创建 Task
-		w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Event Cascade Test","spec":{"prompt":"test","agent":{"type":"gemini"}}}`)
+		w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Event Cascade Test","prompt":"test","type":"general"}`)
 		taskResp := parseJSONResponse(w)
 		taskID := taskResp["id"].(string)
 
@@ -137,7 +137,7 @@ func TestConsistency_RunCounter(t *testing.T) {
 	ctx := context.Background()
 
 	// 创建 Task
-	w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Run Counter Test","spec":{"prompt":"test","agent":{"type":"gemini"}}}`)
+	w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Run Counter Test","prompt":"test","type":"general"}`)
 	taskResp := parseJSONResponse(w)
 	taskID := taskResp["id"].(string)
 	defer testStore.DeleteTask(ctx, taskID)
@@ -167,7 +167,7 @@ func TestConsistency_EventOrdering(t *testing.T) {
 	ctx := context.Background()
 
 	// 创建 Task 和 Run
-	w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Event Order Test","spec":{"prompt":"test","agent":{"type":"gemini"}}}`)
+	w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Event Order Test","prompt":"test","type":"general"}`)
 	taskResp := parseJSONResponse(w)
 	taskID := taskResp["id"].(string)
 	defer testStore.DeleteTask(ctx, taskID)
@@ -219,7 +219,7 @@ func TestConsistency_NodeRunAssignment(t *testing.T) {
 	defer makeRequest("DELETE", "/api/v1/nodes/"+nodeID, nil)
 
 	// 创建 Task 和 Run
-	w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Node Assignment Test","spec":{"prompt":"test","agent":{"type":"gemini"}}}`)
+	w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Node Assignment Test","prompt":"test","type":"general"}`)
 	taskResp := parseJSONResponse(w)
 	taskID := taskResp["id"].(string)
 	defer testStore.DeleteTask(ctx, taskID)
@@ -252,7 +252,7 @@ func TestConsistency_MultipleRunsLatestStatus(t *testing.T) {
 	ctx := context.Background()
 
 	// 创建 Task
-	w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Multiple Runs Test","spec":{"prompt":"test","agent":{"type":"gemini"}}}`)
+	w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Multiple Runs Test","prompt":"test","type":"general"}`)
 	taskResp := parseJSONResponse(w)
 	taskID := taskResp["id"].(string)
 	defer testStore.DeleteTask(ctx, taskID)

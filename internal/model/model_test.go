@@ -47,11 +47,13 @@ func TestRunStatus(t *testing.T) {
 
 func TestTaskJSONSerialization(t *testing.T) {
 	now := time.Now().Truncate(time.Second)
+	// 使用扁平化的 Task 结构
 	task := &Task{
 		ID:        "task-123",
 		Name:      "Test Task",
 		Status:    TaskStatusPending,
-		Spec:      json.RawMessage(`{"prompt":"hello"}`),
+		Type:      TaskTypeGeneral,
+		Prompt:    &Prompt{Content: "hello"},
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
@@ -74,6 +76,11 @@ func TestTaskJSONSerialization(t *testing.T) {
 	}
 	if decoded.Status != task.Status {
 		t.Errorf("Status = %v, want %v", decoded.Status, task.Status)
+	}
+	if decoded.Prompt == nil || task.Prompt == nil {
+		t.Errorf("Prompt is nil")
+	} else if decoded.Prompt.Content != task.Prompt.Content {
+		t.Errorf("Prompt.Content = %v, want %v", decoded.Prompt.Content, task.Prompt.Content)
 	}
 }
 

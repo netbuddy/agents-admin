@@ -17,7 +17,7 @@ func TestEvent_Post(t *testing.T) {
 	ctx := context.Background()
 
 	// 创建测试 Task 和 Run
-	w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Event Post Test","spec":{"prompt":"test","agent":{"type":"gemini"}}}`)
+	w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Event Post Test","prompt":"test","type":"general"}`)
 	taskResp := parseJSONResponse(w)
 	taskID := taskResp["id"].(string)
 	defer testStore.DeleteTask(ctx, taskID)
@@ -100,7 +100,7 @@ func TestEvent_Get(t *testing.T) {
 	ctx := context.Background()
 
 	// 创建测试 Task 和 Run
-	w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Event Get Test","spec":{"prompt":"test","agent":{"type":"gemini"}}}`)
+	w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Event Get Test","prompt":"test","type":"general"}`)
 	taskResp := parseJSONResponse(w)
 	taskID := taskResp["id"].(string)
 	defer testStore.DeleteTask(ctx, taskID)
@@ -182,7 +182,7 @@ func TestEvent_Ordering(t *testing.T) {
 	ctx := context.Background()
 
 	// 创建测试 Task 和 Run
-	w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Event Ordering Test","spec":{"prompt":"test","agent":{"type":"gemini"}}}`)
+	w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Event Ordering Test","prompt":"test","type":"general"}`)
 	taskResp := parseJSONResponse(w)
 	taskID := taskResp["id"].(string)
 	defer testStore.DeleteTask(ctx, taskID)
@@ -229,7 +229,7 @@ func TestEvent_LargePayload(t *testing.T) {
 	ctx := context.Background()
 
 	// 创建测试 Task 和 Run
-	w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Large Payload Test","spec":{"prompt":"test","agent":{"type":"gemini"}}}`)
+	w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Large Payload Test","prompt":"test","type":"general"}`)
 	taskResp := parseJSONResponse(w)
 	taskID := taskResp["id"].(string)
 	defer testStore.DeleteTask(ctx, taskID)

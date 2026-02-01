@@ -55,12 +55,15 @@ func (h *Handler) CreateRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 创建任务快照（扁平化 Task 结构的 JSON 序列化）
+	taskSnapshot, _ := json.Marshal(task)
+
 	now := time.Now()
 	run := &model.Run{
 		ID:        generateID("run"),
 		TaskID:    taskID,
 		Status:    model.RunStatusQueued,
-		Snapshot:  task.Spec,
+		Snapshot:  taskSnapshot,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}

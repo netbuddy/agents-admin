@@ -337,14 +337,14 @@ func (s *Scheduler) requeueRunsAssignedToOfflineNodes(ctx context.Context, onlin
 func (s *Scheduler) resolvePreferredNodeID(ctx context.Context, taskID string, snapshot json.RawMessage) string {
 	instanceID, accountID := extractAgentIDs(snapshot)
 
-	// 兼容旧/其它调用方：如果 instance_id 没放在 spec.agent.instance_id，而是放在 Task.InstanceID 字段，
+	// 兼容旧/其它调用方：如果 instance_id 没放在 spec.agent.instance_id，而是放在 Task.AgentID 字段，
 	// 则从任务记录补齐 instanceID。
 	if instanceID == "" && taskID != "" {
 		task, err := s.store.GetTask(ctx, taskID)
 		if err != nil {
 			log.Printf("[Scheduler] GetTask error: %v", err)
-		} else if task != nil && task.InstanceID != nil && *task.InstanceID != "" {
-			instanceID = *task.InstanceID
+		} else if task != nil && task.AgentID != nil && *task.AgentID != "" {
+			instanceID = *task.AgentID
 		}
 	}
 
@@ -517,27 +517,14 @@ func (s *Scheduler) getTaskLabels(ctx context.Context, taskID string) map[string
 		return nil
 	}
 
-	// 解析 TaskSpec 获取 labels
-	var spec map[string]interface{}
-	if err := json.Unmarshal(task.Spec, &spec); err != nil {
-		return nil
-	}
-
-	labelsRaw, ok := spec["labels"]
-	if !ok {
-		return nil
-	}
-
-	labels, ok := labelsRaw.(map[string]interface{})
-	if !ok {
+	// 直接使用扁平化的 Labels 字段
+	if task.Labels == nil {
 		return nil
 	}
 
 	result := make(map[string]string)
-	for k, v := range labels {
-		if str, ok := v.(string); ok {
-			result[k] = str
-		}
+	for k, v := range task.Labels {
+		result[k] = v
 	}
 
 	return result

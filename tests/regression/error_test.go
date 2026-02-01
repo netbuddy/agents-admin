@@ -110,7 +110,7 @@ func TestError_Conflict(t *testing.T) {
 
 	t.Run("删除有活跃 Run 的 Task", func(t *testing.T) {
 		// 创建 Task 和 Run
-		w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Conflict Test Task","spec":{"prompt":"test","agent":{"type":"gemini"}}}`)
+		w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Conflict Test Task","prompt":"test","type":"general"}`)
 		if w.Code != http.StatusCreated {
 			t.Skip("Failed to create task")
 		}
@@ -143,7 +143,7 @@ func TestError_ValidationErrors(t *testing.T) {
 		skipIfNoDatabase(t)
 
 		// 创建 Task 和 Run
-		w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Validation Test","spec":{"prompt":"test","agent":{"type":"gemini"}}}`)
+		w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Validation Test","prompt":"test","type":"general"}`)
 		if w.Code != http.StatusCreated {
 			t.Skip("Failed to create task")
 		}

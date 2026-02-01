@@ -3,6 +3,7 @@ package api
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -14,20 +15,34 @@ import (
 // 请求/响应结构体
 // ============================================================================
 
-// CreateTaskRequest 创建任务的请求体
+// CreateTaskRequest 创建任务的请求体（扁平化结构）
 //
 // 字段说明：
 //   - Name: 任务名称，必填，用户可读的任务描述
-//   - Spec: 任务规格，可选，包含 prompt、agent 配置等
+//   - Description: 任务描述，可选
+//   - Type: 任务类型，可选，默认为 general
+//   - Prompt: 任务提示词内容，必填（字符串或 Prompt 对象）
+//   - PromptDescription: 提示词说明，可选
+//   - Workspace: 工作空间配置，可选
+//   - Security: 安全配置，可选
+//   - Labels: 任务标签，可选
 //   - ParentID: 父任务 ID，可选，用于创建子任务
-//   - Context: 初始上下文，可选
-//   - InstanceID: 执行实例 ID，可选
+//   - TemplateID: 模板 ID，可选
+//   - AgentID: Agent ID，可选
 type CreateTaskRequest struct {
-	Name       string                 `json:"name"`                  // 任务名称（必填）
-	Spec       map[string]interface{} `json:"spec"`                  // 任务规格（可选）
-	ParentID   *string                `json:"parent_id,omitempty"`   // 父任务 ID（可选）
-	Context    map[string]interface{} `json:"context,omitempty"`     // 初始上下文（可选）
-	InstanceID *string                `json:"instance_id,omitempty"` // 执行实例 ID（可选）
+	Name              string                  `json:"name"`                          // 任务名称（必填）
+	Description       string                  `json:"description,omitempty"`         // 任务描述（可选）
+	Type              string                  `json:"type,omitempty"`                // 任务类型（可选，默认 general）
+	Prompt            string                  `json:"prompt"`                        // 任务提示词内容（必填）
+	PromptDescription string                  `json:"prompt_description,omitempty"`  // 提示词说明（可选）
+	PromptTemplateID  *string                 `json:"prompt_template_id,omitempty"`  // 提示词模板 ID（可选）
+	Workspace         *model.WorkspaceConfig  `json:"workspace,omitempty"`           // 工作空间配置（可选）
+	Security          *model.SecurityConfig   `json:"security,omitempty"`            // 安全配置（可选）
+	Labels            map[string]string       `json:"labels,omitempty"`              // 任务标签（可选）
+	ParentID          *string                 `json:"parent_id,omitempty"`           // 父任务 ID（可选）
+	TemplateID        *string                 `json:"template_id,omitempty"`         // 模板 ID（可选）
+	AgentID           *string                 `json:"agent_id,omitempty"`            // Agent ID（可选）
+	Context           *model.TaskContext      `json:"context,omitempty"`             // 初始上下文（可选）
 }
 
 // UpdateTaskRequest 更新任务的请求体
@@ -35,11 +50,13 @@ type CreateTaskRequest struct {
 // 字段说明：
 //   - Name: 任务名称，可选
 //   - Status: 任务状态，可选
-//   - Spec: 任务规格，可选
+//   - Prompt: 任务提示词，可选
+//   - Labels: 任务标签，可选
 type UpdateTaskRequest struct {
-	Name   *string                `json:"name,omitempty"`   // 任务名称
-	Status *string                `json:"status,omitempty"` // 任务状态
-	Spec   map[string]interface{} `json:"spec,omitempty"`   // 任务规格
+	Name   *string           `json:"name,omitempty"`   // 任务名称
+	Status *string           `json:"status,omitempty"` // 任务状态
+	Prompt *string           `json:"prompt,omitempty"` // 任务提示词
+	Labels map[string]string `json:"labels,omitempty"` // 任务标签
 }
 
 // ============================================================================
@@ -74,24 +91,41 @@ func (h *Handler) CreateTask(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "name is required")
 		return
 	}
+	if req.Prompt == "" {
+		writeError(w, http.StatusBadRequest, "prompt is required")
+		return
+	}
 
-	specJSON, _ := json.Marshal(req.Spec)
-	contextJSON, _ := json.Marshal(req.Context)
-	if req.Context == nil {
-		contextJSON = json.RawMessage("{}")
+	// 确定任务类型
+	taskType := model.TaskTypeGeneral
+	if req.Type != "" {
+		taskType = model.TaskType(req.Type)
+	}
+
+	// 构建结构化 Prompt
+	prompt := &model.Prompt{
+		Content:     req.Prompt,
+		Description: req.PromptDescription,
+		TemplateID:  req.PromptTemplateID,
 	}
 
 	now := time.Now()
 	task := &model.Task{
-		ID:         generateID("task"),
-		ParentID:   req.ParentID,
-		Name:       req.Name,
-		Status:     model.TaskStatusPending,
-		Spec:       specJSON,
-		Context:    contextJSON,
-		InstanceID: req.InstanceID,
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		ID:          generateID("task"),
+		ParentID:    req.ParentID,
+		Name:        req.Name,
+		Description: req.Description,
+		Status:      model.TaskStatusPending,
+		Type:        taskType,
+		Prompt:      prompt,
+		Workspace:   req.Workspace,
+		Security:    req.Security,
+		Labels:      req.Labels,
+		Context:     req.Context,
+		TemplateID:  req.TemplateID,
+		AgentID:     req.AgentID,
+		CreatedAt:   now,
+		UpdatedAt:   now,
 	}
 
 	// 如果有父任务，继承父任务的上下文
@@ -106,21 +140,17 @@ func (h *Handler) CreateTask(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// 将父任务的 produced_context 添加到子任务的 inherited_context
-		if len(parentTask.Context) > 0 {
-			var parentContext model.TaskContext
-			if err := json.Unmarshal(parentTask.Context, &parentContext); err == nil {
-				var childContext model.TaskContext
-				if len(task.Context) > 0 {
-					_ = json.Unmarshal(task.Context, &childContext)
-				}
-				// 继承父任务产出的上下文
-				childContext.InheritedContext = append(childContext.InheritedContext, parentContext.ProducedContext...)
-				task.Context, _ = json.Marshal(childContext)
+		if parentTask.Context != nil && len(parentTask.Context.ProducedContext) > 0 {
+			if task.Context == nil {
+				task.Context = &model.TaskContext{}
 			}
+			// 继承父任务产出的上下文
+			task.Context.InheritedContext = append(task.Context.InheritedContext, parentTask.Context.ProducedContext...)
 		}
 	}
 
 	if err := h.store.CreateTask(r.Context(), task); err != nil {
+		log.Printf("[API] CreateTask error: %v", err)
 		writeError(w, http.StatusInternalServerError, "failed to create task")
 		return
 	}

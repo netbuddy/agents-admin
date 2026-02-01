@@ -22,22 +22,27 @@ func TestTask_Create(t *testing.T) {
 	}{
 		{
 			name:       "基本创建",
-			body:       `{"name":"Test Task","spec":{"prompt":"test","agent":{"type":"gemini"}}}`,
+			body:       `{"name":"Test Task","prompt":"test","type":"general"}`,
 			wantStatus: http.StatusCreated,
 		},
 		{
-			name:       "带完整 spec",
-			body:       `{"name":"Full Spec Task","spec":{"prompt":"test prompt","agent":{"type":"qwencode","model":"qwen-coder"}}}`,
+			name:       "带完整配置",
+			body:       `{"name":"Full Config Task","prompt":"test prompt","type":"development","labels":{"priority":"high"}}`,
 			wantStatus: http.StatusCreated,
 		},
 		{
-			name:       "仅名称",
-			body:       `{"name":"Simple Task"}`,
+			name:       "仅名称和提示词",
+			body:       `{"name":"Simple Task","prompt":"simple test"}`,
 			wantStatus: http.StatusCreated,
 		},
 		{
 			name:       "空请求（缺少 name）",
 			body:       `{}`,
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "缺少 prompt",
+			body:       `{"name":"No Prompt Task"}`,
 			wantStatus: http.StatusBadRequest,
 		},
 	}
@@ -74,7 +79,7 @@ func TestTask_Get(t *testing.T) {
 	ctx := context.Background()
 
 	// 创建测试任务
-	w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Get Test Task","spec":{"prompt":"test","agent":{"type":"gemini"}}}`)
+	w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Get Test Task","prompt":"test","type":"general"}`)
 	if w.Code != http.StatusCreated {
 		t.Fatal("Failed to create test task")
 	}
@@ -113,7 +118,7 @@ func TestTask_List(t *testing.T) {
 	// 创建多个测试任务
 	var taskIDs []string
 	for i := 0; i < 5; i++ {
-		w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"List Test Task","spec":{"prompt":"test","agent":{"type":"gemini"}}}`)
+		w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"List Test Task","prompt":"test","type":"general"}`)
 		if w.Code == http.StatusCreated {
 			resp := parseJSONResponse(w)
 			taskIDs = append(taskIDs, resp["id"].(string))
@@ -182,7 +187,7 @@ func TestTask_Delete(t *testing.T) {
 
 	t.Run("删除存在的任务", func(t *testing.T) {
 		// 创建任务
-		w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Delete Test Task","spec":{"prompt":"test","agent":{"type":"gemini"}}}`)
+		w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Delete Test Task","prompt":"test","type":"general"}`)
 		resp := parseJSONResponse(w)
 		taskID := resp["id"].(string)
 
@@ -209,7 +214,7 @@ func TestTask_Delete(t *testing.T) {
 
 	t.Run("删除带 Run 的任务（级联删除）", func(t *testing.T) {
 		// 创建任务
-		w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Cascade Delete Test","spec":{"prompt":"test","agent":{"type":"gemini"}}}`)
+		w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Cascade Delete Test","prompt":"test","type":"general"}`)
 		resp := parseJSONResponse(w)
 		taskID := resp["id"].(string)
 
@@ -246,7 +251,7 @@ func TestTask_EdgeCases(t *testing.T) {
 		for i := range longName {
 			longName[i] = 'a'
 		}
-		body := `{"name":"` + string(longName) + `","spec":{"prompt":"test","agent":{"type":"gemini"}}}`
+		body := `{"name":"` + string(longName) + `","prompt":"test","type":"general"}`
 		w := makeRequestWithString("POST", "/api/v1/tasks", body)
 		// 应该成功或返回 400
 		if w.Code == http.StatusCreated {
@@ -256,7 +261,7 @@ func TestTask_EdgeCases(t *testing.T) {
 	})
 
 	t.Run("创建特殊字符名称任务", func(t *testing.T) {
-		body := `{"name":"Test 任务 🚀 <script>","spec":{"prompt":"test","agent":{"type":"gemini"}}}`
+		body := `{"name":"Test 任务 🚀 <script>","prompt":"test","type":"general"}`
 		w := makeRequestWithString("POST", "/api/v1/tasks", body)
 		if w.Code == http.StatusCreated {
 			resp := parseJSONResponse(w)
@@ -264,23 +269,25 @@ func TestTask_EdgeCases(t *testing.T) {
 		}
 	})
 
-	t.Run("创建复杂 spec 任务", func(t *testing.T) {
+	t.Run("创建复杂配置任务", func(t *testing.T) {
 		body := `{
-			"name":"Complex Spec Task",
-			"spec":{
-				"prompt":"Fix the bug in src/main.go",
-				"agent":{
-					"type":"qwencode",
-					"model":"qwen-coder-32b",
-					"parameters":{
-						"temperature":0.7,
-						"max_tokens":4096
-					}
-				},
-				"workspace":{
-					"path":"/workspace/project",
-					"git_url":"https://github.com/example/repo.git"
+			"name":"Complex Config Task",
+			"prompt":"Fix the bug in src/main.go",
+			"type":"development",
+			"workspace":{
+				"type":"git",
+				"git":{
+					"url":"https://github.com/example/repo.git",
+					"branch":"main"
 				}
+			},
+			"security":{
+				"policy":"standard",
+				"permissions":["file_read","file_write"]
+			},
+			"labels":{
+				"priority":"high",
+				"team":"platform"
 			}
 		}`
 		w := makeRequestWithString("POST", "/api/v1/tasks", body)
@@ -288,7 +295,7 @@ func TestTask_EdgeCases(t *testing.T) {
 			resp := parseJSONResponse(w)
 			testStore.DeleteTask(ctx, resp["id"].(string))
 		} else {
-			t.Logf("Complex spec task creation: %d", w.Code)
+			t.Logf("Complex config task creation: %d - %s", w.Code, w.Body.String())
 		}
 	})
 }

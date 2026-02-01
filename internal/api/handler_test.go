@@ -187,26 +187,26 @@ func TestGenerateID(t *testing.T) {
 // 请求结构体解析测试
 // ============================================================================
 
-// TestCreateTaskRequest_Parsing 测试创建任务请求解析
+// TestCreateTaskRequest_Parsing 测试创建任务请求解析（扁平化结构）
 func TestCreateTaskRequest_Parsing(t *testing.T) {
 	tests := []struct {
-		name      string
-		body      string
-		wantName  string
-		wantSpec  bool
-		wantError bool
+		name       string
+		body       string
+		wantName   string
+		wantPrompt string
+		wantError  bool
 	}{
 		{
-			name:     "完整请求",
-			body:     `{"name":"Test Task","spec":{"prompt":"hello","agent":{"type":"gemini"}}}`,
-			wantName: "Test Task",
-			wantSpec: true,
+			name:       "完整请求",
+			body:       `{"name":"Test Task","prompt":"hello","type":"general"}`,
+			wantName:   "Test Task",
+			wantPrompt: "hello",
 		},
 		{
-			name:     "仅名称",
-			body:     `{"name":"Simple Task"}`,
-			wantName: "Simple Task",
-			wantSpec: false,
+			name:       "带提示词",
+			body:       `{"name":"Simple Task","prompt":"simple test"}`,
+			wantName:   "Simple Task",
+			wantPrompt: "simple test",
 		},
 		{
 			name:      "无效 JSON",
@@ -214,10 +214,10 @@ func TestCreateTaskRequest_Parsing(t *testing.T) {
 			wantError: true,
 		},
 		{
-			name:     "空名称",
-			body:     `{"name":"","spec":{}}`,
-			wantName: "",
-			wantSpec: true,
+			name:       "空名称",
+			body:       `{"name":"","prompt":"test"}`,
+			wantName:   "",
+			wantPrompt: "test",
 		},
 	}
 
@@ -241,9 +241,8 @@ func TestCreateTaskRequest_Parsing(t *testing.T) {
 				t.Errorf("Name = %v, want %v", req.Name, tt.wantName)
 			}
 
-			hasSpec := req.Spec != nil
-			if hasSpec != tt.wantSpec {
-				t.Errorf("HasSpec = %v, want %v", hasSpec, tt.wantSpec)
+			if req.Prompt != tt.wantPrompt {
+				t.Errorf("Prompt = %v, want %v", req.Prompt, tt.wantPrompt)
 			}
 		})
 	}

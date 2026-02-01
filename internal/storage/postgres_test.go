@@ -33,13 +33,14 @@ func NewMockDB() *MockDB {
 	}
 }
 
-// TestTaskSerialization 测试 Task 序列化
+// TestTaskSerialization 测试 Task 序列化（扁平化结构）
 func TestTaskSerialization(t *testing.T) {
 	task := &model.Task{
 		ID:        "task-001",
 		Name:      "Test Task",
 		Status:    model.TaskStatusPending,
-		Spec:      json.RawMessage(`{"prompt": "Fix the bug"}`),
+		Type:      model.TaskTypeGeneral,
+		Prompt:    &model.Prompt{Content: "Fix the bug"},
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
@@ -528,13 +529,14 @@ func TestTransactionRollback(t *testing.T) {
 	}
 }
 
-// BenchmarkTaskSerialization 基准测试 Task 序列化
+// BenchmarkTaskSerialization 基准测试 Task 序列化（扁平化结构）
 func BenchmarkTaskSerialization(b *testing.B) {
 	task := &model.Task{
 		ID:        "task-001",
 		Name:      "Test Task",
 		Status:    model.TaskStatusPending,
-		Spec:      json.RawMessage(`{"prompt": "Fix the bug"}`),
+		Type:      model.TaskTypeGeneral,
+		Prompt:    &model.Prompt{Content: "Fix the bug"},
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}

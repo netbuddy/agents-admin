@@ -26,17 +26,16 @@ func TestDriver_TaskCreation(t *testing.T) {
 
 	for _, d := range drivers {
 		t.Run(d.name+" Task 创建", func(t *testing.T) {
+			// 使用扁平化结构创建任务
 			body := `{
 				"name":"` + d.name + ` Driver Test",
-				"spec":{
-					"prompt":"Test prompt for ` + d.name + `",
-					"agent":{"type":"` + d.agentType + `"}
-				}
+				"prompt":"Test prompt for ` + d.name + `",
+				"type":"general"
 			}`
 			w := makeRequestWithString("POST", "/api/v1/tasks", body)
 
 			if w.Code != http.StatusCreated {
-				t.Errorf("Create %s task status = %d, want %d", d.name, w.Code, http.StatusCreated)
+				t.Errorf("Create %s task status = %d, want %d - %s", d.name, w.Code, http.StatusCreated, w.Body.String())
 				return
 			}
 
@@ -45,13 +44,11 @@ func TestDriver_TaskCreation(t *testing.T) {
 			defer testStore.DeleteTask(ctx, taskID)
 
 			// 验证 Task 创建成功
-			if resp["spec"] != nil {
-				spec := resp["spec"].(map[string]interface{})
-				if agent, ok := spec["agent"].(map[string]interface{}); ok {
-					if agent["type"] != d.agentType {
-						t.Errorf("Agent type = %v, want %v", agent["type"], d.agentType)
-					}
-				}
+			if resp["prompt"] == nil {
+				t.Error("Prompt field not returned")
+			}
+			if resp["type"] != "general" {
+				t.Errorf("Type = %v, want general", resp["type"])
 			}
 		})
 	}
@@ -73,15 +70,11 @@ func TestDriver_TaskWithModel(t *testing.T) {
 
 	for _, m := range models {
 		t.Run(m.agentType+"/"+m.model, func(t *testing.T) {
+			// 使用扁平化结构创建任务
 			body := `{
 				"name":"Model Test Task",
-				"spec":{
-					"prompt":"Test prompt",
-					"agent":{
-						"type":"` + m.agentType + `",
-						"model":"` + m.model + `"
-					}
-				}
+				"prompt":"Test prompt",
+				"type":"general"
 			}`
 			w := makeRequestWithString("POST", "/api/v1/tasks", body)
 
@@ -99,18 +92,14 @@ func TestDriver_TaskWithParameters(t *testing.T) {
 	skipIfNoDatabase(t)
 	ctx := context.Background()
 
-	t.Run("带温度参数", func(t *testing.T) {
+	t.Run("带安全配置", func(t *testing.T) {
 		body := `{
 			"name":"Parameters Test Task",
-			"spec":{
-				"prompt":"Test prompt",
-				"agent":{
-					"type":"gemini",
-					"parameters":{
-						"temperature":0.7,
-						"max_tokens":2048
-					}
-				}
+			"prompt":"Test prompt",
+			"type":"general",
+			"security":{
+				"policy":"standard",
+				"permissions":["file_read"]
 			}
 		}`
 		w := makeRequestWithString("POST", "/api/v1/tasks", body)
@@ -119,18 +108,19 @@ func TestDriver_TaskWithParameters(t *testing.T) {
 			resp := parseJSONResponse(w)
 			testStore.DeleteTask(ctx, resp["id"].(string))
 		}
-		t.Logf("Task with parameters: %d", w.Code)
+		t.Logf("Task with security: %d", w.Code)
 	})
 
 	t.Run("带工作区配置", func(t *testing.T) {
 		body := `{
 			"name":"Workspace Test Task",
-			"spec":{
-				"prompt":"Test prompt",
-				"agent":{"type":"qwencode"},
-				"workspace":{
+			"prompt":"Test prompt",
+			"type":"development",
+			"workspace":{
+				"type":"local",
+				"local":{
 					"path":"/workspace/project",
-					"git_url":"https://github.com/example/repo.git"
+					"read_only":false
 				}
 			}
 		}`
@@ -153,10 +143,11 @@ func TestDriver_RunWithDriver(t *testing.T) {
 
 	for _, d := range drivers {
 		t.Run("Run "+d+" Task", func(t *testing.T) {
-			// 创建任务
+			// 创建任务（使用扁平化结构）
 			body := `{
 				"name":"Run ` + d + ` Test",
-				"spec":{"prompt":"test","agent":{"type":"` + d + `"}}
+				"prompt":"test",
+				"type":"general"
 			}`
 			w := makeRequestWithString("POST", "/api/v1/tasks", body)
 			if w.Code != http.StatusCreated {
@@ -184,37 +175,42 @@ func TestDriver_RunWithDriver(t *testing.T) {
 	}
 }
 
-// TestDriver_InvalidAgentType 测试无效的 Agent 类型
-func TestDriver_InvalidAgentType(t *testing.T) {
+// TestDriver_InvalidTaskType 测试无效的任务类型
+func TestDriver_InvalidTaskType(t *testing.T) {
 	skipIfNoDatabase(t)
 	ctx := context.Background()
 
-	t.Run("不存在的 Agent 类型", func(t *testing.T) {
+	t.Run("不存在的任务类型", func(t *testing.T) {
 		body := `{
-			"name":"Invalid Driver Test",
-			"spec":{"prompt":"test","agent":{"type":"nonexistent_driver"}}
+			"name":"Invalid Type Test",
+			"prompt":"test",
+			"type":"nonexistent_type"
 		}`
 		w := makeRequestWithString("POST", "/api/v1/tasks", body)
 
-		// 可能成功创建（验证在执行时进行）或返回错误
+		// 任务类型验证可能在执行时进行，所以可能成功创建
 		if w.Code == http.StatusCreated {
 			resp := parseJSONResponse(w)
 			testStore.DeleteTask(ctx, resp["id"].(string))
 		}
-		t.Logf("Invalid agent type: %d", w.Code)
+		t.Logf("Invalid task type: %d", w.Code)
 	})
 
-	t.Run("空 Agent 类型", func(t *testing.T) {
+	t.Run("空任务类型（使用默认值）", func(t *testing.T) {
 		body := `{
-			"name":"Empty Driver Test",
-			"spec":{"prompt":"test","agent":{"type":""}}
+			"name":"Empty Type Test",
+			"prompt":"test"
 		}`
 		w := makeRequestWithString("POST", "/api/v1/tasks", body)
 
 		if w.Code == http.StatusCreated {
 			resp := parseJSONResponse(w)
+			// 验证使用了默认类型
+			if resp["type"] != "general" {
+				t.Errorf("Type = %v, want general", resp["type"])
+			}
 			testStore.DeleteTask(ctx, resp["id"].(string))
 		}
-		t.Logf("Empty agent type: %d", w.Code)
+		t.Logf("Empty task type: %d", w.Code)
 	})
 }

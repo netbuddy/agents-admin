@@ -47,8 +47,8 @@ func TestTaskCRUD_Integration(t *testing.T) {
 
 	router := testHandler.Router()
 
-	// 1. Create Task
-	createBody := `{"name":"Integration Test Task","spec":{"prompt":"test prompt","agent":{"type":"gemini"}}}`
+	// 1. Create Task（使用扁平化结构）
+	createBody := `{"name":"Integration Test Task","prompt":"test prompt","type":"general"}`
 	req := httptest.NewRequest("POST", "/api/v1/tasks", bytes.NewBufferString(createBody))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -114,8 +114,8 @@ func TestRunLifecycle_Integration(t *testing.T) {
 	router := testHandler.Router()
 	ctx := context.Background()
 
-	// 1. Create Task
-	createBody := `{"name":"Run Lifecycle Test","spec":{"prompt":"lifecycle test","agent":{"type":"gemini"}}}`
+	// 1. Create Task（使用扁平化结构）
+	createBody := `{"name":"Run Lifecycle Test","prompt":"lifecycle test","type":"general"}`
 	req := httptest.NewRequest("POST", "/api/v1/tasks", bytes.NewBufferString(createBody))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -183,7 +183,7 @@ func TestEventReporting_Integration(t *testing.T) {
 	ctx := context.Background()
 
 	// Setup: Create task and run
-	createBody := `{"name":"Event Test","spec":{"prompt":"event test","agent":{"type":"gemini"}}}`
+	createBody := `{"name":"Event Test","prompt":"event test","type":"general"}`
 	req := httptest.NewRequest("POST", "/api/v1/tasks", bytes.NewBufferString(createBody))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -295,7 +295,7 @@ func TestUpdateRun_Integration(t *testing.T) {
 	ctx := context.Background()
 
 	// 1. 创建 Task
-	createBody := `{"name":"UpdateRun Test","spec":{"prompt":"test","agent":{"type":"gemini"}}}`
+	createBody := `{"name":"UpdateRun Test","prompt":"test","type":"general"}`
 	req := httptest.NewRequest("POST", "/api/v1/tasks", bytes.NewBufferString(createBody))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -369,7 +369,7 @@ func TestGetNodeRuns_Integration(t *testing.T) {
 	}
 
 	// 2. 创建 Task 和 Run
-	createBody := `{"name":"NodeRuns Test","spec":{"prompt":"test"}}`
+	createBody := `{"name":"NodeRuns Test","prompt":"test","type":"general"}`
 	req = httptest.NewRequest("POST", "/api/v1/tasks", bytes.NewBufferString(createBody))
 	req.Header.Set("Content-Type", "application/json")
 	w = httptest.NewRecorder()
@@ -607,7 +607,7 @@ func TestTaskWithFilters_Integration(t *testing.T) {
 	ctx := context.Background()
 
 	// 1. 创建测试任务
-	createBody := `{"name":"Filter Test Task","spec":{"prompt":"test"}}`
+	createBody := `{"name":"Filter Test Task","prompt":"test","type":"general"}`
 	req := httptest.NewRequest("POST", "/api/v1/tasks", bytes.NewBufferString(createBody))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -647,7 +647,7 @@ func TestEventsWithPagination_Integration(t *testing.T) {
 	ctx := context.Background()
 
 	// 1. 创建 Task 和 Run
-	createBody := `{"name":"Events Pagination Test","spec":{"prompt":"test"}}`
+	createBody := `{"name":"Events Pagination Test","prompt":"test","type":"general"}`
 	req := httptest.NewRequest("POST", "/api/v1/tasks", bytes.NewBufferString(createBody))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -759,10 +759,11 @@ func TestTaskContext_Integration(t *testing.T) {
 	router := testHandler.Router()
 	ctx := context.Background()
 
-	// 1. 创建父任务（带初始上下文）
+	// 1. 创建父任务（带初始上下文，使用扁平化结构）
 	createBody := `{
 		"name": "Parent Task",
-		"spec": {"prompt": "parent task prompt"},
+		"prompt": "parent task prompt",
+		"type": "general",
 		"context": {
 			"produced_context": [
 				{"type": "file", "name": "config.yaml", "content": "key: value", "source": "parent"}
@@ -785,10 +786,11 @@ func TestTaskContext_Integration(t *testing.T) {
 
 	t.Logf("Created parent task: %s", parentID)
 
-	// 2. 创建子任务（继承父任务上下文）
+	// 2. 创建子任务（继承父任务上下文，使用扁平化结构）
 	createChildBody := `{
 		"name": "Child Task",
-		"spec": {"prompt": "child task prompt"},
+		"prompt": "child task prompt",
+		"type": "general",
 		"parent_id": "` + parentID + `"
 	}`
 	req = httptest.NewRequest("POST", "/api/v1/tasks", bytes.NewBufferString(createChildBody))
@@ -882,8 +884,8 @@ func TestTaskContext_Integration(t *testing.T) {
 	t.Log("TaskContext integration test passed")
 }
 
-// TestTaskWithInstanceID_Integration 测试任务与实例关联
-func TestTaskWithInstanceID_Integration(t *testing.T) {
+// TestTaskWithAgentID_Integration 测试任务与 Agent 关联（替代原 InstanceID）
+func TestTaskWithAgentID_Integration(t *testing.T) {
 	if testStore == nil {
 		t.Skip("Database not available")
 	}
@@ -891,13 +893,13 @@ func TestTaskWithInstanceID_Integration(t *testing.T) {
 	router := testHandler.Router()
 	ctx := context.Background()
 
-	// 先创建对应实例记录（兼容 tasks.instance_id 可能存在的外键约束）
-	instanceID := fmt.Sprintf("inst-test-%d", time.Now().UnixNano())
-	_ = testStore.DeleteInstance(ctx, instanceID) // 幂等清理
+	// 先创建对应实例记录（兼容性保留）
+	agentID := fmt.Sprintf("agent-test-%d", time.Now().UnixNano())
+	_ = testStore.DeleteInstance(ctx, agentID) // 幂等清理
 	now := time.Now()
 	if err := testStore.CreateInstance(ctx, &model.Instance{
-		ID:          instanceID,
-		Name:        "Test Instance",
+		ID:          agentID,
+		Name:        "Test Agent",
 		AccountID:   "acc-test-001",
 		AgentTypeID: "qwen-code",
 		Status:      model.InstanceStatusRunning,
@@ -906,14 +908,15 @@ func TestTaskWithInstanceID_Integration(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("Create instance failed: %v", err)
 	}
-	defer testStore.DeleteInstance(ctx, instanceID)
+	defer testStore.DeleteInstance(ctx, agentID)
 
-	// 创建带 instance_id 的任务
+	// 创建带 agent_id 的任务（使用扁平化结构）
 	createBody := fmt.Sprintf(`{
-		"name": "Task with Instance",
-		"spec": {"prompt": "test"},
-		"instance_id": %q
-	}`, instanceID)
+		"name": "Task with Agent",
+		"prompt": "test",
+		"type": "general",
+		"agent_id": %q
+	}`, agentID)
 	req := httptest.NewRequest("POST", "/api/v1/tasks", bytes.NewBufferString(createBody))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -928,8 +931,8 @@ func TestTaskWithInstanceID_Integration(t *testing.T) {
 	taskID := taskResp["id"].(string)
 	defer testStore.DeleteTask(ctx, taskID)
 
-	// 验证 instance_id
-	if taskResp["instance_id"] != instanceID {
-		t.Errorf("instance_id = %v, want %q", taskResp["instance_id"], instanceID)
+	// 验证 agent_id
+	if taskResp["agent_id"] != agentID {
+		t.Errorf("agent_id = %v, want %q", taskResp["agent_id"], agentID)
 	}
 }

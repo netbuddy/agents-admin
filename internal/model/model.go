@@ -147,29 +147,12 @@ const (
 // ============================================================================
 // Task - 任务定义
 // ============================================================================
+// 注意：Task 结构已迁移到 task.go（扁平化版本）
+// 以下是旧版本，保留用于迁移期间的兼容性，将在阶段2删除
 
-// Task 表示一个任务卡片（看板中的卡片）
-//
-// Task 是任务的"定义"，描述需要完成的目标：
-//   - 包含任务名称、提示词（Prompt）、Agent 配置等
-//   - 可以被多次执行（产生多个 Run）
-//   - 状态反映任务整体进展，而非单次执行结果
-//   - 支持层级结构：ParentID 指向父任务，形成任务树
-//
-// 典型生命周期：
-//
-//	创建 → pending → running → completed/failed/cancelled
-//
-// 字段说明：
-//   - ID：唯一标识符，格式如 "task-abc123"
-//   - ParentID：父任务 ID（顶层任务为空）
-//   - Name：任务名称，用户可读的描述
-//   - Status：任务当前状态
-//   - Spec：任务规格（JSON），包含 prompt、agent 配置等
-//   - Context：任务上下文（累积的上下文信息）
-//   - InstanceID：执行实例 ID
-//   - CreatedAt/UpdatedAt：创建和更新时间戳
-type Task struct {
+// TaskLegacy 旧版任务结构（兼容性保留，将被删除）
+// Deprecated: 使用 task.go 中的 Task
+type TaskLegacy struct {
 	ID         string          `json:"id" db:"id"`                             // 任务唯一标识
 	ParentID   *string         `json:"parent_id,omitempty" db:"parent_id"`     // 父任务 ID
 	Name       string          `json:"name" db:"name"`                         // 任务名称

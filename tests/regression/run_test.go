@@ -16,7 +16,7 @@ func TestRun_Create(t *testing.T) {
 	ctx := context.Background()
 
 	// 创建测试 Task
-	w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Run Create Test","spec":{"prompt":"test","agent":{"type":"gemini"}}}`)
+	w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Run Create Test","prompt":"test","type":"general"}`)
 	taskResp := parseJSONResponse(w)
 	taskID := taskResp["id"].(string)
 	defer testStore.DeleteTask(ctx, taskID)
@@ -63,7 +63,7 @@ func TestRun_Get(t *testing.T) {
 	ctx := context.Background()
 
 	// 创建测试 Task 和 Run
-	w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Run Get Test","spec":{"prompt":"test","agent":{"type":"gemini"}}}`)
+	w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Run Get Test","prompt":"test","type":"general"}`)
 	taskResp := parseJSONResponse(w)
 	taskID := taskResp["id"].(string)
 	defer testStore.DeleteTask(ctx, taskID)
@@ -98,7 +98,7 @@ func TestRun_List(t *testing.T) {
 	ctx := context.Background()
 
 	// 创建测试 Task
-	w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Run List Test","spec":{"prompt":"test","agent":{"type":"gemini"}}}`)
+	w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Run List Test","prompt":"test","type":"general"}`)
 	taskResp := parseJSONResponse(w)
 	taskID := taskResp["id"].(string)
 	defer testStore.DeleteTask(ctx, taskID)
@@ -139,7 +139,7 @@ func TestRun_UpdateStatus(t *testing.T) {
 	ctx := context.Background()
 
 	// 创建测试 Task 和 Run
-	w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Run Update Test","spec":{"prompt":"test","agent":{"type":"gemini"}}}`)
+	w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Run Update Test","prompt":"test","type":"general"}`)
 	taskResp := parseJSONResponse(w)
 	taskID := taskResp["id"].(string)
 	defer testStore.DeleteTask(ctx, taskID)
@@ -201,7 +201,7 @@ func TestRun_Cancel(t *testing.T) {
 	ctx := context.Background()
 
 	// 创建测试 Task 和 Run
-	w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Run Cancel Test","spec":{"prompt":"test","agent":{"type":"gemini"}}}`)
+	w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Run Cancel Test","prompt":"test","type":"general"}`)
 	taskResp := parseJSONResponse(w)
 	taskID := taskResp["id"].(string)
 	defer testStore.DeleteTask(ctx, taskID)
@@ -252,7 +252,7 @@ func TestRun_StatusTransitions(t *testing.T) {
 	ctx := context.Background()
 
 	// 创建测试 Task
-	w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Run Transitions Test","spec":{"prompt":"test","agent":{"type":"gemini"}}}`)
+	w := makeRequestWithString("POST", "/api/v1/tasks", `{"name":"Run Transitions Test","prompt":"test","type":"general"}`)
 	taskResp := parseJSONResponse(w)
 	taskID := taskResp["id"].(string)
 	defer testStore.DeleteTask(ctx, taskID)

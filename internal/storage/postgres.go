@@ -43,43 +43,120 @@ func (s *PostgresStore) Close() error {
 
 // === Task 操作 ===
 
-// CreateTask 创建任务
+// CreateTask 创建任务（使用扁平化结构，同时写入旧 spec 字段以保持向后兼容）
 func (s *PostgresStore) CreateTask(ctx context.Context, task *model.Task) error {
+	// 序列化 JSONB 字段
+	promptJSON, _ := json.Marshal(task.Prompt)
+	workspaceJSON, _ := json.Marshal(task.Workspace)
+	securityJSON, _ := json.Marshal(task.Security)
+	labelsJSON, _ := json.Marshal(task.Labels)
+	contextJSON, _ := json.Marshal(task.Context)
+
+	// 构建兼容的 spec JSON（向后兼容旧代码）
+	spec := map[string]interface{}{
+		"prompt": task.Prompt,
+		"type":   task.Type,
+	}
+	if task.Workspace != nil {
+		spec["workspace"] = task.Workspace
+	}
+	if task.Security != nil {
+		spec["security"] = task.Security
+	}
+	if task.Labels != nil {
+		spec["labels"] = task.Labels
+	}
+	specJSON, _ := json.Marshal(spec)
+
 	query := `
-		INSERT INTO tasks (id, parent_id, name, status, spec, context, instance_id, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO tasks (id, parent_id, name, status, spec, type, prompt, workspace, security, labels, context, template_id, agent_id, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 	`
 	_, err := s.db.ExecContext(ctx, query,
-		task.ID, task.ParentID, task.Name, task.Status, task.Spec,
-		task.Context, task.InstanceID, task.CreatedAt, task.UpdatedAt)
+		task.ID, task.ParentID, task.Name, task.Status, specJSON, task.Type, promptJSON,
+		workspaceJSON, securityJSON, labelsJSON, contextJSON,
+		task.TemplateID, task.AgentID, task.CreatedAt, task.UpdatedAt)
 	return err
 }
 
-// GetTask 获取任务
+// GetTask 获取任务（使用扁平化结构）
 func (s *PostgresStore) GetTask(ctx context.Context, id string) (*model.Task, error) {
-	query := `SELECT id, parent_id, name, status, spec, context, instance_id, created_at, updated_at FROM tasks WHERE id = $1`
+	query := `SELECT id, parent_id, name, status, type, prompt, workspace, security, labels, context, template_id, agent_id, created_at, updated_at FROM tasks WHERE id = $1`
 	task := &model.Task{}
+	var promptJSON, workspaceJSON, securityJSON, labelsJSON, contextJSON []byte
 	err := s.db.QueryRowContext(ctx, query, id).Scan(
-		&task.ID, &task.ParentID, &task.Name, &task.Status, &task.Spec,
-		&task.Context, &task.InstanceID, &task.CreatedAt, &task.UpdatedAt)
+		&task.ID, &task.ParentID, &task.Name, &task.Status, &task.Type, &promptJSON,
+		&workspaceJSON, &securityJSON, &labelsJSON, &contextJSON,
+		&task.TemplateID, &task.AgentID, &task.CreatedAt, &task.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
-	return task, err
+	if err != nil {
+		return nil, err
+	}
+	// 反序列化 JSONB 字段
+	if len(promptJSON) > 0 && string(promptJSON) != "null" {
+		json.Unmarshal(promptJSON, &task.Prompt)
+	}
+	if len(workspaceJSON) > 0 && string(workspaceJSON) != "null" {
+		json.Unmarshal(workspaceJSON, &task.Workspace)
+	}
+	if len(securityJSON) > 0 && string(securityJSON) != "null" {
+		json.Unmarshal(securityJSON, &task.Security)
+	}
+	if len(labelsJSON) > 0 && string(labelsJSON) != "null" {
+		json.Unmarshal(labelsJSON, &task.Labels)
+	}
+	if len(contextJSON) > 0 && string(contextJSON) != "null" {
+		json.Unmarshal(contextJSON, &task.Context)
+	}
+	return task, nil
 }
 
-// ListTasks 列出任务
+// scanTask 辅助函数：从数据库行扫描 Task（处理 JSONB 反序列化）
+func scanTask(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.Task, error) {
+	task := &model.Task{}
+	var promptJSON, workspaceJSON, securityJSON, labelsJSON, contextJSON []byte
+	err := scanner.Scan(
+		&task.ID, &task.ParentID, &task.Name, &task.Status, &task.Type, &promptJSON,
+		&workspaceJSON, &securityJSON, &labelsJSON, &contextJSON,
+		&task.TemplateID, &task.AgentID, &task.CreatedAt, &task.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	// 反序列化 JSONB 字段
+	if len(promptJSON) > 0 && string(promptJSON) != "null" {
+		json.Unmarshal(promptJSON, &task.Prompt)
+	}
+	if len(workspaceJSON) > 0 && string(workspaceJSON) != "null" {
+		json.Unmarshal(workspaceJSON, &task.Workspace)
+	}
+	if len(securityJSON) > 0 && string(securityJSON) != "null" {
+		json.Unmarshal(securityJSON, &task.Security)
+	}
+	if len(labelsJSON) > 0 && string(labelsJSON) != "null" {
+		json.Unmarshal(labelsJSON, &task.Labels)
+	}
+	if len(contextJSON) > 0 && string(contextJSON) != "null" {
+		json.Unmarshal(contextJSON, &task.Context)
+	}
+	return task, nil
+}
+
+// ListTasks 列出任务（使用扁平化结构）
 func (s *PostgresStore) ListTasks(ctx context.Context, status string, limit, offset int) ([]*model.Task, error) {
 	var query string
 	var args []interface{}
 
 	if status != "" {
-		query = `SELECT id, parent_id, name, status, spec, context, instance_id, created_at, updated_at 
+		query = `SELECT id, parent_id, name, status, type, prompt, workspace, security, labels, context, template_id, agent_id, created_at, updated_at 
 				 FROM tasks WHERE status = $1 
 				 ORDER BY created_at DESC LIMIT $2 OFFSET $3`
 		args = []interface{}{status, limit, offset}
 	} else {
-		query = `SELECT id, parent_id, name, status, spec, context, instance_id, created_at, updated_at 
+		query = `SELECT id, parent_id, name, status, type, prompt, workspace, security, labels, context, template_id, agent_id, created_at, updated_at 
 				 FROM tasks ORDER BY created_at DESC LIMIT $1 OFFSET $2`
 		args = []interface{}{limit, offset}
 	}
@@ -92,9 +169,8 @@ func (s *PostgresStore) ListTasks(ctx context.Context, status string, limit, off
 
 	var tasks []*model.Task
 	for rows.Next() {
-		task := &model.Task{}
-		if err := rows.Scan(&task.ID, &task.ParentID, &task.Name, &task.Status, &task.Spec,
-			&task.Context, &task.InstanceID, &task.CreatedAt, &task.UpdatedAt); err != nil {
+		task, err := scanTask(rows)
+		if err != nil {
 			return nil, err
 		}
 		tasks = append(tasks, task)
@@ -151,9 +227,9 @@ func (s *PostgresStore) UpdateTaskContext(ctx context.Context, id string, taskCo
 	return err
 }
 
-// ListSubTasks 列出子任务
+// ListSubTasks 列出子任务（使用扁平化结构）
 func (s *PostgresStore) ListSubTasks(ctx context.Context, parentID string) ([]*model.Task, error) {
-	query := `SELECT id, parent_id, name, status, spec, context, instance_id, created_at, updated_at 
+	query := `SELECT id, parent_id, name, status, type, prompt, workspace, security, labels, context, template_id, agent_id, created_at, updated_at 
 			  FROM tasks WHERE parent_id = $1 ORDER BY created_at ASC`
 	rows, err := s.db.QueryContext(ctx, query, parentID)
 	if err != nil {
@@ -163,9 +239,8 @@ func (s *PostgresStore) ListSubTasks(ctx context.Context, parentID string) ([]*m
 
 	var tasks []*model.Task
 	for rows.Next() {
-		task := &model.Task{}
-		if err := rows.Scan(&task.ID, &task.ParentID, &task.Name, &task.Status, &task.Spec,
-			&task.Context, &task.InstanceID, &task.CreatedAt, &task.UpdatedAt); err != nil {
+		task, err := scanTask(rows)
+		if err != nil {
 			return nil, err
 		}
 		tasks = append(tasks, task)
@@ -173,19 +248,19 @@ func (s *PostgresStore) ListSubTasks(ctx context.Context, parentID string) ([]*m
 	return tasks, rows.Err()
 }
 
-// GetTaskTree 获取任务树（包含所有子任务）
+// GetTaskTree 获取任务树（包含所有子任务，使用扁平化结构）
 func (s *PostgresStore) GetTaskTree(ctx context.Context, rootID string) ([]*model.Task, error) {
 	// 使用递归 CTE 查询任务树
 	query := `
 		WITH RECURSIVE task_tree AS (
-			SELECT id, parent_id, name, status, spec, context, instance_id, created_at, updated_at, 0 as depth
+			SELECT id, parent_id, name, status, type, prompt, workspace, security, labels, context, template_id, agent_id, created_at, updated_at, 0 as depth
 			FROM tasks WHERE id = $1
 			UNION ALL
-			SELECT t.id, t.parent_id, t.name, t.status, t.spec, t.context, t.instance_id, t.created_at, t.updated_at, tt.depth + 1
+			SELECT t.id, t.parent_id, t.name, t.status, t.type, t.prompt, t.workspace, t.security, t.labels, t.context, t.template_id, t.agent_id, t.created_at, t.updated_at, tt.depth + 1
 			FROM tasks t
 			INNER JOIN task_tree tt ON t.parent_id = tt.id
 		)
-		SELECT id, parent_id, name, status, spec, context, instance_id, created_at, updated_at
+		SELECT id, parent_id, name, status, type, prompt, workspace, security, labels, context, template_id, agent_id, created_at, updated_at
 		FROM task_tree ORDER BY depth, created_at ASC
 	`
 	rows, err := s.db.QueryContext(ctx, query, rootID)
@@ -196,9 +271,8 @@ func (s *PostgresStore) GetTaskTree(ctx context.Context, rootID string) ([]*mode
 
 	var tasks []*model.Task
 	for rows.Next() {
-		task := &model.Task{}
-		if err := rows.Scan(&task.ID, &task.ParentID, &task.Name, &task.Status, &task.Spec,
-			&task.Context, &task.InstanceID, &task.CreatedAt, &task.UpdatedAt); err != nil {
+		task, err := scanTask(rows)
+		if err != nil {
 			return nil, err
 		}
 		tasks = append(tasks, task)
