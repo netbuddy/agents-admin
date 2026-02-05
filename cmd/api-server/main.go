@@ -11,66 +11,46 @@ import (
 	"syscall"
 	"time"
 
-	"agents-admin/internal/api"
-	"agents-admin/internal/storage"
+	"agents-admin/internal/apiserver/server"
+	"agents-admin/internal/config"
+	"agents-admin/internal/shared/infra"
+	"agents-admin/internal/shared/storage"
 )
 
 func main() {
-	log.Println("Starting API Server...")
+	// 加载配置（自动加载 .env，根据 TEST_ENV 切换数据库和 Redis）
+	cfg := config.Load()
 
-	port := getEnv("PORT", "8080")
-	databaseURL := getEnv("DATABASE_URL", "postgres://agents:agents_dev_password@localhost:5432/agents_admin?sslmode=disable")
-	redisURL := getEnv("REDIS_URL", "redis://localhost:6380/0")
-	etcdEndpoints := getEnv("ETCD_ENDPOINTS", "localhost:2379")
+	log.Printf("Starting API Server... [env=%s]", cfg.Env)
+	log.Printf("Config: %s", cfg.String())
 
 	// 初始化 PostgreSQL（持久化业务数据）
-	store, err := storage.NewPostgresStore(databaseURL)
+	store, err := storage.NewPostgresStore(cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("Failed to connect to PostgreSQL: %v", err)
 	}
 	defer store.Close()
 	log.Println("Connected to PostgreSQL")
 
-	// 初始化 Redis（运行时状态、事件流）
-	redisStore, err := storage.NewRedisStoreFromURL(redisURL)
+	// 初始化 Redis（缓存、事件总线、消息队列）
+	redisInfra, err := infra.NewRedisInfra(cfg.RedisURL)
 	if err != nil {
 		log.Fatalf("Failed to connect to Redis: %v", err)
 	}
-	defer redisStore.Close()
+	defer redisInfra.Close()
 	log.Println("Connected to Redis")
 
-	// 初始化 etcd（可选，已弃用，保留兼容）
-	var etcdStore *storage.EtcdStore
-	etcdStore, err = storage.NewEtcdStore(storage.EtcdConfig{
-		Endpoints: []string{etcdEndpoints},
-		Prefix:    "/agents",
-	})
-	if err != nil {
-		log.Printf("WARNING: etcd not available (deprecated): %v", err)
-		etcdStore = nil
-	} else {
-		defer etcdStore.Close()
-		log.Println("Connected to etcd (deprecated, kept for compatibility)")
-	}
-
-	// 初始化 Handler
-	handler := api.NewHandler(store, redisStore, etcdStore)
-
-	// 初始化 EventBus（已弃用，保留兼容）
-	if etcdStore != nil {
-		eventBus := storage.NewEtcdEventBusFromStore(etcdStore)
-		handler.SetEventBus(eventBus)
-		log.Println("Legacy EventBus enabled (deprecated)")
-	}
+	// 初始化 Handler（心跳缓存由 Redis 提供，etcd 已弃用）
+	h := server.NewHandler(store, redisInfra)
 
 	// 启动调度器
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go handler.StartScheduler(ctx)
+	go h.StartScheduler(ctx)
 
-	server := &http.Server{
-		Addr:         ":" + port,
-		Handler:      handler.Router(),
+	srv := &http.Server{
+		Addr:         ":" + cfg.APIPort,
+		Handler:      h.Router(),
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
@@ -86,22 +66,15 @@ func main() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		if err := server.Shutdown(ctx); err != nil {
+		if err := srv.Shutdown(ctx); err != nil {
 			log.Printf("Server shutdown error: %v", err)
 		}
 	}()
 
-	log.Printf("API Server listening on :%s", port)
-	if err := server.ListenAndServe(); err != http.ErrServerClosed {
+	log.Printf("API Server listening on :%s", cfg.APIPort)
+	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		log.Fatalf("Server error: %v", err)
 	}
 
 	fmt.Println("Server stopped")
-}
-
-func getEnv(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
 }

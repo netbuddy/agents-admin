@@ -1,0 +1,199 @@
+# Task 任务管理 API
+
+paths:
+  /api/v1/tasks:
+    get:
+      tags: [Tasks]
+      operationId: listTasks
+      summary: 列出任务
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/LimitParam'
+        - $ref: 'common.yaml#/components/parameters/OffsetParam'
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 任务列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Task'
+    post:
+      tags: [Tasks]
+      operationId: createTask
+      summary: 创建任务
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaskRequest'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+
+  /api/v1/tasks/{id}:
+    get:
+      tags: [Tasks]
+      operationId: getTask
+      summary: 获取任务详情
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 任务详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+    delete:
+      tags: [Tasks]
+      operationId: deleteTask
+      summary: 删除任务
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/MessageResponse'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+components:
+  schemas:
+    Task:
+      type: object
+      required: [id, name, status]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+        status:
+          type: string
+          description: 任务状态（pending=待处理, in_progress=处理中, completed=已完成, failed=已失败, cancelled=已取消）
+          enum: [pending, in_progress, completed, failed, cancelled]
+        prompt:
+          type: string
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+        parent_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateTaskRequest:
+      type: object
+      required: [name, prompt]
+      properties:
+        name:
+          type: string
+          description: 任务名称
+        description:
+          type: string
+        type:
+          type: string
+          default: general
+        prompt:
+          type: string
+          description: 任务提示词
+        prompt_description:
+          type: string
+        prompt_template_id:
+          type: string
+          description: 提示词模板 ID
+        workspace:
+          $ref: 'common.yaml#/components/schemas/WorkspaceConfig'
+        security:
+          $ref: 'common.yaml#/components/schemas/SecurityConfig'
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+        parent_id:
+          type: string
+        template_id:
+          type: string
+        agent_id:
+          type: string
+        context:
+          $ref: '#/components/schemas/TaskContext'
+
+    TaskContext:
+      type: object
+      description: 任务上下文
+      properties:
+        inherited_context:
+          type: array
+          description: 继承的上下文（来自父任务和兄弟任务）
+          items:
+            $ref: '#/components/schemas/ContextItem'
+        produced_context:
+          type: array
+          description: 本任务产出的上下文（供子任务使用）
+          items:
+            $ref: '#/components/schemas/ContextItem'
+        conversation_history:
+          type: array
+          description: 对话历史
+          items:
+            $ref: '#/components/schemas/Message'
+
+    ContextItem:
+      type: object
+      description: 上下文项
+      required: [type, name]
+      properties:
+        type:
+          type: string
+          description: 上下文类型（file, summary, reference）
+        name:
+          type: string
+          description: 名称
+        content:
+          type: string
+          description: 内容
+        source:
+          type: string
+          description: 来源任务 ID
+
+    Message:
+      type: object
+      description: 对话消息
+      required: [role, content]
+      properties:
+        role:
+          type: string
+          description: 角色（user, assistant, system）
+        content:
+          type: string
+          description: 消息内容
+        timestamp:
+          type: string
+          format: date-time
+          description: 时间戳

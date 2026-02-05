@@ -1,0 +1,154 @@
+# Node 节点管理 API
+
+paths:
+  /api/v1/nodes/heartbeat:
+    post:
+      tags: [Nodes]
+      operationId: nodeHeartbeat
+      summary: 节点心跳
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HeartbeatRequest'
+      responses:
+        '200':
+          description: 心跳成功
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/MessageResponse'
+
+  /api/v1/nodes:
+    get:
+      tags: [Nodes]
+      operationId: listNodes
+      summary: 列出在线节点
+      responses:
+        '200':
+          description: 节点列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Node'
+
+  /api/v1/nodes/{id}:
+    get:
+      tags: [Nodes]
+      operationId: getNode
+      summary: 获取节点详情
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 节点详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Node'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+    patch:
+      tags: [Nodes]
+      operationId: updateNode
+      summary: 更新节点
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateNodeRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Node'
+    delete:
+      tags: [Nodes]
+      operationId: deleteNode
+      summary: 删除节点
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/MessageResponse'
+
+  /api/v1/nodes/{id}/runs:
+    get:
+      tags: [Nodes]
+      operationId: getNodeRuns
+      summary: 获取节点的执行任务
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 执行列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: 'runs.yaml#/components/schemas/Run'
+
+components:
+  schemas:
+    Node:
+      type: object
+      required: [id, status]
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum: [online, offline, draining]
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+        capacity:
+          type: object
+        last_heartbeat:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    HeartbeatRequest:
+      type: object
+      required: [node_id]
+      properties:
+        node_id:
+          type: string
+        status:
+          type: string
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+        capacity:
+          type: object
+
+    UpdateNodeRequest:
+      type: object
+      properties:
+        status:
+          type: string
+        labels:
+          type: object
+          additionalProperties:
+            type: string

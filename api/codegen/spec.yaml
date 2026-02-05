@@ -1,0 +1,13 @@
+# oapi-codegen 配置 - 嵌入规范
+package: api
+output: api/generated/go/spec.gen.go
+
+generate:
+  models: false
+  std-http-server: false
+  embedded-spec: true
+  client: false
+
+output-options:
+  skip-prune: true
+  nullable-type: true

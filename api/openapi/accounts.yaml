@@ -1,0 +1,360 @@
+# Account 账号管理 API
+
+paths:
+  /api/v1/agent-types:
+    get:
+      tags: [Accounts]
+      operationId: listAgentTypes
+      summary: 获取支持的 Agent 类型列表
+      responses:
+        '200':
+          description: Agent 类型列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agent_types:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AgentType'
+
+  /api/v1/agent-types/{id}:
+    get:
+      tags: [Accounts]
+      operationId: getAgentType
+      summary: 获取指定 Agent 类型详情
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Agent 类型详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentType'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+  /api/v1/accounts:
+    get:
+      tags: [Accounts]
+      operationId: listAccounts
+      summary: 获取账号列表
+      parameters:
+        - name: agent_type
+          in: query
+          schema:
+            type: string
+          description: 按 Agent 类型过滤
+      responses:
+        '200':
+          description: 账号列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accounts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Account'
+    post:
+      tags: [Accounts]
+      operationId: createAccount
+      summary: 创建新账号
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAccountRequest'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+
+  /api/v1/accounts/{id}:
+    get:
+      tags: [Accounts]
+      operationId: getAccount
+      summary: 获取账号详情
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 账号详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+    delete:
+      tags: [Accounts]
+      operationId: deleteAccount
+      summary: 删除账号
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/MessageResponse'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+  /api/v1/accounts/{id}/auth:
+    post:
+      tags: [Accounts]
+      operationId: startAccountAuth
+      summary: 发起账号认证
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartAuthRequest'
+      responses:
+        '200':
+          description: 认证任务已创建
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTask'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+  /api/v1/accounts/{id}/auth/status:
+    get:
+      tags: [Accounts]
+      operationId: getAccountAuthStatus
+      summary: 获取账号认证状态
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 认证状态
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthStatusResponse'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+  /api/v1/auth-tasks/{id}:
+    get:
+      tags: [Accounts]
+      operationId: getAuthTask
+      summary: 获取认证任务详情
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 认证任务详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTask'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+    patch:
+      tags: [Accounts]
+      operationId: updateAuthTask
+      summary: 更新认证任务状态（Node Agent 调用）
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAuthTaskRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTask'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+
+  /api/v1/nodes/{id}/auth-tasks:
+    get:
+      tags: [Accounts]
+      operationId: getNodeAuthTasks
+      summary: 获取节点的认证任务
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+        - name: status
+          in: query
+          schema:
+            type: string
+          description: 按状态过滤
+      responses:
+        '200':
+          description: 认证任务列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  auth_tasks:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuthTask'
+
+components:
+  schemas:
+    AgentType:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        auth_methods:
+          type: array
+          items:
+            type: string
+        icon:
+          type: string
+
+    Account:
+      type: object
+      required: [id, name, agent_type, node_id, status]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        agent_type:
+          type: string
+        node_id:
+          type: string
+        volume_name:
+          type: string
+        status:
+          type: string
+          enum: [pending, authenticating, authenticated, expired]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        last_used_at:
+          type: string
+          format: date-time
+
+    CreateAccountRequest:
+      type: object
+      required: [name, agent_type, node_id]
+      properties:
+        name:
+          type: string
+          description: 账号名称
+        agent_type:
+          type: string
+          description: Agent 类型 ID
+        node_id:
+          type: string
+          description: 绑定的节点 ID
+
+    AuthTask:
+      type: object
+      required: [id, account_id, status]
+      properties:
+        id:
+          type: string
+        account_id:
+          type: string
+        method:
+          type: string
+          enum: [oauth, api_key]
+        proxy_id:
+          type: string
+        node_id:
+          type: string
+        status:
+          type: string
+          enum: [pending, assigned, running, waiting_user, success, failed, timeout]
+        terminal_session_id:
+          type: string
+        terminal_url:
+          type: string
+        error_message:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    StartAuthRequest:
+      type: object
+      properties:
+        method:
+          type: string
+          enum: [oauth, api_key]
+          default: oauth
+        proxy_id:
+          type: string
+          description: 代理 ID（可选）
+
+    UpdateAuthTaskRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [running, waiting_user, success, failed, timeout]
+        terminal_port:
+          type: integer
+          description: 终端端口
+        terminal_url:
+          type: string
+          description: 终端 URL
+        terminal_session_id:
+          type: string
+          description: 终端会话 ID
+        container_name:
+          type: string
+          description: 容器名称
+        oauth_url:
+          type: string
+          description: OAuth 认证 URL
+        user_code:
+          type: string
+          description: 用户验证码
+        volume_name:
+          type: string
+          description: Volume 名称
+        error_message:
+          type: string
+          description: 错误信息
+        message:
+          type: string
+          description: 状态消息
+
+    AuthStatusResponse:
+      type: object
+      properties:
+        account:
+          $ref: '#/components/schemas/Account'
+        auth_task:
+          $ref: '#/components/schemas/AuthTask'

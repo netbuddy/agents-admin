@@ -1,0 +1,94 @@
+# Event 事件管理 API
+
+paths:
+  /api/v1/runs/{id}/events:
+    get:
+      tags: [Events]
+      operationId: getEvents
+      summary: 获取事件列表
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+        - name: after_seq
+          in: query
+          schema:
+            type: integer
+        - $ref: 'common.yaml#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: 事件列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Event'
+    post:
+      tags: [Events]
+      operationId: postEvents
+      summary: 批量上报事件
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostEventsRequest'
+      responses:
+        '200':
+          description: 上报成功
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/MessageResponse'
+
+components:
+  schemas:
+    Event:
+      type: object
+      required: [id, run_id, type, seq]
+      properties:
+        id:
+          type: string
+        run_id:
+          type: string
+        type:
+          type: string
+        seq:
+          type: integer
+        payload:
+          type: object
+        timestamp:
+          type: string
+          format: date-time
+
+    PostEventsRequest:
+      type: object
+      required: [events]
+      properties:
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/EventInput'
+
+    EventInput:
+      type: object
+      required: [seq, type, timestamp]
+      properties:
+        seq:
+          type: integer
+          description: 事件序号，Run 内递增
+        type:
+          type: string
+          description: 事件类型（如 message、tool_use_start、command 等）
+        timestamp:
+          type: string
+          format: date-time
+          description: 事件发生时间
+        payload:
+          type: object
+          additionalProperties: true
+          description: 事件数据
+        raw:
+          type: string
+          description: 原始 CLI 输出（用于调试和回放）

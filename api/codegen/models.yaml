@@ -1,0 +1,13 @@
+# oapi-codegen 配置 - 模型定义
+package: api
+output: api/generated/go/models.gen.go
+
+generate:
+  models: true
+  std-http-server: false
+  embedded-spec: false
+  client: false
+
+output-options:
+  skip-prune: true
+  nullable-type: true

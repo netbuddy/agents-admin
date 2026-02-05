@@ -1,0 +1,26 @@
+# 开发环境配置
+# 公共配置见 common.yaml
+
+server:
+  port: 8080
+
+database:
+  host: localhost
+  port: 5432
+  user: agents
+  name: agents_admin
+  sslmode: disable
+
+redis:
+  host: localhost
+  port: 6380
+  db: 0
+
+etcd:
+  endpoints:
+    - localhost:2379
+  prefix: /agents
+
+# 调度器配置（覆盖 common.yaml 中的默认值）
+scheduler:
+  node_id: api-server

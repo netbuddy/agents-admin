@@ -1,14 +1,68 @@
-.PHONY: all build test lint clean dev-up dev-down run-api run-executor run-web stop-api stop-executor stop-web monitoring-up monitoring-down watch-api watch-executor
+.PHONY: all build test lint clean dev-up dev-down run-api run-nodemanager run-web stop-api stop-nodemanager stop-web monitoring-up monitoring-down watch-api watch-nodemanager generate-api generate-api-force generate-api-models generate-api-server generate-api-spec bundle-openapi
+
+# ========== OpenAPI 代码生成 ==========
+OAPI_CODEGEN := $(HOME)/go/bin/oapi-codegen
+OPENAPI_DIR := api/openapi
+CODEGEN_DIR := api/codegen
+GENERATED_DIR := api/generated/go
+
+# 源文件（拆分的 yaml 文件，不包括 bundled.yaml）
+OPENAPI_SOURCES := $(filter-out $(OPENAPI_DIR)/bundled.yaml,$(shell find $(OPENAPI_DIR) -name '*.yaml' 2>/dev/null))
+OPENAPI_MAIN := $(OPENAPI_DIR)/openapi.yaml
+OPENAPI_BUNDLED := $(OPENAPI_DIR)/bundled.yaml
+
+# 生成的文件
+GEN_MODELS := $(GENERATED_DIR)/models.gen.go
+GEN_SERVER := $(GENERATED_DIR)/server.gen.go
+GEN_SPEC := $(GENERATED_DIR)/spec.gen.go
+
+# 合并 OpenAPI 规范（将拆分的文件合并为单个文件）
+$(OPENAPI_BUNDLED): $(OPENAPI_SOURCES)
+	@echo "Bundling OpenAPI specs..."
+	npx @redocly/cli bundle $(OPENAPI_MAIN) -o $(OPENAPI_BUNDLED)
+
+bundle-openapi: $(OPENAPI_BUNDLED)
+
+# Models（所有模型定义）
+$(GEN_MODELS): $(OPENAPI_BUNDLED) $(CODEGEN_DIR)/models.yaml
+	@echo "Generating models..."
+	@mkdir -p $(GENERATED_DIR)
+	$(OAPI_CODEGEN) --config $(CODEGEN_DIR)/models.yaml $(OPENAPI_BUNDLED)
+
+# Server（服务接口）
+$(GEN_SERVER): $(OPENAPI_BUNDLED) $(CODEGEN_DIR)/server.yaml $(GEN_MODELS)
+	@echo "Generating server interface..."
+	$(OAPI_CODEGEN) --config $(CODEGEN_DIR)/server.yaml $(OPENAPI_BUNDLED)
+
+# Spec（嵌入规范）
+$(GEN_SPEC): $(OPENAPI_BUNDLED) $(CODEGEN_DIR)/spec.yaml
+	@echo "Generating embedded spec..."
+	$(OAPI_CODEGEN) --config $(CODEGEN_DIR)/spec.yaml $(OPENAPI_BUNDLED)
+
+# 快捷目标
+generate-api-models: $(GEN_MODELS)
+generate-api-server: $(GEN_SERVER)
+generate-api-spec: $(GEN_SPEC)
+
+# 生成所有（增量）
+generate-api: $(GEN_MODELS) $(GEN_SERVER) $(GEN_SPEC)
+
+# 强制重新生成所有
+generate-api-force:
+	@echo "Force regenerating all OpenAPI code..."
+	@rm -f $(OPENAPI_BUNDLED)
+	@rm -rf $(GENERATED_DIR)
+	@$(MAKE) generate-api
 
 # 默认目标
 all: lint test build
 
-# 构建
-build:
+# 构建（自动检查 OpenAPI 是否需要重新生成）
+build: generate-api
 	@echo "Building API Server..."
 	CGO_ENABLED=0 go build -o bin/api-server ./cmd/api-server
-	@echo "Building Executor..."
-	CGO_ENABLED=0 go build -o bin/executor ./cmd/executor
+	@echo "Building NodeManager..."
+	CGO_ENABLED=0 go build -o bin/nodemanager ./cmd/nodemanager
 
 # 测试
 test:
@@ -69,16 +123,15 @@ stop-api:
 		echo "No process listening on 8080"; \
 	fi
 
-run-executor:
-	@echo "Starting Executor..."
+run-nodemanager:
+	@echo "Starting NodeManager..."
 	API_SERVER_URL="http://localhost:8080" \
 	NODE_ID="dev-node-01" \
 	WORKSPACE_DIR="/tmp/agents-workspaces" \
-	go run ./cmd/executor
+	go run ./cmd/nodemanager
 
-stop-executor:
-	@echo "Stopping Executor on port 18000-18099 (ttyd) and any 8080 client connections..."
-	@# 终止 ttyd 暴露端口
+stop-nodemanager:
+	@echo "Stopping NodeManager on port 18000-18099 (ttyd)..."
 	@PORTS=$$(seq 18000 18099); \
 	FOUND=0; \
 	for p in $$PORTS; do \
@@ -89,7 +142,7 @@ stop-executor:
 		fi; \
 	done; \
 	if [ "$$FOUND" -eq 0 ]; then \
-		echo "No executor-related ports (18000-18099) in use"; \
+		echo "No nodemanager-related ports (18000-18099) in use"; \
 	fi
 
 run-web:
@@ -111,10 +164,10 @@ watch-api:
 	@echo "修改 Go 代码后会自动重新编译并重启"
 	air -c .air.api.toml
 
-watch-executor:
+watch-nodemanager:
 	@echo "Starting Executor with hot reload (air)..."
 	@echo "修改 Go 代码后会自动重新编译并重启"
-	air -c .air.executor.toml
+	air -c .air.nodemanager.toml
 
 # 监控栈
 monitoring-up:
@@ -151,21 +204,35 @@ clean:
 # 帮助
 help:
 	@echo "Available targets:"
-	@echo "  build            - Build binaries"
-	@echo "  test             - Run unit tests"
-	@echo "  test-all         - Run all tests"
-	@echo "  test-coverage    - Run tests with coverage"
-	@echo "  test-integration - Run integration tests"
-	@echo "  test-e2e         - Run E2E tests"
-	@echo "  lint             - Run linter"
-	@echo "  dev-up           - Start dev infrastructure"
-	@echo "  dev-down         - Stop dev infrastructure"
-	@echo "  run-api          - Run API Server locally"
-	@echo "  run-executor     - Run Executor locally"
-	@echo "  run-web          - Run Web UI locally (支持热加载)"
-	@echo "  watch-api        - Run API Server with hot reload (air)"
-	@echo "  watch-executor   - Run Executor with hot reload (air)"
-	@echo "  monitoring-up    - Start monitoring stack"
-	@echo "  monitoring-down  - Stop monitoring stack"
-	@echo "  docker-build     - Build Docker images"
-	@echo "  clean            - Clean build artifacts"
+	@echo ""
+	@echo "  Code Generation (by type):"
+	@echo "    generate-api         - Generate all OpenAPI code (incremental)"
+	@echo "    generate-api-force   - Force regenerate all OpenAPI code"
+	@echo "    generate-api-models  - Generate models only"
+	@echo "    generate-api-server  - Generate server interface only"
+	@echo "    generate-api-spec    - Generate embedded spec only"
+	@echo "    bundle-openapi       - Bundle split OpenAPI files into one"
+	@echo ""
+	@echo "  Build & Test:"
+	@echo "    build            - Build binaries (auto-generates API if needed)"
+	@echo "    test             - Run unit tests"
+	@echo "    test-all         - Run all tests"
+	@echo "    test-coverage    - Run tests with coverage"
+	@echo "    test-integration - Run integration tests"
+	@echo "    test-e2e         - Run E2E tests"
+	@echo "    lint             - Run linter"
+	@echo ""
+	@echo "  Development:"
+	@echo "    dev-up           - Start dev infrastructure"
+	@echo "    dev-down         - Stop dev infrastructure"
+	@echo "    run-api          - Run API Server locally"
+	@echo "    run-nodemanager  - Run NodeManager locally"
+	@echo "    run-web          - Run Web UI locally"
+	@echo "    watch-api        - Run API Server with hot reload (air)"
+	@echo "    watch-nodemanager - Run NodeManager with hot reload (air)"
+	@echo ""
+	@echo "  Infrastructure:"
+	@echo "    monitoring-up    - Start monitoring stack"
+	@echo "    monitoring-down  - Stop monitoring stack"
+	@echo "    docker-build     - Build Docker images"
+	@echo "    clean            - Clean build artifacts"

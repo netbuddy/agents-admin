@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"testing"
 
-	"agents-admin/internal/model"
+	"agents-admin/internal/shared/model"
 )
 
 // ============================================================================
@@ -34,7 +34,7 @@ func TestConsistency_TaskStatusFollowsRun(t *testing.T) {
 	runResp := parseJSONResponse(w)
 	runID := runResp["id"].(string)
 
-	t.Run("Run 变为 running 时 Task 变为 running", func(t *testing.T) {
+	t.Run("Run 变为 running 时 Task 变为 in_progress", func(t *testing.T) {
 		w := makeRequestWithString("PATCH", "/api/v1/runs/"+runID, `{"status":"running"}`)
 		if w.Code != http.StatusOK {
 			t.Fatalf("Update run failed: %d", w.Code)
@@ -44,8 +44,8 @@ func TestConsistency_TaskStatusFollowsRun(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to get task: %v", err)
 		}
-		if task.Status != model.TaskStatusRunning {
-			t.Errorf("Task status = %v, want running", task.Status)
+		if task.Status != model.TaskStatusInProgress {
+			t.Errorf("Task status = %v, want in_progress", task.Status)
 		}
 	})
 
@@ -285,7 +285,7 @@ func TestConsistency_MultipleRunsLatestStatus(t *testing.T) {
 
 	t.Run("第二个 Run running 后 Task 状态", func(t *testing.T) {
 		task, _ := testStore.GetTask(ctx, taskID)
-		if task.Status != model.TaskStatusRunning {
+		if task.Status != model.TaskStatusInProgress {
 			t.Logf("Task status with running run: %v", task.Status)
 		}
 	})

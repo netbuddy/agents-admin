@@ -1,0 +1,34 @@
+# 测试环境配置（集成测试 + E2E 测试共用）
+# 公共配置见 common.yaml
+
+server:
+  port: 8081
+
+database:
+  host: localhost
+  port: 5432
+  user: agents
+  name: agents_admin_test
+  sslmode: disable
+
+redis:
+  host: localhost
+  port: 6380
+  db: 1
+
+etcd:
+  endpoints:
+    - localhost:2379
+  prefix: /agents-test
+
+# 调度器配置（测试环境使用更短的超时）
+scheduler:
+  node_id: test-scheduler
+  redis:
+    read_timeout: 2s
+    read_count: 5
+  fallback:
+    interval: 30s
+    stale_threshold: 30s
+  requeue:
+    offline_threshold: 10s

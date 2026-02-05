@@ -253,10 +253,13 @@ func TestTask_EdgeCases(t *testing.T) {
 		}
 		body := `{"name":"` + string(longName) + `","prompt":"test","type":"general"}`
 		w := makeRequestWithString("POST", "/api/v1/tasks", body)
-		// 应该成功或返回 400
+		// 应该返回 400（验证失败）或 500（数据库约束）
+		// TODO: 在 handler 中添加长度验证，改为返回 400
 		if w.Code == http.StatusCreated {
 			resp := parseJSONResponse(w)
 			testStore.DeleteTask(ctx, resp["id"].(string))
+		} else if w.Code != http.StatusBadRequest && w.Code != http.StatusInternalServerError {
+			t.Errorf("Create long name task: unexpected status %d", w.Code)
 		}
 	})
 

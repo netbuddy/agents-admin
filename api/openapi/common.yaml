@@ -1,0 +1,209 @@
+# 公共定义：参数、响应、基础模型
+# 被其他规范文件引用
+
+components:
+  parameters:
+    IdParam:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    LimitParam:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 100
+    OffsetParam:
+      name: offset
+      in: query
+      schema:
+        type: integer
+        default: 0
+
+  responses:
+    BadRequest:
+      description: 请求参数错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: 资源不存在
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    MessageResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        message:
+          type: string
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+
+    # 配置类型（被多个领域使用）
+    # 与 internal/shared/model/task.go 中的定义保持一致
+    WorkspaceConfig:
+      type: object
+      description: 工作空间配置
+      properties:
+        type:
+          type: string
+          description: 工作空间类型
+          enum: [git, local, remote, volume]
+        git:
+          $ref: '#/components/schemas/GitConfig'
+        local:
+          $ref: '#/components/schemas/LocalConfig'
+        remote:
+          $ref: '#/components/schemas/RemoteConfig'
+        volume:
+          $ref: '#/components/schemas/VolumeConfig'
+
+    GitConfig:
+      type: object
+      description: Git 仓库配置
+      properties:
+        url:
+          type: string
+          description: 仓库地址（HTTPS 或 SSH）
+        branch:
+          type: string
+          description: 分支名称
+        commit:
+          type: string
+          description: 指定的提交 SHA
+        depth:
+          type: integer
+          description: 克隆深度（0 表示完整克隆）
+
+    LocalConfig:
+      type: object
+      description: 本地目录配置
+      properties:
+        path:
+          type: string
+          description: 本地目录路径
+        read_only:
+          type: boolean
+          description: 是否只读挂载
+
+    RemoteConfig:
+      type: object
+      description: 远程系统配置
+      properties:
+        host:
+          type: string
+          description: 远程主机地址
+        port:
+          type: integer
+          description: SSH 端口，默认 22
+        user:
+          type: string
+          description: 用户名
+        credential_ref:
+          type: string
+          description: 凭据引用
+
+    VolumeConfig:
+      type: object
+      description: 持久化卷配置
+      properties:
+        name:
+          type: string
+          description: 卷名称
+        sub_path:
+          type: string
+          description: 卷内子路径
+
+    SecurityConfig:
+      type: object
+      description: 安全配置
+      properties:
+        policy:
+          type: string
+          description: 安全策略等级
+          enum: [strict, standard, permissive]
+        permissions:
+          type: array
+          description: 权限列表
+          items:
+            type: string
+        denied_permissions:
+          type: array
+          description: 明确禁止的权限
+          items:
+            type: string
+        network:
+          $ref: '#/components/schemas/NetworkPolicy'
+        limits:
+          $ref: '#/components/schemas/ResourceLimits'
+        require_approval:
+          type: array
+          description: 需要人工审批的操作
+          items:
+            type: string
+
+    NetworkPolicy:
+      type: object
+      description: 网络访问策略
+      properties:
+        allow_internet:
+          type: boolean
+          description: 是否允许访问互联网
+        allowed_domains:
+          type: array
+          description: 允许访问的域名列表
+          items:
+            type: string
+        denied_domains:
+          type: array
+          description: 禁止访问的域名列表
+          items:
+            type: string
+        allowed_ports:
+          type: array
+          description: 允许的端口列表
+          items:
+            type: integer
+
+    ResourceLimits:
+      type: object
+      description: 资源限制配置
+      properties:
+        max_cpu:
+          type: string
+          description: 最大 CPU 核数（如 "2.0"）
+        max_memory:
+          type: string
+          description: 最大内存（如 "4Gi"）
+        max_disk:
+          type: string
+          description: 最大磁盘使用（如 "10Gi"）
+        max_network:
+          type: string
+          description: 最大网络带宽（如 "100Mbps"）
+        max_processes:
+          type: integer
+          description: 最大进程数
+        max_open_files:
+          type: integer
+          description: 最大打开文件数

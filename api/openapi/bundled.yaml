@@ -1,0 +1,1231 @@
+openapi: 3.0.3
+info:
+  title: Agents Admin API
+  description: AI Agent 管理系统 API
+  version: 1.0.0
+  contact:
+    name: Agents Admin Team
+servers:
+  - url: http://localhost:8080
+    description: Development server
+tags:
+  - name: Health
+    description: 健康检查
+  - name: Tasks
+    description: 任务管理
+  - name: Runs
+    description: 执行管理
+  - name: Events
+    description: 事件管理
+  - name: Nodes
+    description: 节点管理
+  - name: Accounts
+    description: 账号管理
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      operationId: health
+      summary: 健康检查
+      responses:
+        '200':
+          description: 服务正常
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /api/v1/tasks:
+    get:
+      tags:
+        - Tasks
+      operationId: listTasks
+      summary: 列出任务
+      parameters:
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/OffsetParam'
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 任务列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Task'
+    post:
+      tags:
+        - Tasks
+      operationId: createTask
+      summary: 创建任务
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaskRequest'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /api/v1/tasks/{id}:
+    get:
+      tags:
+        - Tasks
+      operationId: getTask
+      summary: 获取任务详情
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 任务详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags:
+        - Tasks
+      operationId: deleteTask
+      summary: 删除任务
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/tasks/{id}/runs:
+    post:
+      tags:
+        - Runs
+      operationId: createRun
+      summary: 创建执行
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRunRequest'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Run'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    get:
+      tags:
+        - Runs
+      operationId: listTaskRuns
+      summary: 列出任务的执行记录
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/OffsetParam'
+      responses:
+        '200':
+          description: 执行列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Run'
+  /api/v1/runs/{id}:
+    get:
+      tags:
+        - Runs
+      operationId: getRun
+      summary: 获取执行详情
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 执行详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Run'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags:
+        - Runs
+      operationId: updateRun
+      summary: 更新执行状态
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRunRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Run'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /api/v1/runs/{id}/cancel:
+    post:
+      tags:
+        - Runs
+      operationId: cancelRun
+      summary: 取消执行
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 取消成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Run'
+  /api/v1/runs/{id}/events:
+    get:
+      tags:
+        - Events
+      operationId: getEvents
+      summary: 获取事件列表
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+        - name: after_seq
+          in: query
+          schema:
+            type: integer
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: 事件列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Event'
+    post:
+      tags:
+        - Events
+      operationId: postEvents
+      summary: 批量上报事件
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostEventsRequest'
+      responses:
+        '200':
+          description: 上报成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+  /api/v1/nodes/heartbeat:
+    post:
+      tags:
+        - Nodes
+      operationId: nodeHeartbeat
+      summary: 节点心跳
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HeartbeatRequest'
+      responses:
+        '200':
+          description: 心跳成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+  /api/v1/nodes:
+    get:
+      tags:
+        - Nodes
+      operationId: listNodes
+      summary: 列出在线节点
+      responses:
+        '200':
+          description: 节点列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Node'
+  /api/v1/nodes/{id}:
+    get:
+      tags:
+        - Nodes
+      operationId: getNode
+      summary: 获取节点详情
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 节点详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Node'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags:
+        - Nodes
+      operationId: updateNode
+      summary: 更新节点
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateNodeRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Node'
+    delete:
+      tags:
+        - Nodes
+      operationId: deleteNode
+      summary: 删除节点
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+  /api/v1/nodes/{id}/runs:
+    get:
+      tags:
+        - Nodes
+      operationId: getNodeRuns
+      summary: 获取节点的执行任务
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 执行列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Run'
+  /api/v1/agent-types:
+    get:
+      tags:
+        - Accounts
+      operationId: listAgentTypes
+      summary: 获取支持的 Agent 类型列表
+      responses:
+        '200':
+          description: Agent 类型列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agent_types:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AgentType'
+  /api/v1/agent-types/{id}:
+    get:
+      tags:
+        - Accounts
+      operationId: getAgentType
+      summary: 获取指定 Agent 类型详情
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Agent 类型详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentType'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/accounts:
+    get:
+      tags:
+        - Accounts
+      operationId: listAccounts
+      summary: 获取账号列表
+      parameters:
+        - name: agent_type
+          in: query
+          schema:
+            type: string
+          description: 按 Agent 类型过滤
+      responses:
+        '200':
+          description: 账号列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accounts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Account'
+    post:
+      tags:
+        - Accounts
+      operationId: createAccount
+      summary: 创建新账号
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAccountRequest'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /api/v1/accounts/{id}:
+    get:
+      tags:
+        - Accounts
+      operationId: getAccount
+      summary: 获取账号详情
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 账号详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags:
+        - Accounts
+      operationId: deleteAccount
+      summary: 删除账号
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/accounts/{id}/auth:
+    post:
+      tags:
+        - Accounts
+      operationId: startAccountAuth
+      summary: 发起账号认证
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartAuthRequest'
+      responses:
+        '200':
+          description: 认证任务已创建
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTask'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/accounts/{id}/auth/status:
+    get:
+      tags:
+        - Accounts
+      operationId: getAccountAuthStatus
+      summary: 获取账号认证状态
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 认证状态
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthStatusResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/auth-tasks/{id}:
+    get:
+      tags:
+        - Accounts
+      operationId: getAuthTask
+      summary: 获取认证任务详情
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 认证任务详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTask'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags:
+        - Accounts
+      operationId: updateAuthTask
+      summary: 更新认证任务状态（Node Agent 调用）
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAuthTaskRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTask'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /api/v1/nodes/{id}/auth-tasks:
+    get:
+      tags:
+        - Accounts
+      operationId: getNodeAuthTasks
+      summary: 获取节点的认证任务
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+        - name: status
+          in: query
+          schema:
+            type: string
+          description: 按状态过滤
+      responses:
+        '200':
+          description: 认证任务列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  auth_tasks:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuthTask'
+components:
+  parameters:
+    IdParam:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    LimitParam:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 100
+    OffsetParam:
+      name: offset
+      in: query
+      schema:
+        type: integer
+        default: 0
+  responses:
+    BadRequest:
+      description: 请求参数错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: 资源不存在
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+    MessageResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        message:
+          type: string
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+    WorkspaceConfig:
+      type: object
+      description: 工作空间配置
+      properties:
+        type:
+          type: string
+          description: 工作空间类型
+          enum:
+            - git
+            - local
+            - remote
+            - volume
+        git:
+          $ref: '#/components/schemas/GitConfig'
+        local:
+          $ref: '#/components/schemas/LocalConfig'
+        remote:
+          $ref: '#/components/schemas/RemoteConfig'
+        volume:
+          $ref: '#/components/schemas/VolumeConfig'
+    SecurityConfig:
+      type: object
+      description: 安全配置
+      properties:
+        policy:
+          type: string
+          description: 安全策略等级
+          enum:
+            - strict
+            - standard
+            - permissive
+        permissions:
+          type: array
+          description: 权限列表
+          items:
+            type: string
+        denied_permissions:
+          type: array
+          description: 明确禁止的权限
+          items:
+            type: string
+        network:
+          $ref: '#/components/schemas/NetworkPolicy'
+        limits:
+          $ref: '#/components/schemas/ResourceLimits'
+        require_approval:
+          type: array
+          description: 需要人工审批的操作
+          items:
+            type: string
+    Task:
+      type: object
+      required:
+        - id
+        - name
+        - status
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+        status:
+          type: string
+          description: 任务状态（pending=待处理, in_progress=处理中, completed=已完成, failed=已失败, cancelled=已取消）
+          enum:
+            - pending
+            - in_progress
+            - completed
+            - failed
+            - cancelled
+        prompt:
+          type: string
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+        parent_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    CreateTaskRequest:
+      type: object
+      required:
+        - name
+        - prompt
+      properties:
+        name:
+          type: string
+          description: 任务名称
+        description:
+          type: string
+        type:
+          type: string
+          default: general
+        prompt:
+          type: string
+          description: 任务提示词
+        prompt_description:
+          type: string
+        prompt_template_id:
+          type: string
+          description: 提示词模板 ID
+        workspace:
+          $ref: '#/components/schemas/WorkspaceConfig'
+        security:
+          $ref: '#/components/schemas/SecurityConfig'
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+        parent_id:
+          type: string
+        template_id:
+          type: string
+        agent_id:
+          type: string
+        context:
+          $ref: '#/components/schemas/TaskContext'
+    TaskContext:
+      type: object
+      description: 任务上下文
+      properties:
+        inherited_context:
+          type: array
+          description: 继承的上下文（来自父任务和兄弟任务）
+          items:
+            $ref: '#/components/schemas/ContextItem'
+        produced_context:
+          type: array
+          description: 本任务产出的上下文（供子任务使用）
+          items:
+            $ref: '#/components/schemas/ContextItem'
+        conversation_history:
+          type: array
+          description: 对话历史
+          items:
+            $ref: '#/components/schemas/Message'
+    Run:
+      type: object
+      required:
+        - id
+        - task_id
+        - status
+      properties:
+        id:
+          type: string
+        task_id:
+          type: string
+        status:
+          type: string
+          enum:
+            - queued
+            - running
+            - done
+            - failed
+            - cancelled
+        node_id:
+          type: string
+        exit_code:
+          type: integer
+        error_message:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    CreateRunRequest:
+      type: object
+      properties:
+        agent_id:
+          type: string
+        priority:
+          type: integer
+    UpdateRunRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - running
+            - done
+            - failed
+            - cancelled
+        exit_code:
+          type: integer
+        error_message:
+          type: string
+    Event:
+      type: object
+      required:
+        - id
+        - run_id
+        - type
+        - seq
+      properties:
+        id:
+          type: string
+        run_id:
+          type: string
+        type:
+          type: string
+        seq:
+          type: integer
+        payload:
+          type: object
+        timestamp:
+          type: string
+          format: date-time
+    PostEventsRequest:
+      type: object
+      required:
+        - events
+      properties:
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/EventInput'
+    EventInput:
+      type: object
+      required:
+        - seq
+        - type
+        - timestamp
+      properties:
+        seq:
+          type: integer
+          description: 事件序号，Run 内递增
+        type:
+          type: string
+          description: 事件类型（如 message、tool_use_start、command 等）
+        timestamp:
+          type: string
+          format: date-time
+          description: 事件发生时间
+        payload:
+          type: object
+          additionalProperties: true
+          description: 事件数据
+        raw:
+          type: string
+          description: 原始 CLI 输出（用于调试和回放）
+    Node:
+      type: object
+      required:
+        - id
+        - status
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum:
+            - online
+            - offline
+            - draining
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+        capacity:
+          type: object
+        last_heartbeat:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    HeartbeatRequest:
+      type: object
+      required:
+        - node_id
+      properties:
+        node_id:
+          type: string
+        status:
+          type: string
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+        capacity:
+          type: object
+    UpdateNodeRequest:
+      type: object
+      properties:
+        status:
+          type: string
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+    AgentType:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        auth_methods:
+          type: array
+          items:
+            type: string
+        icon:
+          type: string
+    Account:
+      type: object
+      required:
+        - id
+        - name
+        - agent_type
+        - node_id
+        - status
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        agent_type:
+          type: string
+        node_id:
+          type: string
+        volume_name:
+          type: string
+        status:
+          type: string
+          enum:
+            - pending
+            - authenticating
+            - authenticated
+            - expired
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        last_used_at:
+          type: string
+          format: date-time
+    CreateAccountRequest:
+      type: object
+      required:
+        - name
+        - agent_type
+        - node_id
+      properties:
+        name:
+          type: string
+          description: 账号名称
+        agent_type:
+          type: string
+          description: Agent 类型 ID
+        node_id:
+          type: string
+          description: 绑定的节点 ID
+    AuthTask:
+      type: object
+      required:
+        - id
+        - account_id
+        - status
+      properties:
+        id:
+          type: string
+        account_id:
+          type: string
+        method:
+          type: string
+          enum:
+            - oauth
+            - api_key
+        proxy_id:
+          type: string
+        node_id:
+          type: string
+        status:
+          type: string
+          enum:
+            - pending
+            - assigned
+            - running
+            - waiting_user
+            - success
+            - failed
+            - timeout
+        terminal_session_id:
+          type: string
+        terminal_url:
+          type: string
+        error_message:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    StartAuthRequest:
+      type: object
+      properties:
+        method:
+          type: string
+          enum:
+            - oauth
+            - api_key
+          default: oauth
+        proxy_id:
+          type: string
+          description: 代理 ID（可选）
+    UpdateAuthTaskRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - running
+            - waiting_user
+            - success
+            - failed
+            - timeout
+        terminal_port:
+          type: integer
+          description: 终端端口
+        terminal_url:
+          type: string
+          description: 终端 URL
+        terminal_session_id:
+          type: string
+          description: 终端会话 ID
+        container_name:
+          type: string
+          description: 容器名称
+        oauth_url:
+          type: string
+          description: OAuth 认证 URL
+        user_code:
+          type: string
+          description: 用户验证码
+        volume_name:
+          type: string
+          description: Volume 名称
+        error_message:
+          type: string
+          description: 错误信息
+        message:
+          type: string
+          description: 状态消息
+    AuthStatusResponse:
+      type: object
+      properties:
+        account:
+          $ref: '#/components/schemas/Account'
+        auth_task:
+          $ref: '#/components/schemas/AuthTask'
+    GitConfig:
+      type: object
+      description: Git 仓库配置
+      properties:
+        url:
+          type: string
+          description: 仓库地址（HTTPS 或 SSH）
+        branch:
+          type: string
+          description: 分支名称
+        commit:
+          type: string
+          description: 指定的提交 SHA
+        depth:
+          type: integer
+          description: 克隆深度（0 表示完整克隆）
+    LocalConfig:
+      type: object
+      description: 本地目录配置
+      properties:
+        path:
+          type: string
+          description: 本地目录路径
+        read_only:
+          type: boolean
+          description: 是否只读挂载
+    RemoteConfig:
+      type: object
+      description: 远程系统配置
+      properties:
+        host:
+          type: string
+          description: 远程主机地址
+        port:
+          type: integer
+          description: SSH 端口，默认 22
+        user:
+          type: string
+          description: 用户名
+        credential_ref:
+          type: string
+          description: 凭据引用
+    VolumeConfig:
+      type: object
+      description: 持久化卷配置
+      properties:
+        name:
+          type: string
+          description: 卷名称
+        sub_path:
+          type: string
+          description: 卷内子路径
+    NetworkPolicy:
+      type: object
+      description: 网络访问策略
+      properties:
+        allow_internet:
+          type: boolean
+          description: 是否允许访问互联网
+        allowed_domains:
+          type: array
+          description: 允许访问的域名列表
+          items:
+            type: string
+        denied_domains:
+          type: array
+          description: 禁止访问的域名列表
+          items:
+            type: string
+        allowed_ports:
+          type: array
+          description: 允许的端口列表
+          items:
+            type: integer
+    ResourceLimits:
+      type: object
+      description: 资源限制配置
+      properties:
+        max_cpu:
+          type: string
+          description: 最大 CPU 核数（如 "2.0"）
+        max_memory:
+          type: string
+          description: 最大内存（如 "4Gi"）
+        max_disk:
+          type: string
+          description: 最大磁盘使用（如 "10Gi"）
+        max_network:
+          type: string
+          description: 最大网络带宽（如 "100Mbps"）
+        max_processes:
+          type: integer
+          description: 最大进程数
+        max_open_files:
+          type: integer
+          description: 最大打开文件数
+    ContextItem:
+      type: object
+      description: 上下文项
+      required:
+        - type
+        - name
+      properties:
+        type:
+          type: string
+          description: 上下文类型（file, summary, reference）
+        name:
+          type: string
+          description: 名称
+        content:
+          type: string
+          description: 内容
+        source:
+          type: string
+          description: 来源任务 ID
+    Message:
+      type: object
+      description: 对话消息
+      required:
+        - role
+        - content
+      properties:
+        role:
+          type: string
+          description: 角色（user, assistant, system）
+        content:
+          type: string
+          description: 消息内容
+        timestamp:
+          type: string
+          format: date-time
+          description: 时间戳

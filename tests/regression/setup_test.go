@@ -20,7 +20,8 @@
 //   - consistency_test.go - 数据一致性测试
 //
 // 运行方式：
-//   go test -v ./tests/regression/...
+//
+//	go test -v ./tests/regression/...
 //
 // 环境要求：
 //   - PostgreSQL 数据库可用
@@ -35,8 +36,9 @@ import (
 	"os"
 	"testing"
 
-	"agents-admin/internal/api"
-	"agents-admin/internal/storage"
+	"agents-admin/internal/apiserver/server"
+	"agents-admin/internal/shared/infra"
+	"agents-admin/internal/shared/storage"
 )
 
 // ============================================================================
@@ -45,8 +47,8 @@ import (
 
 var (
 	testStore   *storage.PostgresStore
-	testRedis   *storage.RedisStore
-	testHandler *api.Handler
+	testRedis   *infra.RedisInfra
+	testHandler *server.Handler
 	testRouter  http.Handler
 )
 
@@ -74,13 +76,21 @@ func TestMain(m *testing.M) {
 	defer testStore.Close()
 
 	// 初始化 Redis（可选）
-	testRedis, _ = storage.NewRedisStoreFromURL(redisURL)
+	testRedis, _ = infra.NewRedisInfra(redisURL)
 	if testRedis != nil {
 		defer testRedis.Close()
 	}
 
 	// 初始化 Handler
-	testHandler = api.NewHandler(testStore, testRedis, nil)
+	// 如果 Redis 不可用，使用 NoOpCacheStore
+	var cacheStore storage.CacheStore
+	if testRedis != nil {
+		cacheStore = testRedis
+	} else {
+		cacheStore = storage.NewNoOpCacheStore()
+	}
+
+	testHandler = server.NewHandler(testStore, cacheStore)
 	testRouter = testHandler.Router()
 
 	os.Exit(m.Run())

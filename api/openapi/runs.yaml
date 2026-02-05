@@ -1,0 +1,145 @@
+# Run 执行管理 API
+
+paths:
+  /api/v1/tasks/{id}/runs:
+    post:
+      tags: [Runs]
+      operationId: createRun
+      summary: 创建执行
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRunRequest'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Run'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+    get:
+      tags: [Runs]
+      operationId: listTaskRuns
+      summary: 列出任务的执行记录
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+        - $ref: 'common.yaml#/components/parameters/LimitParam'
+        - $ref: 'common.yaml#/components/parameters/OffsetParam'
+      responses:
+        '200':
+          description: 执行列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Run'
+
+  /api/v1/runs/{id}:
+    get:
+      tags: [Runs]
+      operationId: getRun
+      summary: 获取执行详情
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 执行详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Run'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+    patch:
+      tags: [Runs]
+      operationId: updateRun
+      summary: 更新执行状态
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRunRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Run'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+
+  /api/v1/runs/{id}/cancel:
+    post:
+      tags: [Runs]
+      operationId: cancelRun
+      summary: 取消执行
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 取消成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Run'
+
+components:
+  schemas:
+    Run:
+      type: object
+      required: [id, task_id, status]
+      properties:
+        id:
+          type: string
+        task_id:
+          type: string
+        status:
+          type: string
+          enum: [queued, running, done, failed, cancelled]
+        node_id:
+          type: string
+        exit_code:
+          type: integer
+        error_message:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateRunRequest:
+      type: object
+      properties:
+        agent_id:
+          type: string
+        priority:
+          type: integer
+
+    UpdateRunRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [running, done, failed, cancelled]
+        exit_code:
+          type: integer
+        error_message:
+          type: string

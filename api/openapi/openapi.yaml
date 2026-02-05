@@ -1,0 +1,156 @@
+# Agents Admin API - 主入口
+# 引用各领域模块的 paths 和 schemas
+
+openapi: 3.0.3
+info:
+  title: Agents Admin API
+  description: AI Agent 管理系统 API
+  version: 1.0.0
+  contact:
+    name: Agents Admin Team
+
+servers:
+  - url: http://localhost:8080
+    description: Development server
+
+tags:
+  - name: Health
+    description: 健康检查
+  - name: Tasks
+    description: 任务管理
+  - name: Runs
+    description: 执行管理
+  - name: Events
+    description: 事件管理
+  - name: Nodes
+    description: 节点管理
+  - name: Accounts
+    description: 账号管理
+
+paths:
+  # Health
+  /health:
+    $ref: 'health.yaml#/paths/~1health'
+
+  # Tasks
+  /api/v1/tasks:
+    $ref: 'tasks.yaml#/paths/~1api~1v1~1tasks'
+  /api/v1/tasks/{id}:
+    $ref: 'tasks.yaml#/paths/~1api~1v1~1tasks~1{id}'
+
+  # Runs
+  /api/v1/tasks/{id}/runs:
+    $ref: 'runs.yaml#/paths/~1api~1v1~1tasks~1{id}~1runs'
+  /api/v1/runs/{id}:
+    $ref: 'runs.yaml#/paths/~1api~1v1~1runs~1{id}'
+  /api/v1/runs/{id}/cancel:
+    $ref: 'runs.yaml#/paths/~1api~1v1~1runs~1{id}~1cancel'
+
+  # Events
+  /api/v1/runs/{id}/events:
+    $ref: 'events.yaml#/paths/~1api~1v1~1runs~1{id}~1events'
+
+  # Nodes
+  /api/v1/nodes/heartbeat:
+    $ref: 'nodes.yaml#/paths/~1api~1v1~1nodes~1heartbeat'
+  /api/v1/nodes:
+    $ref: 'nodes.yaml#/paths/~1api~1v1~1nodes'
+  /api/v1/nodes/{id}:
+    $ref: 'nodes.yaml#/paths/~1api~1v1~1nodes~1{id}'
+  /api/v1/nodes/{id}/runs:
+    $ref: 'nodes.yaml#/paths/~1api~1v1~1nodes~1{id}~1runs'
+
+  # Accounts
+  /api/v1/agent-types:
+    $ref: 'accounts.yaml#/paths/~1api~1v1~1agent-types'
+  /api/v1/agent-types/{id}:
+    $ref: 'accounts.yaml#/paths/~1api~1v1~1agent-types~1{id}'
+  /api/v1/accounts:
+    $ref: 'accounts.yaml#/paths/~1api~1v1~1accounts'
+  /api/v1/accounts/{id}:
+    $ref: 'accounts.yaml#/paths/~1api~1v1~1accounts~1{id}'
+  /api/v1/accounts/{id}/auth:
+    $ref: 'accounts.yaml#/paths/~1api~1v1~1accounts~1{id}~1auth'
+  /api/v1/accounts/{id}/auth/status:
+    $ref: 'accounts.yaml#/paths/~1api~1v1~1accounts~1{id}~1auth~1status'
+  /api/v1/auth-tasks/{id}:
+    $ref: 'accounts.yaml#/paths/~1api~1v1~1auth-tasks~1{id}'
+  /api/v1/nodes/{id}/auth-tasks:
+    $ref: 'accounts.yaml#/paths/~1api~1v1~1nodes~1{id}~1auth-tasks'
+
+components:
+  # 引用公共组件
+  parameters:
+    IdParam:
+      $ref: 'common.yaml#/components/parameters/IdParam'
+    LimitParam:
+      $ref: 'common.yaml#/components/parameters/LimitParam'
+    OffsetParam:
+      $ref: 'common.yaml#/components/parameters/OffsetParam'
+
+  responses:
+    BadRequest:
+      $ref: 'common.yaml#/components/responses/BadRequest'
+    NotFound:
+      $ref: 'common.yaml#/components/responses/NotFound'
+
+  schemas:
+    # Common
+    ErrorResponse:
+      $ref: 'common.yaml#/components/schemas/ErrorResponse'
+    MessageResponse:
+      $ref: 'common.yaml#/components/schemas/MessageResponse'
+    HealthResponse:
+      $ref: 'common.yaml#/components/schemas/HealthResponse'
+    WorkspaceConfig:
+      $ref: 'common.yaml#/components/schemas/WorkspaceConfig'
+    SecurityConfig:
+      $ref: 'common.yaml#/components/schemas/SecurityConfig'
+
+    # Task
+    Task:
+      $ref: 'tasks.yaml#/components/schemas/Task'
+    CreateTaskRequest:
+      $ref: 'tasks.yaml#/components/schemas/CreateTaskRequest'
+    TaskContext:
+      $ref: 'tasks.yaml#/components/schemas/TaskContext'
+
+    # Run
+    Run:
+      $ref: 'runs.yaml#/components/schemas/Run'
+    CreateRunRequest:
+      $ref: 'runs.yaml#/components/schemas/CreateRunRequest'
+    UpdateRunRequest:
+      $ref: 'runs.yaml#/components/schemas/UpdateRunRequest'
+
+    # Event
+    Event:
+      $ref: 'events.yaml#/components/schemas/Event'
+    PostEventsRequest:
+      $ref: 'events.yaml#/components/schemas/PostEventsRequest'
+    EventInput:
+      $ref: 'events.yaml#/components/schemas/EventInput'
+
+    # Node
+    Node:
+      $ref: 'nodes.yaml#/components/schemas/Node'
+    HeartbeatRequest:
+      $ref: 'nodes.yaml#/components/schemas/HeartbeatRequest'
+    UpdateNodeRequest:
+      $ref: 'nodes.yaml#/components/schemas/UpdateNodeRequest'
+
+    # Account
+    AgentType:
+      $ref: 'accounts.yaml#/components/schemas/AgentType'
+    Account:
+      $ref: 'accounts.yaml#/components/schemas/Account'
+    CreateAccountRequest:
+      $ref: 'accounts.yaml#/components/schemas/CreateAccountRequest'
+    AuthTask:
+      $ref: 'accounts.yaml#/components/schemas/AuthTask'
+    StartAuthRequest:
+      $ref: 'accounts.yaml#/components/schemas/StartAuthRequest'
+    UpdateAuthTaskRequest:
+      $ref: 'accounts.yaml#/components/schemas/UpdateAuthTaskRequest'
+    AuthStatusResponse:
+      $ref: 'accounts.yaml#/components/schemas/AuthStatusResponse'
