@@ -161,20 +161,49 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 
 // List 列出任务
 // GET /api/v1/tasks
+//
+// 支持的查询参数：
+//   - status: 按状态筛选
+//   - search: 按名称模糊搜索
+//   - since:  创建时间下限 (ISO8601)
+//   - until:  创建时间上限 (ISO8601)
+//   - limit:  每页条数 (默认 20, 最大 100)
+//   - offset: 偏移量
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
-	status := r.URL.Query().Get("status")
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
 
-	tasks, err := h.store.ListTasks(r.Context(), status, limit, offset)
+	filter := storage.TaskFilter{
+		Status: r.URL.Query().Get("status"),
+		Search: r.URL.Query().Get("search"),
+		Limit:  limit,
+		Offset: offset,
+	}
+	if s := r.URL.Query().Get("since"); s != "" {
+		if t, err := time.Parse(time.RFC3339, s); err == nil {
+			filter.Since = t
+		}
+	}
+	if u := r.URL.Query().Get("until"); u != "" {
+		if t, err := time.Parse(time.RFC3339, u); err == nil {
+			filter.Until = t
+		}
+	}
+
+	tasks, total, err := h.store.ListTasksWithFilter(r.Context(), filter)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list tasks")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{"tasks": tasks, "count": len(tasks)})
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"tasks":    tasks,
+		"count":    len(tasks),
+		"total":    total,
+		"has_more": offset+len(tasks) < total,
+	})
 }
 
 // Delete 删除任务

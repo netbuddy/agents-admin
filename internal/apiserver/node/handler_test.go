@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"agents-admin/internal/shared/model"
+	"agents-admin/internal/shared/storage"
 )
 
 // mockStore 模拟存储层
@@ -65,6 +66,9 @@ func (m *mockStore) CreateTask(ctx context.Context, task *model.Task) error     
 func (m *mockStore) GetTask(ctx context.Context, id string) (*model.Task, error) { return nil, nil }
 func (m *mockStore) ListTasks(ctx context.Context, status string, limit, offset int) ([]*model.Task, error) {
 	return nil, nil
+}
+func (m *mockStore) ListTasksWithFilter(ctx context.Context, filter storage.TaskFilter) ([]*model.Task, int, error) {
+	return nil, 0, nil
 }
 func (m *mockStore) DeleteTask(ctx context.Context, id string) error { return nil }
 func (m *mockStore) ListSubTasks(ctx context.Context, parentID string) ([]*model.Task, error) {
@@ -180,6 +184,18 @@ func (m *mockStore) UpdateAccountStatus(ctx context.Context, id string, status m
 }
 func (m *mockStore) UpdateAccountVolume(ctx context.Context, id, volumeName string) error {
 	return nil
+}
+func (m *mockStore) CreateNodeProvision(ctx context.Context, p *model.NodeProvision) error {
+	return nil
+}
+func (m *mockStore) UpdateNodeProvision(ctx context.Context, p *model.NodeProvision) error {
+	return nil
+}
+func (m *mockStore) GetNodeProvision(ctx context.Context, id string) (*model.NodeProvision, error) {
+	return nil, nil
+}
+func (m *mockStore) ListNodeProvisions(ctx context.Context) ([]*model.NodeProvision, error) {
+	return nil, nil
 }
 
 func TestHandler_Heartbeat(t *testing.T) {

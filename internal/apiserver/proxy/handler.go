@@ -6,9 +6,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"agents-admin/internal/shared/model"
@@ -33,8 +36,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/v1/proxies/{id}", h.Update)
 	mux.HandleFunc("DELETE /api/v1/proxies/{id}", h.Delete)
 	mux.HandleFunc("POST /api/v1/proxies/{id}/test", h.Test)
-	mux.HandleFunc("POST /api/v1/proxies/{id}/set-default", h.SetDefault)
-	mux.HandleFunc("POST /api/v1/proxies/clear-default", h.ClearDefault)
+	// 默认代理功能已移除
 }
 
 // List 获取代理列表
@@ -201,6 +203,9 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 // Test 测试代理连通性
+// 支持两级验证：
+//  1. TCP 端口连通性（默认，无 target_url 时）
+//  2. 端到端 HTTP 代理验证（提供 target_url 时，通过代理实际请求目标）
 func (h *Handler) Test(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
@@ -214,6 +219,19 @@ func (h *Handler) Test(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 解析可选的 target_url
+	var req struct {
+		TargetURL string `json:"target_url"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&req)
+
+	if req.TargetURL != "" {
+		// 端到端代理验证：通过代理请求目标 URL
+		h.testProxyEndToEnd(w, proxy, req.TargetURL)
+		return
+	}
+
+	// 默认：TCP 连通性检查
 	addr := net.JoinHostPort(proxy.Host, fmt.Sprintf("%d", proxy.Port))
 	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
 	if err != nil {
@@ -231,6 +249,109 @@ func (h *Handler) Test(w http.ResponseWriter, r *http.Request) {
 		"success": true,
 		"message": "proxy is reachable",
 	})
+}
+
+// testProxyEndToEnd 通过代理实际请求目标 URL，验证代理转发能力
+func (h *Handler) testProxyEndToEnd(w http.ResponseWriter, proxy *model.Proxy, targetURL string) {
+	proxyScheme := "http"
+	if proxy.Type == "socks5" {
+		proxyScheme = "socks5"
+	}
+
+	proxyURLStr := fmt.Sprintf("%s://%s:%d", proxyScheme, proxy.Host, proxy.Port)
+	if proxy.Username != nil && *proxy.Username != "" {
+		pwd := ""
+		if proxy.Password != nil {
+			pwd = *proxy.Password
+		}
+		proxyURLStr = fmt.Sprintf("%s://%s:%s@%s:%d", proxyScheme, *proxy.Username, pwd, proxy.Host, proxy.Port)
+	}
+
+	proxyURL, err := url.Parse(proxyURLStr)
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"success":    false,
+			"target_url": targetURL,
+			"message":    fmt.Sprintf("invalid proxy URL: %v", err),
+		})
+		return
+	}
+
+	transport := &http.Transport{
+		Proxy:                 http.ProxyURL(proxyURL),
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 15 * time.Second,
+	}
+	client := &http.Client{
+		Transport: transport,
+		Timeout:   20 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 3 {
+				return fmt.Errorf("too many redirects")
+			}
+			return nil
+		},
+	}
+
+	start := time.Now()
+	resp, err := client.Get(targetURL)
+	latencyMs := time.Since(start).Milliseconds()
+
+	if err != nil {
+		log.Printf("[proxy] E2E test failed for %s -> %s: %v", proxy.ID, targetURL, err)
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"success":    false,
+			"target_url": targetURL,
+			"latency_ms": latencyMs,
+			"message":    fmt.Sprintf("request failed: %v", err),
+		})
+		return
+	}
+	defer resp.Body.Close()
+
+	log.Printf("[proxy] E2E test for %s -> %s: HTTP %d (%dms)", proxy.ID, targetURL, resp.StatusCode, latencyMs)
+
+	// 读取响应体摘要作为验证证据（最多 512 字节）
+	bodyBuf := make([]byte, 512)
+	n, _ := io.ReadFull(resp.Body, bodyBuf)
+	bodySnippet := string(bodyBuf[:n])
+	// 提取 <title> 标签内容
+	titleSnippet := ""
+	if idx := strings.Index(strings.ToLower(bodySnippet), "<title>"); idx >= 0 {
+		rest := bodySnippet[idx+7:]
+		if end := strings.Index(strings.ToLower(rest), "</title>"); end >= 0 {
+			titleSnippet = strings.TrimSpace(rest[:end])
+		}
+	}
+
+	// 收集关键响应头
+	headers := map[string]string{}
+	for _, key := range []string{"Content-Type", "Server", "X-Frame-Options"} {
+		if v := resp.Header.Get(key); v != "" {
+			headers[key] = v
+		}
+	}
+
+	success := resp.StatusCode >= 200 && resp.StatusCode < 400
+	msg := fmt.Sprintf("HTTP %d (%dms)", resp.StatusCode, latencyMs)
+	if success {
+		msg = fmt.Sprintf("代理可用，目标响应正常 (%dms)", latencyMs)
+	} else {
+		msg = fmt.Sprintf("目标返回 HTTP %d (%dms)", resp.StatusCode, latencyMs)
+	}
+
+	result := map[string]interface{}{
+		"success":     success,
+		"target_url":  targetURL,
+		"status_code": resp.StatusCode,
+		"latency_ms":  latencyMs,
+		"message":     msg,
+		"headers":     headers,
+	}
+	if titleSnippet != "" {
+		result["page_title"] = titleSnippet
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 // SetDefault 设置默认代理

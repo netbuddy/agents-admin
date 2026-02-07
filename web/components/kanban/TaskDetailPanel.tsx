@@ -9,7 +9,10 @@ interface Task {
   id: string
   name: string
   status: string
-  spec: any
+  type?: string
+  prompt?: { content?: string }
+  agent_id?: string
+  spec?: any
   created_at: string
   updated_at: string
 }
@@ -100,9 +103,9 @@ export default function TaskDetailPanel({ task, onClose, onStartRun, onRefresh }
     }
   }, [selectedRun?.status])
 
-  const agentType = task.spec?.agent?.type || 'unknown'
-  const accountId = task.spec?.agent?.account_id
-  const prompt = task.spec?.prompt || ''
+  const agentType = task.type || task.spec?.agent?.type || 'unknown'
+  const accountId = task.agent_id || task.spec?.agent?.account_id
+  const prompt = task.prompt?.content || task.spec?.prompt || ''
   const status = statusConfig[task.status] || statusConfig.pending
 
   // 获取 Run 列表
@@ -351,7 +354,7 @@ export default function TaskDetailPanel({ task, onClose, onStartRun, onRefresh }
   }
 
   return (
-    <div className="w-[480px] bg-white border-l border-gray-200 flex flex-col h-full overflow-hidden">
+    <div className="w-full md:w-[420px] lg:w-[480px] bg-white md:border-l border-gray-200 flex flex-col h-full overflow-hidden">
       {/* 头部 */}
       <div className="flex-shrink-0 border-b border-gray-200">
         <div className="px-4 py-3 flex items-center justify-between">
@@ -505,7 +508,7 @@ export default function TaskDetailPanel({ task, onClose, onStartRun, onRefresh }
       <div className="flex-shrink-0 px-4 py-3 border-t border-gray-200 bg-gray-50">
         <div className="flex items-center justify-between gap-2">
           <a
-            href={`/tasks/${task.id}`}
+            href={`/tasks/detail?id=${task.id}`}
             className="flex items-center gap-1 text-sm text-blue-600 hover:underline"
           >
             <ExternalLink className="w-4 h-4" />

@@ -1,0 +1,21 @@
+# Node Manager 配置
+# 开发环境默认值
+
+node:
+  id: dev-node-01
+  api_server_url: http://localhost:8080
+  workspace_dir: /tmp/agents-workspaces
+  labels:
+    os: linux
+
+redis:
+  url: redis://localhost:6380/0
+
+etcd:
+  endpoints: localhost:2379
+  prefix: /agents
+
+# TLS 配置（生产环境启用）
+# tls:
+#   enabled: true
+#   ca_file: /etc/agents-admin/certs/ca.pem

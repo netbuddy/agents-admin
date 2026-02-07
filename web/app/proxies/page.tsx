@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Plus, Trash2, Star, TestTube, Edit2, CheckCircle, XCircle, Loader2 } from 'lucide-react'
+import { Plus, Trash2, TestTube, Edit2, CheckCircle, XCircle, Loader2, X, Globe } from 'lucide-react'
 import { AdminLayout } from '@/components/layout'
 
 interface Proxy {
@@ -23,7 +23,8 @@ export default function ProxiesPage() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [editingProxy, setEditingProxy] = useState<Proxy | null>(null)
   const [testingProxy, setTestingProxy] = useState<string | null>(null)
-  const [testResult, setTestResult] = useState<{id: string, success: boolean, message: string} | null>(null)
+  const [testResult, setTestResult] = useState<{id: string, success: boolean, message: string, headers?: Record<string, string>, page_title?: string, status_code?: number, latency_ms?: number} | null>(null)
+  const [testDialogProxy, setTestDialogProxy] = useState<Proxy | null>(null)
 
   const fetchProxies = async () => {
     try {
@@ -85,23 +86,24 @@ export default function ProxiesPage() {
     }
   }
 
-  const setDefaultProxy = async (id: string) => {
-    try {
-      await fetch(`/api/v1/proxies/${id}/set-default`, { method: 'POST' })
-      fetchProxies()
-    } catch (err) {
-      console.error('Failed to set default proxy:', err)
-    }
-  }
 
-  const testProxy = async (id: string) => {
+  const testProxy = async (id: string, targetUrl?: string) => {
     setTestingProxy(id)
     setTestResult(null)
     try {
-      const res = await fetch(`/api/v1/proxies/${id}/test`, { method: 'POST' })
+      const body = targetUrl ? JSON.stringify({ target_url: targetUrl }) : '{}'
+      const res = await fetch(`/api/v1/proxies/${id}/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      })
       if (res.ok) {
         const data = await res.json()
-        setTestResult({ id, success: data.success, message: data.message })
+        setTestResult({
+          id, success: data.success, message: data.message,
+          headers: data.headers, page_title: data.page_title,
+          status_code: data.status_code, latency_ms: data.latency_ms,
+        })
       }
     } catch (err) {
       setTestResult({ id, success: false, message: '测试请求失败' })
@@ -155,73 +157,58 @@ export default function ProxiesPage() {
       ) : (
         <div className="bg-white rounded-lg border divide-y">
           {proxies.map(proxy => (
-            <div key={proxy.id} className="px-4 py-4 flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  {proxy.is_default && (
-                    <Star className="w-5 h-5 text-yellow-500 fill-yellow-500" />
-                  )}
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium">{proxy.name}</p>
-                      <span className="px-2 py-0.5 text-xs bg-gray-100 rounded">
-                        {proxyTypeLabel(proxy.type)}
+            <div key={proxy.id} className="px-3 sm:px-4 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-medium truncate">{proxy.name}</p>
+                    <span className="px-2 py-0.5 text-xs bg-gray-100 rounded">
+                      {proxyTypeLabel(proxy.type)}
+                    </span>
+                    {proxy.status === 'inactive' && (
+                      <span className="px-2 py-0.5 text-xs bg-red-100 text-red-700 rounded">
+                        已禁用
                       </span>
-                      {proxy.status === 'inactive' && (
-                        <span className="px-2 py-0.5 text-xs bg-red-100 text-red-700 rounded">
-                          已禁用
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm text-gray-500">
-                      {proxy.host}:{proxy.port}
-                      {proxy.username && ` (认证: ${proxy.username})`}
-                    </p>
+                    )}
                   </div>
+                  <p className="text-sm text-gray-500 truncate">
+                    {proxy.host}:{proxy.port}
+                    {proxy.username && ` (认证: ${proxy.username})`}
+                  </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 ml-8 sm:ml-0">
                 {testResult?.id === proxy.id && (
-                  <span className={`flex items-center gap-1 text-sm ${testResult.success ? 'text-green-600' : 'text-red-600'}`}>
+                  <span className={`flex items-center gap-1 text-xs sm:text-sm ${testResult.success ? 'text-green-600' : 'text-red-600'}`}>
                     {testResult.success ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
-                    {testResult.message}
+                    <span className="hidden sm:inline">{testResult.message}</span>
                   </span>
                 )}
                 
                 <button
-                  onClick={() => testProxy(proxy.id)}
+                  onClick={() => setTestDialogProxy(proxy)}
                   disabled={testingProxy === proxy.id}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded disabled:opacity-50"
+                  className="flex items-center gap-1 px-2 sm:px-3 py-2 sm:py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded disabled:opacity-50"
                 >
                   {testingProxy === proxy.id ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
                     <TestTube className="w-4 h-4" />
                   )}
-                  测试
+                  <span className="hidden sm:inline">测试</span>
                 </button>
-
-                {!proxy.is_default && (
-                  <button
-                    onClick={() => setDefaultProxy(proxy.id)}
-                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-yellow-600 hover:bg-yellow-50 rounded"
-                  >
-                    <Star className="w-4 h-4" />
-                    设为默认
-                  </button>
-                )}
 
                 <button
                   onClick={() => setEditingProxy(proxy)}
-                  className="p-1.5 text-gray-500 hover:bg-gray-100 rounded"
+                  className="p-2 sm:p-1.5 text-gray-500 hover:bg-gray-100 rounded"
                 >
                   <Edit2 className="w-4 h-4" />
                 </button>
 
                 <button
                   onClick={() => deleteProxy(proxy.id)}
-                  className="p-1.5 text-red-500 hover:bg-red-50 rounded"
+                  className="p-2 sm:p-1.5 text-red-500 hover:bg-red-50 rounded"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -243,6 +230,16 @@ export default function ProxiesPage() {
           proxy={editingProxy}
           onClose={() => setEditingProxy(null)}
           onSave={(data) => updateProxy(editingProxy.id, data)}
+        />
+      )}
+
+      {testDialogProxy && (
+        <ProxyTestDialog
+          proxy={testDialogProxy}
+          testing={testingProxy === testDialogProxy.id}
+          result={testResult?.id === testDialogProxy.id ? testResult : null}
+          onTest={(targetUrl) => testProxy(testDialogProxy.id, targetUrl)}
+          onClose={() => { setTestDialogProxy(null); setTestResult(null) }}
         />
       )}
     </AdminLayout>
@@ -268,7 +265,6 @@ function ProxyFormModal({
   const [noProxy, setNoProxy] = useState(
     proxy?.no_proxy ? proxy.no_proxy.split(',').map(s => s.trim()).join('\n') : ''
   )
-  const [isDefault, setIsDefault] = useState(proxy?.is_default || false)
   const [status, setStatus] = useState(proxy?.status || 'active')
 
   const handleSubmit = () => {
@@ -284,7 +280,6 @@ function ProxyFormModal({
       type,
       host,
       port: parseInt(port, 10),
-      is_default: isDefault,
       status,
     }
     if (username) data.username = username
@@ -294,8 +289,8 @@ function ProxyFormModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg w-full max-w-md p-6">
+    <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50">
+      <div className="bg-white rounded-t-2xl sm:rounded-lg w-full sm:max-w-md p-4 sm:p-6 max-h-[90vh] overflow-y-auto touch-scroll">
         <h2 className="text-lg font-semibold mb-4">
           {proxy ? '编辑代理' : '添加代理'}
         </h2>
@@ -382,18 +377,8 @@ function ProxyFormModal({
             <p className="text-xs text-gray-500 mt-1">每行一个地址，可使用通配符匹配规则（如 192.168.213.*）</p>
           </div>
 
-          <div className="flex items-center gap-4">
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={isDefault}
-                onChange={e => setIsDefault(e.target.checked)}
-                className="rounded"
-              />
-              <span className="text-sm">设为默认代理</span>
-            </label>
-
-            {proxy && (
+          {proxy && (
+            <div className="flex items-center gap-4">
               <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -403,8 +388,8 @@ function ProxyFormModal({
                 />
                 <span className="text-sm">启用</span>
               </label>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         <div className="flex justify-end gap-2 mt-6">
@@ -417,6 +402,146 @@ function ProxyFormModal({
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
           >
             {proxy ? '保存' : '创建'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const QUICK_TARGETS = [
+  { label: 'Google', url: 'https://www.google.com' },
+  { label: 'GitHub', url: 'https://github.com' },
+  { label: 'OpenAI', url: 'https://api.openai.com' },
+  { label: 'Anthropic', url: 'https://api.anthropic.com' },
+]
+
+function ProxyTestDialog({
+  proxy,
+  testing,
+  result,
+  onTest,
+  onClose,
+}: {
+  proxy: Proxy
+  testing: boolean
+  result: { success: boolean; message: string; headers?: Record<string, string>; page_title?: string; status_code?: number; latency_ms?: number } | null
+  onTest: (targetUrl: string) => void
+  onClose: () => void
+}) {
+  const [targetUrl, setTargetUrl] = useState('https://www.google.com')
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50">
+      <div className="bg-white rounded-t-2xl sm:rounded-xl w-full sm:max-w-md p-5 sm:p-6 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Globe className="w-5 h-5 text-blue-600" />
+            <h2 className="text-lg font-semibold">测试代理连接</h2>
+          </div>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded">
+            <X className="w-5 h-5 text-gray-400" />
+          </button>
+        </div>
+
+        <p className="text-sm text-gray-500 mb-4">
+          通过代理 <span className="font-medium text-gray-700">{proxy.name}</span> ({proxy.host}:{proxy.port}) 访问目标网址，验证代理是否可用。
+        </p>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">目标网址</label>
+            <input
+              type="url"
+              value={targetUrl}
+              onChange={e => setTargetUrl(e.target.value)}
+              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              placeholder="https://www.google.com"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs text-gray-500 mb-2">常用目标</label>
+            <div className="flex flex-wrap gap-2">
+              {QUICK_TARGETS.map(t => (
+                <button
+                  key={t.url}
+                  onClick={() => setTargetUrl(t.url)}
+                  className={`px-3 py-1.5 text-xs rounded-full border transition-colors ${
+                    targetUrl === t.url
+                      ? 'bg-blue-50 border-blue-300 text-blue-700'
+                      : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {result && (
+            <div className={`p-3 rounded-lg border ${
+              result.success
+                ? 'bg-green-50 border-green-200'
+                : 'bg-red-50 border-red-200'
+            }`}>
+              <div className="flex items-center gap-2 mb-1">
+                {result.success
+                  ? <CheckCircle className="w-4 h-4 text-green-600" />
+                  : <XCircle className="w-4 h-4 text-red-600" />
+                }
+                <span className={`text-sm font-medium ${result.success ? 'text-green-700' : 'text-red-700'}`}>
+                  {result.success ? '代理可用' : '测试失败'}
+                </span>
+              </div>
+              <p className={`text-xs ${result.success ? 'text-green-600' : 'text-red-600'}`}>
+                {result.message}
+              </p>
+              {result.success && (
+                <div className="mt-2 pt-2 border-t border-green-200 space-y-1">
+                  <p className="text-xs text-gray-500 font-medium">验证证据：</p>
+                  {result.page_title && (
+                    <p className="text-xs text-gray-600">页面标题: <span className="font-mono bg-white/60 px-1 rounded">{result.page_title}</span></p>
+                  )}
+                  {result.status_code && (
+                    <p className="text-xs text-gray-600">HTTP 状态码: <span className="font-mono">{result.status_code}</span></p>
+                  )}
+                  {result.headers && Object.keys(result.headers).length > 0 && (
+                    <div className="text-xs text-gray-600">
+                      <p>响应头:</p>
+                      <div className="font-mono text-[11px] bg-white/60 rounded p-1.5 mt-0.5 space-y-0.5">
+                        {Object.entries(result.headers).map(([k, v]) => (
+                          <p key={k}>{k}: {v}</p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-3 mt-6">
+          <button onClick={onClose} className="px-4 py-2 border rounded-lg hover:bg-gray-100 text-sm">
+            关闭
+          </button>
+          <button
+            onClick={() => onTest(targetUrl)}
+            disabled={testing || !targetUrl}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm"
+          >
+            {testing ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                测试中...
+              </>
+            ) : (
+              <>
+                <TestTube className="w-4 h-4" />
+                开始测试
+              </>
+            )}
           </button>
         </div>
       </div>

@@ -6,6 +6,7 @@ import {
   RefreshCw, Search, Filter, ChevronRight, Zap,
   TrendingUp, Timer, BarChart3
 } from 'lucide-react';
+import { AdminLayout } from '@/components/layout';
 
 interface WorkflowSummary {
   id: string;
@@ -90,15 +91,15 @@ function StatCard({ title, value, icon: Icon, trend, color }: {
   color: string;
 }) {
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow">
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-3 sm:p-5 hover:shadow-md transition-shadow">
       <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm text-gray-500 font-medium">{title}</p>
-          <p className="text-2xl font-bold mt-1">{value}</p>
-          {trend && <p className="text-xs text-gray-400 mt-1">{trend}</p>}
+        <div className="min-w-0">
+          <p className="text-xs sm:text-sm text-gray-500 font-medium truncate">{title}</p>
+          <p className="text-xl sm:text-2xl font-bold mt-0.5 sm:mt-1">{value}</p>
+          {trend && <p className="text-xs text-gray-400 mt-0.5 sm:mt-1 hidden sm:block">{trend}</p>}
         </div>
-        <div className={`p-3 rounded-xl ${color}`}>
-          <Icon className="w-6 h-6 text-white" />
+        <div className={`p-2 sm:p-3 rounded-lg sm:rounded-xl ${color} flex-shrink-0`}>
+          <Icon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
         </div>
       </div>
     </div>
@@ -278,166 +279,149 @@ export default function MonitorPage() {
   }, [fetchData]);
 
   const filteredWorkflows = workflows.filter(w => {
-    if (!searchTerm) return true;
-    return w.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-           w.id.toLowerCase().includes(searchTerm.toLowerCase());
+    if (filterType && w.type !== filterType) return false;
+    if (filterState && w.state !== filterState) return false;
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      return w.name.toLowerCase().includes(term) ||
+             w.id.toLowerCase().includes(term);
+    }
+    return true;
   });
 
   if (selectedWorkflow) {
     const workflow = workflows.find(w => w.id === selectedWorkflow);
     if (workflow) {
       return (
-        <WorkflowDetail 
-          workflow={workflow} 
-          onBack={() => setSelectedWorkflow(null)} 
-        />
+        <AdminLayout title="工作流监控" onRefresh={fetchData} loading={loading}>
+          <WorkflowDetail 
+            workflow={workflow} 
+            onBack={() => setSelectedWorkflow(null)} 
+          />
+        </AdminLayout>
       );
     }
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl">
-                <BarChart3 className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-gray-900">工作流监控中心</h1>
-                <p className="text-xs text-gray-500">实时监控认证与任务执行流程</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              {/* WebSocket 状态指示 */}
-              <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs ${
-                wsConnected ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-              }`}>
-                <span className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
-                {wsConnected ? '实时' : '离线'}
-              </div>
-              <button
-                onClick={() => setAutoRefresh(!autoRefresh)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  autoRefresh 
-                    ? 'bg-green-100 text-green-700' 
-                    : 'bg-gray-100 text-gray-600'
-                }`}
-              >
-                <RefreshCw className={`w-4 h-4 ${autoRefresh && wsConnected ? 'animate-spin' : ''}`} />
-                {autoRefresh ? '自动刷新' : '已暂停'}
-              </button>
-              <button
-                onClick={fetchData}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <RefreshCw className="w-5 h-5 text-gray-600" />
-              </button>
-            </div>
-          </div>
+    <AdminLayout title="工作流监控" onRefresh={fetchData} loading={loading}>
+      {/* WebSocket 状态 + 控制栏 */}
+      <div className="flex items-center gap-2 mb-4">
+        <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs ${
+          wsConnected ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+        }`}>
+          <span className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
+          <span>{wsConnected ? '实时连接' : '离线'}</span>
         </div>
-      </header>
+        <button
+          onClick={() => setAutoRefresh(!autoRefresh)}
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+            autoRefresh 
+              ? 'bg-green-100 text-green-700' 
+              : 'bg-gray-100 text-gray-600'
+          }`}
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${autoRefresh && wsConnected ? 'animate-spin' : ''}`} />
+          {autoRefresh ? '自动刷新' : '已暂停'}
+        </button>
+      </div>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Stats Grid */}
-        {stats && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <StatCard 
-              title="总工作流" 
-              value={stats.total_workflows} 
-              icon={BarChart3}
-              color="bg-gradient-to-br from-blue-500 to-blue-600"
-            />
-            <StatCard 
-              title="活跃中" 
-              value={stats.active_workflows} 
-              icon={Activity}
-              trend="实时运行"
-              color="bg-gradient-to-br from-green-500 to-green-600"
-            />
-            <StatCard 
-              title="今日完成" 
-              value={stats.completed_today} 
-              icon={CheckCircle2}
-              color="bg-gradient-to-br from-emerald-500 to-emerald-600"
-            />
-            <StatCard 
-              title="今日失败" 
-              value={stats.failed_today} 
-              icon={XCircle}
-              color="bg-gradient-to-br from-red-500 to-red-600"
-            />
-          </div>
-        )}
-
-        {/* Filters */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex-1 min-w-[200px]">
-              <div className="relative">
-                <Search className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="搜索工作流..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-gray-500" />
-              <select
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value)}
-                className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-              >
-                <option value="">所有类型</option>
-                <option value="auth">OAuth 认证</option>
-                <option value="run">任务执行</option>
-              </select>
-              <select
-                value={filterState}
-                onChange={(e) => setFilterState(e.target.value)}
-                className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-              >
-                <option value="">所有状态</option>
-                <option value="pending">等待中</option>
-                <option value="running">运行中</option>
-                <option value="waiting">等待用户</option>
-                <option value="completed">已完成</option>
-                <option value="failed">失败</option>
-              </select>
-            </div>
-          </div>
+      {/* Stats Grid */}
+      {stats && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
+          <StatCard 
+            title="总工作流" 
+            value={stats.total_workflows} 
+            icon={BarChart3}
+            color="bg-gradient-to-br from-blue-500 to-blue-600"
+          />
+          <StatCard 
+            title="活跃中" 
+            value={stats.active_workflows} 
+            icon={Activity}
+            trend="实时运行"
+            color="bg-gradient-to-br from-green-500 to-green-600"
+          />
+          <StatCard 
+            title="今日完成" 
+            value={stats.completed_today} 
+            icon={CheckCircle2}
+            color="bg-gradient-to-br from-emerald-500 to-emerald-600"
+          />
+          <StatCard 
+            title="今日失败" 
+            value={stats.failed_today} 
+            icon={XCircle}
+            color="bg-gradient-to-br from-red-500 to-red-600"
+          />
         </div>
+      )}
 
-        {/* Workflow List */}
-        {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <RefreshCw className="w-8 h-8 text-blue-500 animate-spin" />
-          </div>
-        ) : filteredWorkflows.length === 0 ? (
-          <div className="text-center py-20">
-            <Activity className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500">暂无工作流数据</p>
-            <p className="text-sm text-gray-400 mt-1">发起认证或任务后，数据将在此显示</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredWorkflows.map(workflow => (
-              <WorkflowCard 
-                key={workflow.id} 
-                workflow={workflow} 
-                onClick={() => setSelectedWorkflow(workflow.id)}
+      {/* Filters */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-3 sm:p-4 mb-4 sm:mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+          <div className="flex-1 min-w-0">
+            <div className="relative">
+              <Search className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="搜索工作流..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
               />
-            ))}
+            </div>
           </div>
-        )}
-      </main>
-    </div>
+          <div className="flex items-center gap-2">
+            <Filter className="w-4 h-4 text-gray-500 hidden sm:block" />
+            <select
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+              className="flex-1 sm:flex-none px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            >
+              <option value="">所有类型</option>
+              <option value="auth">OAuth 认证</option>
+              <option value="run">任务执行</option>
+            </select>
+            <select
+              value={filterState}
+              onChange={(e) => setFilterState(e.target.value)}
+              className="flex-1 sm:flex-none px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            >
+              <option value="">所有状态</option>
+              <option value="pending">等待中</option>
+              <option value="running">运行中</option>
+              <option value="waiting">等待用户</option>
+              <option value="completed">已完成</option>
+              <option value="failed">失败</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Workflow List */}
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <RefreshCw className="w-8 h-8 text-blue-500 animate-spin" />
+        </div>
+      ) : filteredWorkflows.length === 0 ? (
+        <div className="text-center py-20">
+          <Activity className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+          <p className="text-gray-500">暂无工作流数据</p>
+          <p className="text-sm text-gray-400 mt-1">发起认证或任务后，数据将在此显示</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+          {filteredWorkflows.map(workflow => (
+            <WorkflowCard 
+              key={workflow.id} 
+              workflow={workflow} 
+              onClick={() => setSelectedWorkflow(workflow.id)}
+            />
+          ))}
+        </div>
+      )}
+    </AdminLayout>
   );
 }
 
@@ -476,33 +460,29 @@ function WorkflowDetail({ workflow, onBack }: { workflow: WorkflowSummary; onBac
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center h-16">
-            <button
-              onClick={onBack}
-              className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mr-4"
-            >
-              <ChevronRight className="w-5 h-5 rotate-180" />
-              <span>返回</span>
-            </button>
-            <div className="flex-1">
-              <h1 className="text-lg font-bold text-gray-900">{workflow.name}</h1>
-              <p className="text-xs text-gray-500 font-mono">{workflow.id}</p>
-            </div>
-            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full ${config.bgColor} ${config.color}`}>
-              <StateIcon className="w-4 h-4" />
-              <span className="text-sm font-medium">{config.label}</span>
-            </div>
-          </div>
+    <div>
+      {/* 返回按钮 + 标题 */}
+      <div className="flex items-center gap-3 mb-6">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+        >
+          <ChevronRight className="w-4 h-4 rotate-180" />
+          返回
+        </button>
+        <div className="flex-1 min-w-0">
+          <h2 className="text-lg font-bold text-gray-900 truncate">{workflow.name}</h2>
+          <p className="text-xs text-gray-500 font-mono">{workflow.id}</p>
         </div>
-      </header>
+        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full ${config.bgColor} ${config.color}`}>
+          <StateIcon className="w-4 h-4" />
+          <span className="text-sm font-medium">{config.label}</span>
+        </div>
+      </div>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div>
         {/* Info Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-6">
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
             <p className="text-sm text-gray-500">开始时间</p>
             <p className="text-lg font-semibold mt-1">{formatTime(workflow.start_time)}</p>
@@ -613,7 +593,7 @@ function WorkflowDetail({ workflow, onBack }: { workflow: WorkflowSummary; onBac
             </div>
           )}
         </div>
-      </main>
+      </div>
     </div>
   );
 }

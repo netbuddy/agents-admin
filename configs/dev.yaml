@@ -24,3 +24,11 @@ etcd:
 # 调度器配置（覆盖 common.yaml 中的默认值）
 scheduler:
   node_id: api-server
+
+# 认证配置
+auth:
+  jwt_secret: "dev-secret-key-at-least-32-characters-long"
+  access_token_ttl: "15m"
+  refresh_token_ttl: "168h"
+  admin_email: "admin@agents-admin.local"
+  admin_password: "admin123456"

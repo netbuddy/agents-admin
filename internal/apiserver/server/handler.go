@@ -12,6 +12,7 @@ package server
 import (
 	"net/http"
 
+	"agents-admin/internal/apiserver/auth"
 	"agents-admin/internal/apiserver/hitl"
 	"agents-admin/internal/apiserver/instance"
 	"agents-admin/internal/apiserver/node"
@@ -117,11 +118,23 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("GET /api/v1/monitor/workflows/{type}/{id}/events", h.GetWorkflowEvents)
 	mux.HandleFunc("GET /api/v1/monitor/stats", h.GetMonitorStats)
 
+	// Auth 路由
+	authCfg := auth.Config{
+		JWTSecret:       h.authConfig.JWTSecret,
+		AccessTokenTTL:  h.authConfig.AccessTokenTTL,
+		RefreshTokenTTL: h.authConfig.RefreshTokenTTL,
+	}
+	authHandler := auth.NewHandler(h.store, authCfg)
+	authHandler.RegisterRoutes(mux)
+
 	// 应用指标中间件到 REST API
 	apiHandler := h.metrics.MetricsMiddleware(mux)
 
+	// 应用认证中间件
+	authedHandler := auth.Middleware(authCfg)(apiHandler)
+
 	// 应用 CORS 中间件
-	corsHandler := corsMiddleware(apiHandler)
+	corsHandler := corsMiddleware(authedHandler)
 
 	// 创建顶层路由，WebSocket 绑过 metrics 中间件（避免 http.Hijacker 问题）
 	topMux := http.NewServeMux()

@@ -127,11 +127,15 @@ const (
 // 持久化存储接口（由 postgres.Store 实现）
 // ============================================================================
 
+// TaskFilter 任务查询过滤条件（类型重导出，避免循环导入）
+type TaskFilter = storagetypes.TaskFilter
+
 // TaskStore 任务存储接口
 type TaskStore interface {
 	CreateTask(ctx context.Context, task *model.Task) error
 	GetTask(ctx context.Context, id string) (*model.Task, error)
 	ListTasks(ctx context.Context, status string, limit, offset int) ([]*model.Task, error)
+	ListTasksWithFilter(ctx context.Context, filter TaskFilter) ([]*model.Task, int, error)
 	UpdateTaskStatus(ctx context.Context, id string, status model.TaskStatus) error
 	DeleteTask(ctx context.Context, id string) error
 	UpdateTaskContext(ctx context.Context, id string, taskContext json.RawMessage) error
@@ -169,6 +173,10 @@ type NodeStore interface {
 	ListAllNodes(ctx context.Context) ([]*model.Node, error)
 	ListOnlineNodes(ctx context.Context) ([]*model.Node, error)
 	DeleteNode(ctx context.Context, id string) error
+	CreateNodeProvision(ctx context.Context, p *model.NodeProvision) error
+	UpdateNodeProvision(ctx context.Context, p *model.NodeProvision) error
+	GetNodeProvision(ctx context.Context, id string) (*model.NodeProvision, error)
+	ListNodeProvisions(ctx context.Context) ([]*model.NodeProvision, error)
 }
 
 // AccountStore 账号存储接口
@@ -275,6 +283,7 @@ type TemplateStore interface {
 	CreateAgentTemplate(ctx context.Context, tmpl *model.AgentTemplate) error
 	GetAgentTemplate(ctx context.Context, id string) (*model.AgentTemplate, error)
 	ListAgentTemplates(ctx context.Context, category string) ([]*model.AgentTemplate, error)
+	UpdateAgentTemplate(ctx context.Context, tmpl *model.AgentTemplate) error
 	DeleteAgentTemplate(ctx context.Context, id string) error
 }
 
@@ -318,6 +327,15 @@ type EtcdNodeHeartbeat interface {
 // 组合接口
 // ============================================================================
 
+// UserStore 用户存储接口
+type UserStore interface {
+	CreateUser(ctx context.Context, user *model.User) error
+	GetUserByEmail(ctx context.Context, email string) (*model.User, error)
+	GetUserByID(ctx context.Context, id string) (*model.User, error)
+	UpdateUserPassword(ctx context.Context, id, passwordHash string) error
+	ListUsers(ctx context.Context) ([]*model.User, error)
+}
+
 // PersistentStore 持久化存储组合接口
 type PersistentStore interface {
 	TaskStore
@@ -336,6 +354,7 @@ type PersistentStore interface {
 	SkillStore
 	MCPServerStore
 	SecurityPolicyStore
+	UserStore
 	Close() error
 }
 

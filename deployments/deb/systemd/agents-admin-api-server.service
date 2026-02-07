@@ -1,0 +1,31 @@
+[Unit]
+Description=Agents Admin API Server
+Documentation=https://github.com/agents-admin
+After=network-online.target postgresql.service redis.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=agents-admin
+Group=agents-admin
+EnvironmentFile=-/etc/agents-admin/api-server.env
+ExecStart=/usr/bin/agents-admin-api-server --config /etc/agents-admin
+Restart=on-failure
+RestartSec=5
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+# 安全加固
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/agents-admin
+PrivateTmp=true
+
+# 日志
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=agents-admin-api-server
+
+[Install]
+WantedBy=multi-user.target

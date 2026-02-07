@@ -794,6 +794,21 @@ func TestAgentTemplateCRUD(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "Test Agent", got.Name)
 
+	// Update
+	got.Name = "Updated Agent"
+	got.Type = "claude"
+	got.Role = "reviewer"
+	got.Skills = []string{"builtin-code-review"}
+	got.UpdatedAt = time.Now().Truncate(time.Second)
+	require.NoError(t, s.UpdateAgentTemplate(ctx, got))
+
+	updated, err := s.GetAgentTemplate(ctx, "at-001")
+	require.NoError(t, err)
+	assert.Equal(t, "Updated Agent", updated.Name)
+	assert.Equal(t, model.AgentModelType("claude"), updated.Type)
+	assert.Equal(t, "reviewer", updated.Role)
+	assert.Equal(t, []string{"builtin-code-review"}, updated.Skills)
+
 	require.NoError(t, s.DeleteAgentTemplate(ctx, "at-001"))
 }
 

@@ -32,6 +32,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/agent-templates", h.ListAgentTemplates)
 	mux.HandleFunc("GET /api/v1/agent-templates/{id}", h.GetAgentTemplate)
 	mux.HandleFunc("POST /api/v1/agent-templates", h.CreateAgentTemplate)
+	mux.HandleFunc("PATCH /api/v1/agent-templates/{id}", h.UpdateAgentTemplate)
 	mux.HandleFunc("DELETE /api/v1/agent-templates/{id}", h.DeleteAgentTemplate)
 
 	// Skills
@@ -158,6 +159,73 @@ func (h *Handler) CreateAgentTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, tmpl)
+}
+
+func (h *Handler) UpdateAgentTemplate(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	existing, err := h.store.GetAgentTemplate(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to get agent template")
+		return
+	}
+	if existing == nil {
+		writeError(w, http.StatusNotFound, "agent template not found")
+		return
+	}
+	if existing.IsBuiltin {
+		writeError(w, http.StatusForbidden, "cannot update builtin template")
+		return
+	}
+
+	var patch map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if v, ok := patch["name"].(string); ok && v != "" {
+		existing.Name = v
+	}
+	if v, ok := patch["type"].(string); ok && v != "" {
+		existing.Type = model.AgentModelType(v)
+	}
+	if v, ok := patch["role"].(string); ok {
+		existing.Role = v
+	}
+	if v, ok := patch["description"].(string); ok {
+		existing.Description = v
+	}
+	if v, ok := patch["model"].(string); ok {
+		existing.Model = v
+	}
+	if v, ok := patch["system_prompt"].(string); ok {
+		existing.SystemPrompt = v
+	}
+	if v, ok := patch["temperature"].(float64); ok {
+		existing.Temperature = v
+	}
+	if v, ok := patch["max_context"].(float64); ok {
+		existing.MaxContext = int(v)
+	}
+	if v, ok := patch["category"].(string); ok {
+		existing.Category = v
+	}
+	if v, ok := patch["skills"].([]interface{}); ok {
+		skills := make([]string, 0, len(v))
+		for _, s := range v {
+			if str, ok := s.(string); ok {
+				skills = append(skills, str)
+			}
+		}
+		existing.Skills = skills
+	}
+
+	existing.UpdatedAt = time.Now()
+	if err := h.store.UpdateAgentTemplate(r.Context(), existing); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to update agent template")
+		return
+	}
+	writeJSON(w, http.StatusOK, existing)
 }
 
 func (h *Handler) DeleteAgentTemplate(w http.ResponseWriter, r *http.Request) {

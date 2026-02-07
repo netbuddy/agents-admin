@@ -12,8 +12,12 @@ import {
   ChevronRight,
   Activity,
   Globe,
+  Bot,
+  X,
+  LogOut,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect } from 'react'
+import { useAuth } from '@/lib/auth'
 
 interface NavItem {
   name: string
@@ -25,38 +29,65 @@ interface NavItem {
 const navigation: NavItem[] = [
   { name: '任务看板', href: '/', icon: LayoutDashboard },
   { name: '工作流监控', href: '/monitor', icon: Activity },
+  { name: '智能体', href: '/agents', icon: Bot },
   { name: '账号管理', href: '/accounts', icon: Users },
-  { name: '实例管理', href: '/instances', icon: Server },
   { name: '节点管理', href: '/nodes', icon: Network },
   { name: '代理管理', href: '/proxies', icon: Globe },
   { name: '系统设置', href: '/settings', icon: Settings },
 ]
 
-export default function Sidebar() {
+interface SidebarProps {
+  mobileOpen?: boolean
+  onMobileClose?: () => void
+  collapsed?: boolean
+  onCollapsedChange?: (collapsed: boolean) => void
+}
+
+export default function Sidebar({
+  mobileOpen = false,
+  onMobileClose,
+  collapsed = false,
+  onCollapsedChange,
+}: SidebarProps) {
   const pathname = usePathname()
-  const [collapsed, setCollapsed] = useState(false)
+  const { user, logout } = useAuth()
+
+  // 路由变化时关闭移动端侧边栏
+  useEffect(() => {
+    onMobileClose?.()
+  }, [pathname])
 
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/'
     return pathname.startsWith(href)
   }
 
-  return (
-    <aside
-      className={`flex flex-col bg-gray-900 text-white transition-all duration-300 ${
-        collapsed ? 'w-16' : 'w-56'
-      }`}
-    >
+  const handleNavClick = () => {
+    // 移动端点击导航后关闭侧边栏
+    onMobileClose?.()
+  }
+
+  const sidebarContent = (
+    <>
       {/* Logo */}
       <div className="flex h-14 items-center justify-between px-4 border-b border-gray-800">
-        {!collapsed && (
+        {(!collapsed || mobileOpen) && (
           <span className="font-semibold text-lg">Agent Kanban</span>
         )}
+        {/* 移动端显示关闭按钮 */}
         <button
-          onClick={() => setCollapsed(!collapsed)}
-          className="p-1 rounded hover:bg-gray-800"
+          onClick={() => {
+            if (mobileOpen) {
+              onMobileClose?.()
+            } else {
+              onCollapsedChange?.(!collapsed)
+            }
+          }}
+          className="p-1.5 rounded hover:bg-gray-800 min-w-[32px] min-h-[32px] flex items-center justify-center"
         >
-          {collapsed ? (
+          {mobileOpen ? (
+            <X className="w-5 h-5" />
+          ) : collapsed ? (
             <ChevronRight className="w-5 h-5" />
           ) : (
             <ChevronLeft className="w-5 h-5" />
@@ -65,24 +96,26 @@ export default function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 py-4 space-y-1">
+      <nav className="flex-1 py-4 space-y-1 overflow-y-auto touch-scroll">
         {navigation.map((item) => {
           const Icon = item.icon
           const active = isActive(item.href)
+          const showLabel = !collapsed || mobileOpen
           return (
             <Link
               key={item.name}
               href={item.href}
-              className={`flex items-center gap-3 px-4 py-2.5 mx-2 rounded-lg transition-colors ${
+              onClick={handleNavClick}
+              className={`flex items-center gap-3 px-4 py-3 md:py-2.5 mx-2 rounded-lg transition-colors ${
                 active
                   ? 'bg-blue-600 text-white'
                   : 'text-gray-300 hover:bg-gray-800 hover:text-white'
               }`}
-              title={collapsed ? item.name : undefined}
+              title={!showLabel ? item.name : undefined}
             >
               <Icon className="w-5 h-5 flex-shrink-0" />
-              {!collapsed && <span>{item.name}</span>}
-              {!collapsed && item.badge !== undefined && (
+              {showLabel && <span>{item.name}</span>}
+              {showLabel && item.badge !== undefined && (
                 <span className="ml-auto bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
                   {item.badge}
                 </span>
@@ -92,12 +125,66 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* Footer */}
-      {!collapsed && (
-        <div className="p-4 border-t border-gray-800 text-xs text-gray-500">
-          Phase 1.5 · v0.1.0
-        </div>
+      {/* Footer: User info + Logout */}
+      <div className="border-t border-gray-800 p-3">
+        {(!collapsed || mobileOpen) && user && (
+          <div className="flex items-center justify-between">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-gray-200 truncate">{user.username}</p>
+              <p className="text-xs text-gray-500 truncate">{user.email}</p>
+            </div>
+            <button
+              onClick={logout}
+              className="p-2 text-gray-400 hover:text-red-400 hover:bg-gray-800 rounded-lg transition-colors flex-shrink-0"
+              title="退出登录"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+        {collapsed && !mobileOpen && (
+          <button
+            onClick={logout}
+            className="w-full flex items-center justify-center p-2 text-gray-400 hover:text-red-400 hover:bg-gray-800 rounded-lg"
+            title="退出登录"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+    </>
+  )
+
+  return (
+    <>
+      {/* 移动端遮罩层 */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/60 z-40 lg:hidden"
+          onClick={onMobileClose}
+        />
       )}
-    </aside>
+
+      {/* 移动端抽屉式侧边栏 */}
+      <aside
+        className={`
+          fixed inset-y-0 left-0 z-50 flex flex-col bg-gray-900 text-white
+          w-64 transition-transform duration-300 ease-in-out
+          lg:hidden
+          ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}
+        `}
+      >
+        {sidebarContent}
+      </aside>
+
+      {/* 桌面端固定侧边栏 */}
+      <aside
+        className={`hidden lg:flex flex-col bg-gray-900 text-white transition-all duration-300 flex-shrink-0 ${
+          collapsed ? 'w-16' : 'w-56'
+        }`}
+      >
+        {sidebarContent}
+      </aside>
+    </>
   )
 }

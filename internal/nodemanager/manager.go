@@ -45,6 +45,7 @@ type Config struct {
 	APIServerURL string            // API Server 地址
 	WorkspaceDir string            // 工作空间根目录
 	Labels       map[string]string // 节点标签（用于调度匹配）
+	HTTPClient   *http.Client      // 自定义 HTTP 客户端（可选，用于 TLS）
 }
 
 // NodeManager 节点管理器核心结构
@@ -73,11 +74,14 @@ func NewNodeManager(cfg Config) (*NodeManager, error) {
 		return nil, fmt.Errorf("failed to create auth controller: %w", err)
 	}
 
+	httpClient := cfg.HTTPClient
+	if httpClient == nil {
+		httpClient = &http.Client{Timeout: 30 * time.Second}
+	}
+
 	return &NodeManager{
-		config: cfg,
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
+		config:           cfg,
+		httpClient:       httpClient,
 		adapters:         adapter.NewRegistry(),
 		running:          make(map[string]context.CancelFunc),
 		authController:   authController,

@@ -39,10 +39,31 @@ type YAMLConfig struct {
 	Redis     RedisConfig     `yaml:"redis"`
 	Etcd      EtcdConfig      `yaml:"etcd"`
 	Scheduler SchedulerConfig `yaml:"scheduler"`
+	TLS       TLSConfig       `yaml:"tls"`
+	Auth      AuthConfig      `yaml:"auth"`
+}
+
+// AuthConfig 认证配置
+type AuthConfig struct {
+	JWTSecret       string `yaml:"jwt_secret"`
+	AccessTokenTTL  string `yaml:"access_token_ttl"`  // 例如 "15m"
+	RefreshTokenTTL string `yaml:"refresh_token_ttl"` // 例如 "168h"
+	AdminEmail      string `yaml:"admin_email"`
+	AdminPassword   string `yaml:"admin_password"`
 }
 
 type ServerConfig struct {
 	Port string `yaml:"port"`
+}
+
+// TLSConfig TLS/HTTPS 配置
+type TLSConfig struct {
+	Enabled      bool   `yaml:"enabled"`
+	CertFile     string `yaml:"cert_file"`     // 服务端证书
+	KeyFile      string `yaml:"key_file"`      // 服务端私钥
+	CAFile       string `yaml:"ca_file"`       // CA 证书（用于验证客户端/服务端）
+	AutoGenerate bool   `yaml:"auto_generate"` // 启用时若证书不存在则自动生成自签名证书
+	Hosts        string `yaml:"hosts"`         // 证书 SANs（逗号分隔的 IP/域名，自动包含 localhost）
 }
 
 type DatabaseConfig struct {
@@ -106,13 +127,24 @@ type Config struct {
 	EtcdPrefix    string
 	APIPort       string
 	Scheduler     SchedulerConfig
+	TLS           TLSConfig
+	Auth          AuthConfig
 }
+
+// configDir 由外部通过 SetConfigDir 指定，优先级最高
+var configDir string
 
 var configPaths = []string{
 	"configs",
 	"../configs",
 	"../../configs",
 	"../../../configs",
+}
+
+// SetConfigDir 设置配置文件目录（用于 --config 命令行参数）
+// 调用后 Load 将优先从该目录加载配置文件
+func SetConfigDir(dir string) {
+	configDir = dir
 }
 
 var envPaths = []string{
@@ -143,21 +175,52 @@ func Load() *Config {
 	// 从环境变量获取敏感信息
 	dbPassword := getEnv("DB_PASSWORD", "agents_dev_password")
 
+	// 环境变量覆盖 auth 配置（.env 中的敏感信息优先）
+	if v := os.Getenv("JWT_SECRET"); v != "" {
+		yamlCfg.Auth.JWTSecret = v
+	}
+	if v := os.Getenv("ADMIN_EMAIL"); v != "" {
+		yamlCfg.Auth.AdminEmail = v
+	}
+	if v := os.Getenv("ADMIN_PASSWORD"); v != "" {
+		yamlCfg.Auth.AdminPassword = v
+	}
+
+	// 环境变量覆盖 DATABASE_URL / REDIS_URL
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		databaseURL = buildDatabaseURL(yamlCfg.Database, dbPassword)
+	}
+	redisURL := os.Getenv("REDIS_URL")
+	if redisURL == "" {
+		redisURL = buildRedisURL(yamlCfg.Redis)
+	}
+
 	// 构建最终配置
 	cfg := &Config{
 		Env:           env,
-		DatabaseURL:   buildDatabaseURL(yamlCfg.Database, dbPassword),
-		RedisURL:      buildRedisURL(yamlCfg.Redis),
+		DatabaseURL:   databaseURL,
+		RedisURL:      redisURL,
 		EtcdEndpoints: strings.Join(yamlCfg.Etcd.Endpoints, ","),
 		EtcdPrefix:    yamlCfg.Etcd.Prefix,
 		APIPort:       yamlCfg.Server.Port,
 		Scheduler:     yamlCfg.Scheduler,
+		TLS:           yamlCfg.TLS,
+		Auth:          yamlCfg.Auth,
 	}
 
 	// 验证并填充调度器默认值
 	cfg.Scheduler.validate()
 
 	return cfg
+}
+
+// effectiveConfigPaths 返回实际搜索路径（优先使用 configDir）
+func effectiveConfigPaths() []string {
+	if configDir != "" {
+		return []string{configDir}
+	}
+	return configPaths
 }
 
 // loadYAMLConfig 加载 YAML 配置文件
@@ -182,8 +245,10 @@ func loadYAMLConfig(env Environment) *YAMLConfig {
 		},
 	}
 
+	paths := effectiveConfigPaths()
+
 	// 2. 加载 common.yaml（公共配置）
-	for _, base := range configPaths {
+	for _, base := range paths {
 		path := filepath.Join(base, "common.yaml")
 		if data, err := os.ReadFile(path); err == nil {
 			yaml.Unmarshal(data, cfg)
@@ -193,7 +258,7 @@ func loadYAMLConfig(env Environment) *YAMLConfig {
 
 	// 3. 加载 {env}.yaml（环境特定配置，覆盖公共配置）
 	filename := fmt.Sprintf("%s.yaml", env)
-	for _, base := range configPaths {
+	for _, base := range paths {
 		path := filepath.Join(base, filename)
 		if data, err := os.ReadFile(path); err == nil {
 			yaml.Unmarshal(data, cfg)

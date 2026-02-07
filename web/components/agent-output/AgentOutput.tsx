@@ -224,8 +224,11 @@ export default function AgentOutput({ events, isStreaming, error }: AgentOutputP
   }
 
   return (
-    <div ref={containerRef} className="h-full overflow-y-auto bg-gray-50">
-      <div className="p-4 space-y-3">
+    <div className="flex flex-col h-full">
+      <div 
+        ref={containerRef}
+        className="flex-1 overflow-y-auto p-2 sm:p-4 space-y-2 sm:space-y-3 touch-scroll"
+      >
         {events.length === 0 && !isStreaming && (
           <div className="text-center py-12 text-gray-400">
             <Terminal className="w-12 h-12 mx-auto mb-4 opacity-50" />

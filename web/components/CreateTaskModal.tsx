@@ -106,14 +106,9 @@ export default function CreateTaskModal({ onClose, onCreated }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name,
-          spec: {
-            prompt,
-            agent: { 
-              type: agentType,
-              instance_id: instanceId,
-              account_id: selectedInstance?.account_id // 保留账号信息
-            },
-          },
+          prompt,
+          type: agentType,
+          agent_id: instanceId,
         }),
       })
 
@@ -145,8 +140,8 @@ export default function CreateTaskModal({ onClose, onCreated }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg w-full max-w-lg p-6">
+    <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50">
+      <div className="bg-white rounded-t-2xl sm:rounded-lg w-full sm:max-w-lg p-4 sm:p-6 max-h-[90vh] overflow-y-auto touch-scroll">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold">新建任务</h2>
           <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded">

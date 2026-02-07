@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"agents-admin/internal/shared/model"
+	"agents-admin/internal/shared/storage"
 )
 
 // ============================================================================
@@ -214,6 +215,9 @@ func (m *mockStore) CreateTask(_ context.Context, _ *model.Task) error        { 
 func (m *mockStore) GetTask(_ context.Context, _ string) (*model.Task, error) { return nil, nil }
 func (m *mockStore) ListTasks(_ context.Context, _ string, _, _ int) ([]*model.Task, error) {
 	return nil, nil
+}
+func (m *mockStore) ListTasksWithFilter(_ context.Context, _ storage.TaskFilter) ([]*model.Task, int, error) {
+	return nil, 0, nil
 }
 func (m *mockStore) UpdateTaskStatus(_ context.Context, _ string, _ model.TaskStatus) error {
 	return nil

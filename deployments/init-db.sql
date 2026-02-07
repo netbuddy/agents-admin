@@ -1,180 +1,20 @@
--- Agent Kanban 数据库初始化脚本
--- 版本: 2.0 - 支持任务类型和灵活工作空间
+-- ==========================================================================
+-- Agent Admin 数据库初始化脚本（最终状态）
+-- 版本: 3.0 — 合并 init-db.sql + migrations 002-016
+-- 生成日期: 2026-02-06
+--
+-- 使用方法:
+--   psql "postgres://agents:agents_dev_password@localhost:5432/agents_admin" \
+--     -f deployments/init-db.sql
+--
+-- 说明: 本脚本为幂等设计，可重复执行。所有 CREATE 使用 IF NOT EXISTS。
+-- ==========================================================================
 
--- 启用 UUID 扩展
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- ============================================================
--- 任务表
--- 存储任务定义（TaskSpec），支持多种任务类型和层级结构
--- ============================================================
-CREATE TABLE IF NOT EXISTS tasks (
-    id VARCHAR(20) PRIMARY KEY,
-    -- 父任务 ID，用于任务层级结构（顶层任务为空）
-    parent_id VARCHAR(20) REFERENCES tasks(id) ON DELETE SET NULL,
-    name VARCHAR(200) NOT NULL,
-    -- 任务类型：general, development, operation, research, automation, review
-    type VARCHAR(20) NOT NULL DEFAULT 'general',
-    status VARCHAR(20) NOT NULL DEFAULT 'pending',
-    -- spec 存储完整的 TaskSpec JSON，包含 Agent、Workspace、Security 配置
-    spec JSONB NOT NULL,
-    -- context 存储任务上下文（继承的上下文、产出的上下文、对话历史）
-    context JSONB DEFAULT '{}',
-    -- 关联的执行实例 ID
-    instance_id VARCHAR(64),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- ============================================================
--- Run 表
--- 存储任务执行实例，包含运行时快照
--- ============================================================
-CREATE TABLE IF NOT EXISTS runs (
-    id VARCHAR(20) PRIMARY KEY,
-    -- 使用 ON DELETE CASCADE 允许删除任务时自动删除关联的 runs
-    task_id VARCHAR(20) NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
-    status VARCHAR(20) NOT NULL DEFAULT 'queued',
-    node_id VARCHAR(50),
-    started_at TIMESTAMPTZ,
-    finished_at TIMESTAMPTZ,
-    -- snapshot 存储执行时的 TaskSpec 快照，用于审计和复现
-    snapshot JSONB,
-    error TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- ============================================================
--- 事件表
--- 存储 Run 执行过程中的 CanonicalEvent
--- ============================================================
-CREATE TABLE IF NOT EXISTS events (
-    id BIGSERIAL PRIMARY KEY,
-    -- 使用 ON DELETE CASCADE 允许删除 run 时自动删除关联的事件
-    run_id VARCHAR(20) NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
-    seq INTEGER NOT NULL,
-    -- 事件类型：run_started, message, tool_use_start, file_write, error 等
-    type VARCHAR(50) NOT NULL,
-    timestamp TIMESTAMPTZ NOT NULL,
-    -- payload 存储事件载荷
-    payload JSONB,
-    -- raw 存储原始 CLI 输出（用于调试和回放）
-    raw TEXT,
-    UNIQUE(run_id, seq)
-);
-
--- ============================================================
--- 节点表
--- 存储 Node Agent 注册信息和状态
--- ============================================================
-CREATE TABLE IF NOT EXISTS nodes (
-    id VARCHAR(50) PRIMARY KEY,
-    -- 节点状态：online, offline, draining, disabled, maintenance
-    status VARCHAR(20) NOT NULL DEFAULT 'offline',
-    -- labels 存储节点标签（用于调度匹配）
-    labels JSONB DEFAULT '{}',
-    -- capacity 存储节点容量信息
-    capacity JSONB DEFAULT '{}',
-    last_heartbeat TIMESTAMPTZ,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- ============================================================
--- 产物表
--- 存储 Run 执行产物（事件日志、代码变更、输出文件等）
--- ============================================================
-CREATE TABLE IF NOT EXISTS artifacts (
-    id BIGSERIAL PRIMARY KEY,
-    -- 使用 ON DELETE CASCADE 允许删除 run 时自动删除关联的产物
-    run_id VARCHAR(20) NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
-    name VARCHAR(200) NOT NULL,
-    path VARCHAR(500) NOT NULL,
-    size BIGINT,
-    content_type VARCHAR(100),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- ============================================================
--- 索引
--- ============================================================
-CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
-CREATE INDEX IF NOT EXISTS idx_tasks_type ON tasks(type);
-CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_tasks_parent_id ON tasks(parent_id);
-CREATE INDEX IF NOT EXISTS idx_tasks_instance_id ON tasks(instance_id);
-CREATE INDEX IF NOT EXISTS idx_tasks_context ON tasks USING GIN (context);
-CREATE INDEX IF NOT EXISTS idx_runs_task_id ON runs(task_id);
-CREATE INDEX IF NOT EXISTS idx_runs_status ON runs(status);
-CREATE INDEX IF NOT EXISTS idx_runs_node_id ON runs(node_id);
-CREATE INDEX IF NOT EXISTS idx_events_run_id ON events(run_id);
-CREATE INDEX IF NOT EXISTS idx_events_run_id_seq ON events(run_id, seq);
-CREATE INDEX IF NOT EXISTS idx_events_type ON events(type);
-CREATE INDEX IF NOT EXISTS idx_nodes_status ON nodes(status);
-
--- ============================================================
--- 账号表
--- 存储 AI Agent 认证账号信息
--- ============================================================
-CREATE TABLE IF NOT EXISTS accounts (
-    id VARCHAR(64) PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    agent_type_id VARCHAR(64) NOT NULL,
-    node_id VARCHAR(64) NOT NULL,  -- 账号所属节点（当前阶段必填，未来共享存储后可选）
-    volume_name VARCHAR(255),  -- Docker Volume 名称（由 Node Agent 创建后回填）
-    status VARCHAR(32) NOT NULL DEFAULT 'pending',
-    -- pending: 待认证
-    -- authenticating: 认证中
-    -- authenticated: 已认证
-    -- expired: 认证过期
-    metadata JSONB DEFAULT '{}',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    last_used_at TIMESTAMPTZ
-);
-
--- ============================================================
--- 认证任务表
--- 存储认证任务的期望状态和当前状态（控制面/数据面分离）
--- ============================================================
-CREATE TABLE IF NOT EXISTS auth_tasks (
-    id VARCHAR(64) PRIMARY KEY,
-    account_id VARCHAR(64) NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    
-    -- 期望状态（由 API Server 设置）
-    method VARCHAR(32) NOT NULL,  -- oauth, api_key
-    
-    -- 节点信息（由用户指定，不走 Scheduler）
-    node_id VARCHAR(64) NOT NULL,
-    
-    -- 当前状态（由 Node Agent 上报）
-    status VARCHAR(32) NOT NULL DEFAULT 'pending',
-    -- pending: 待调度
-    -- assigned: 已分配节点
-    -- running: 执行中
-    -- waiting_user: 等待用户操作（终端已启动）
-    -- success: 认证成功
-    -- failed: 认证失败
-    -- timeout: 超时
-    
-    terminal_port INT,            -- Node Agent 上报的终端端口
-    terminal_url VARCHAR(255),    -- 终端访问 URL
-    container_name VARCHAR(255),  -- 容器名称
-    message TEXT,
-    
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    expires_at TIMESTAMPTZ NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_accounts_status ON accounts(status);
-CREATE INDEX IF NOT EXISTS idx_accounts_agent_type ON accounts(agent_type_id);
-CREATE INDEX IF NOT EXISTS idx_auth_tasks_status ON auth_tasks(status);
-CREATE INDEX IF NOT EXISTS idx_auth_tasks_node_id ON auth_tasks(node_id);
-CREATE INDEX IF NOT EXISTS idx_auth_tasks_account_id ON auth_tasks(account_id);
-
--- 更新时间触发器
+-- ==========================================================================
+-- 更新时间触发器函数（全局共用）
+-- ==========================================================================
 CREATE OR REPLACE FUNCTION update_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -183,30 +23,185 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- ==========================================================================
+-- 1. tasks — 任务定义
+-- ==========================================================================
+CREATE TABLE IF NOT EXISTS tasks (
+    id VARCHAR(20) PRIMARY KEY,
+    parent_id VARCHAR(20) REFERENCES tasks(id) ON DELETE SET NULL,
+    name VARCHAR(200) NOT NULL,
+    type VARCHAR(32) NOT NULL DEFAULT 'general',
+    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    description TEXT,
+    -- 结构化提示词（JSONB）
+    prompt JSONB,
+    -- 旧字段保留兼容
+    spec JSONB,
+    context JSONB DEFAULT '{}',
+    -- 扩展字段（005 扁平化）
+    workspace JSONB,
+    security JSONB,
+    labels JSONB,
+    template_id VARCHAR(64),
+    agent_id VARCHAR(64),
+    instance_id VARCHAR(64),
+    -- 执行模式（015）
+    mode VARCHAR(32) NOT NULL DEFAULT 'simple',
+    decomposition JSONB,
+    parent_close_policy VARCHAR(32) NOT NULL DEFAULT 'terminate',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+CREATE INDEX IF NOT EXISTS idx_tasks_type ON tasks(type);
+CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tasks_parent_id ON tasks(parent_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_instance_id ON tasks(instance_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_context ON tasks USING GIN (context);
+CREATE INDEX IF NOT EXISTS idx_tasks_template_id ON tasks(template_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_agent_id ON tasks(agent_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_mode ON tasks(mode);
+
+DROP TRIGGER IF EXISTS tasks_updated_at ON tasks;
 CREATE TRIGGER tasks_updated_at
-    BEFORE UPDATE ON tasks
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+    BEFORE UPDATE ON tasks FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
+-- ==========================================================================
+-- 2. runs — 任务执行记录
+-- ==========================================================================
+CREATE TABLE IF NOT EXISTS runs (
+    id VARCHAR(20) PRIMARY KEY,
+    task_id VARCHAR(20) NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    status VARCHAR(20) NOT NULL DEFAULT 'queued',
+    node_id VARCHAR(50),
+    started_at TIMESTAMPTZ,
+    finished_at TIMESTAMPTZ,
+    snapshot JSONB,
+    error TEXT,
+    -- 层次化支持（015）
+    parent_id VARCHAR(64),
+    root_id VARCHAR(64),
+    depth INT NOT NULL DEFAULT 0,
+    phase VARCHAR(64),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_runs_task_id ON runs(task_id);
+CREATE INDEX IF NOT EXISTS idx_runs_status ON runs(status);
+CREATE INDEX IF NOT EXISTS idx_runs_node_id ON runs(node_id);
+CREATE INDEX IF NOT EXISTS idx_runs_parent_id ON runs(parent_id);
+CREATE INDEX IF NOT EXISTS idx_runs_root_id ON runs(root_id);
+CREATE INDEX IF NOT EXISTS idx_runs_depth ON runs(depth);
+CREATE INDEX IF NOT EXISTS idx_runs_phase ON runs(phase);
+
+DROP TRIGGER IF EXISTS runs_updated_at ON runs;
 CREATE TRIGGER runs_updated_at
-    BEFORE UPDATE ON runs
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+    BEFORE UPDATE ON runs FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
+-- ==========================================================================
+-- 3. events — 执行事件（CanonicalEvent）
+-- ==========================================================================
+CREATE TABLE IF NOT EXISTS events (
+    id BIGSERIAL PRIMARY KEY,
+    run_id VARCHAR(20) NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+    seq INTEGER NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    timestamp TIMESTAMPTZ NOT NULL,
+    payload JSONB,
+    raw TEXT,
+    UNIQUE(run_id, seq)
+);
+
+CREATE INDEX IF NOT EXISTS idx_events_run_id ON events(run_id);
+CREATE INDEX IF NOT EXISTS idx_events_run_id_seq ON events(run_id, seq);
+CREATE INDEX IF NOT EXISTS idx_events_type ON events(type);
+
+-- ==========================================================================
+-- 4. nodes — 执行节点
+-- ==========================================================================
+CREATE TABLE IF NOT EXISTS nodes (
+    id VARCHAR(50) PRIMARY KEY,
+    status VARCHAR(20) NOT NULL DEFAULT 'offline',
+    labels JSONB DEFAULT '{}',
+    capacity JSONB DEFAULT '{}',
+    last_heartbeat TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_nodes_status ON nodes(status);
+
+DROP TRIGGER IF EXISTS nodes_updated_at ON nodes;
 CREATE TRIGGER nodes_updated_at
-    BEFORE UPDATE ON nodes
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+    BEFORE UPDATE ON nodes FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
+-- ==========================================================================
+-- 5. artifacts — 执行产物
+-- ==========================================================================
+CREATE TABLE IF NOT EXISTS artifacts (
+    id BIGSERIAL PRIMARY KEY,
+    run_id VARCHAR(20) NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+    name VARCHAR(200) NOT NULL,
+    path VARCHAR(500) NOT NULL,
+    size BIGINT,
+    content_type VARCHAR(100),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ==========================================================================
+-- 6. accounts — AI Agent 认证账号
+-- ==========================================================================
+CREATE TABLE IF NOT EXISTS accounts (
+    id VARCHAR(64) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    agent_type_id VARCHAR(64) NOT NULL,
+    node_id VARCHAR(64) NOT NULL,
+    volume_name VARCHAR(255),
+    status VARCHAR(32) NOT NULL DEFAULT 'pending',
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_used_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_accounts_status ON accounts(status);
+CREATE INDEX IF NOT EXISTS idx_accounts_agent_type ON accounts(agent_type_id);
+
+DROP TRIGGER IF EXISTS accounts_updated_at ON accounts;
 CREATE TRIGGER accounts_updated_at
-    BEFORE UPDATE ON accounts
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+    BEFORE UPDATE ON accounts FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
+-- ==========================================================================
+-- 7. auth_tasks — 认证任务（控制面/数据面分离）
+-- ==========================================================================
+CREATE TABLE IF NOT EXISTS auth_tasks (
+    id VARCHAR(64) PRIMARY KEY,
+    account_id VARCHAR(64) NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    method VARCHAR(32) NOT NULL,
+    node_id VARCHAR(64) NOT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'pending',
+    terminal_port INT,
+    terminal_url VARCHAR(255),
+    container_name VARCHAR(255),
+    message TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_auth_tasks_status ON auth_tasks(status);
+CREATE INDEX IF NOT EXISTS idx_auth_tasks_node_id ON auth_tasks(node_id);
+CREATE INDEX IF NOT EXISTS idx_auth_tasks_account_id ON auth_tasks(account_id);
+
+DROP TRIGGER IF EXISTS auth_tasks_updated_at ON auth_tasks;
 CREATE TRIGGER auth_tasks_updated_at
-    BEFORE UPDATE ON auth_tasks
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+    BEFORE UPDATE ON auth_tasks FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
--- ============================================================
--- 实例表
--- 存储容器实例状态（替代全局 map，支持持久化和横向扩展）
--- ============================================================
+-- ==========================================================================
+-- 8. instances — 容器实例
+-- ==========================================================================
 CREATE TABLE IF NOT EXISTS instances (
     id VARCHAR(64) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
@@ -215,11 +210,6 @@ CREATE TABLE IF NOT EXISTS instances (
     container_name VARCHAR(255),
     node_id VARCHAR(64),
     status VARCHAR(20) NOT NULL DEFAULT 'pending',
-    -- pending: 待创建
-    -- creating: 创建中
-    -- running: 运行中
-    -- stopped: 已停止
-    -- error: 错误
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -228,14 +218,13 @@ CREATE INDEX IF NOT EXISTS idx_instances_account ON instances(account_id);
 CREATE INDEX IF NOT EXISTS idx_instances_status ON instances(status);
 CREATE INDEX IF NOT EXISTS idx_instances_node ON instances(node_id);
 
+DROP TRIGGER IF EXISTS instances_updated_at ON instances;
 CREATE TRIGGER instances_updated_at
-    BEFORE UPDATE ON instances
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+    BEFORE UPDATE ON instances FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
--- ============================================================
--- 终端会话表
--- 存储终端会话状态（替代全局 map，支持持久化和横向扩展）
--- ============================================================
+-- ==========================================================================
+-- 9. terminal_sessions — 终端会话
+-- ==========================================================================
 CREATE TABLE IF NOT EXISTS terminal_sessions (
     id VARCHAR(64) PRIMARY KEY,
     instance_id VARCHAR(64),
@@ -244,11 +233,6 @@ CREATE TABLE IF NOT EXISTS terminal_sessions (
     port INTEGER,
     url VARCHAR(512),
     status VARCHAR(20) NOT NULL DEFAULT 'pending',
-    -- pending: 待创建
-    -- starting: 启动中
-    -- running: 运行中
-    -- closed: 已关闭
-    -- error: 错误
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     expires_at TIMESTAMPTZ
 );
@@ -256,3 +240,429 @@ CREATE TABLE IF NOT EXISTS terminal_sessions (
 CREATE INDEX IF NOT EXISTS idx_terminal_sessions_instance ON terminal_sessions(instance_id);
 CREATE INDEX IF NOT EXISTS idx_terminal_sessions_status ON terminal_sessions(status);
 CREATE INDEX IF NOT EXISTS idx_terminal_sessions_node ON terminal_sessions(node_id);
+
+-- ==========================================================================
+-- 10. proxies — 网络代理配置
+-- ==========================================================================
+CREATE TABLE IF NOT EXISTS proxies (
+    id VARCHAR(64) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    type VARCHAR(20) NOT NULL DEFAULT 'http',
+    host VARCHAR(255) NOT NULL,
+    port INTEGER NOT NULL,
+    username VARCHAR(255),
+    password VARCHAR(255),
+    no_proxy TEXT,
+    is_default BOOLEAN NOT NULL DEFAULT FALSE,
+    status VARCHAR(20) NOT NULL DEFAULT 'active',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_proxies_status ON proxies(status);
+CREATE INDEX IF NOT EXISTS idx_proxies_is_default ON proxies(is_default);
+
+-- ==========================================================================
+-- 11. operations — 系统操作（认证、运行时管理等）
+-- ==========================================================================
+CREATE TABLE IF NOT EXISTS operations (
+    id VARCHAR(64) PRIMARY KEY,
+    type VARCHAR(32) NOT NULL,
+    config JSONB NOT NULL DEFAULT '{}',
+    status VARCHAR(32) NOT NULL DEFAULT 'pending',
+    node_id VARCHAR(64),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    finished_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_operations_type ON operations(type);
+CREATE INDEX IF NOT EXISTS idx_operations_status ON operations(status);
+CREATE INDEX IF NOT EXISTS idx_operations_node_id ON operations(node_id);
+CREATE INDEX IF NOT EXISTS idx_operations_created_at ON operations(created_at DESC);
+
+CREATE OR REPLACE FUNCTION update_operations_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trigger_operations_updated_at ON operations;
+CREATE TRIGGER trigger_operations_updated_at
+    BEFORE UPDATE ON operations FOR EACH ROW EXECUTE FUNCTION update_operations_updated_at();
+
+-- ==========================================================================
+-- 12. actions — 操作执行实例
+-- ==========================================================================
+CREATE TABLE IF NOT EXISTS actions (
+    id VARCHAR(64) PRIMARY KEY,
+    operation_id VARCHAR(64) NOT NULL REFERENCES operations(id) ON DELETE CASCADE,
+    status VARCHAR(32) NOT NULL DEFAULT 'assigned',
+    progress INT NOT NULL DEFAULT 0,
+    result JSONB,
+    error TEXT,
+    phase VARCHAR(64) DEFAULT '',
+    message TEXT DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    started_at TIMESTAMPTZ,
+    finished_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_actions_operation_id ON actions(operation_id);
+CREATE INDEX IF NOT EXISTS idx_actions_status ON actions(status);
+CREATE INDEX IF NOT EXISTS idx_actions_created_at ON actions(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_actions_phase ON actions(phase) WHERE phase != '';
+
+-- ==========================================================================
+-- 13. agent_templates — 智能体模板
+-- ==========================================================================
+CREATE TABLE IF NOT EXISTS agent_templates (
+    id VARCHAR(64) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    type VARCHAR(32) NOT NULL DEFAULT 'custom',
+    role VARCHAR(255),
+    description TEXT,
+    personality JSONB,
+    system_prompt TEXT,
+    skills JSONB,
+    tools JSONB,
+    mcp_servers JSONB,
+    documents JSONB,
+    gambits JSONB,
+    hooks JSONB,
+    model VARCHAR(64),
+    temperature DECIMAL(3,2) DEFAULT 0.7,
+    max_context INT DEFAULT 128000,
+    default_security_policy_id VARCHAR(64),
+    is_builtin BOOLEAN NOT NULL DEFAULT FALSE,
+    category VARCHAR(64),
+    tags JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_templates_type ON agent_templates(type);
+CREATE INDEX IF NOT EXISTS idx_agent_templates_is_builtin ON agent_templates(is_builtin);
+CREATE INDEX IF NOT EXISTS idx_agent_templates_category ON agent_templates(category);
+
+-- 内置 AgentTemplate
+INSERT INTO agent_templates (id, name, type, role, description, personality, model, temperature, max_context, is_builtin, category)
+VALUES
+    ('builtin-claude-dev', 'Claude 开发助手', 'claude', '代码开发助手', '基于 Claude 的代码开发智能体', '["专业", "严谨", "乐于助人"]', 'claude-3-opus', 0.7, 128000, TRUE, 'development'),
+    ('builtin-gemini-research', 'Gemini 研究助手', 'gemini', '技术研究助手', '基于 Gemini 的研究智能体', '["博学", "分析性强", "客观"]', 'gemini-pro', 0.5, 100000, TRUE, 'research'),
+    ('builtin-qwen-code', 'Qwen 编程助手', 'qwen', '编程助手', '基于 Qwen 的编程智能体', '["高效", "精确", "实用"]', 'qwen-coder', 0.6, 64000, TRUE, 'development')
+ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description, updated_at = NOW();
+
+-- ==========================================================================
+-- 14. agents — 智能体实例
+-- ==========================================================================
+CREATE TABLE IF NOT EXISTS agents (
+    id VARCHAR(64) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    template_id VARCHAR(64) REFERENCES agent_templates(id),
+    type VARCHAR(32) NOT NULL DEFAULT 'custom',
+    account_id VARCHAR(64) NOT NULL,
+    runtime_id VARCHAR(64),
+    node_id VARCHAR(64),
+    status VARCHAR(32) NOT NULL DEFAULT 'pending',
+    current_task_id VARCHAR(64),
+    config_overrides JSONB,
+    security_policy_id VARCHAR(64),
+    memory_enabled BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_active_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_agents_template_id ON agents(template_id);
+CREATE INDEX IF NOT EXISTS idx_agents_account_id ON agents(account_id);
+CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
+CREATE INDEX IF NOT EXISTS idx_agents_node_id ON agents(node_id);
+
+-- ==========================================================================
+-- 15. runtimes — 运行时环境
+-- ==========================================================================
+CREATE TABLE IF NOT EXISTS runtimes (
+    id VARCHAR(64) PRIMARY KEY,
+    type VARCHAR(32) NOT NULL DEFAULT 'container',
+    status VARCHAR(32) NOT NULL DEFAULT 'creating',
+    agent_id VARCHAR(64) NOT NULL,
+    node_id VARCHAR(64) NOT NULL,
+    container_id VARCHAR(255),
+    container_name VARCHAR(255),
+    image VARCHAR(255),
+    workspace_path TEXT,
+    ip_address VARCHAR(45),
+    ports JSONB,
+    resources JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    started_at TIMESTAMPTZ,
+    stopped_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_runtimes_agent_id ON runtimes(agent_id);
+CREATE INDEX IF NOT EXISTS idx_runtimes_node_id ON runtimes(node_id);
+CREATE INDEX IF NOT EXISTS idx_runtimes_status ON runtimes(status);
+
+-- ==========================================================================
+-- 16. security_policies — 安全策略
+-- ==========================================================================
+CREATE TABLE IF NOT EXISTS security_policies (
+    id VARCHAR(64) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    tool_permissions JSONB,
+    resource_limits JSONB,
+    network_policy JSONB,
+    sandbox_policy JSONB,
+    is_builtin BOOLEAN NOT NULL DEFAULT FALSE,
+    category VARCHAR(64),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_security_policies_is_builtin ON security_policies(is_builtin);
+CREATE INDEX IF NOT EXISTS idx_security_policies_category ON security_policies(category);
+
+-- 内置安全策略
+INSERT INTO security_policies (id, name, description, tool_permissions, resource_limits, network_policy, is_builtin, category)
+VALUES
+    ('builtin-strict', '严格策略', '最小权限原则', '[{"tool": "file_read", "permission": "allowed"}]', '{"max_cpu": "1.0", "max_memory": "2Gi"}', '{"allow_internet": false}', TRUE, 'security'),
+    ('builtin-standard', '标准策略', '平衡安全与便利', '[{"tool": "file_*", "permission": "allowed"}]', '{"max_cpu": "2.0", "max_memory": "4Gi"}', '{"allow_internet": true}', TRUE, 'development'),
+    ('builtin-permissive', '宽松策略', '较少限制', '[{"tool": "*", "permission": "allowed"}]', '{"max_cpu": "4.0", "max_memory": "8Gi"}', '{"allow_internet": true}', TRUE, 'trusted')
+ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description, updated_at = NOW();
+
+-- ==========================================================================
+-- 17. sandboxes — 沙箱实例
+-- ==========================================================================
+CREATE TABLE IF NOT EXISTS sandboxes (
+    id VARCHAR(64) PRIMARY KEY,
+    agent_id VARCHAR(64) NOT NULL,
+    type VARCHAR(32) NOT NULL DEFAULT 'container',
+    status VARCHAR(32) NOT NULL DEFAULT 'creating',
+    isolation VARCHAR(64),
+    fs_root TEXT,
+    net_ns VARCHAR(255),
+    resource_limits JSONB,
+    runtime_id VARCHAR(64),
+    node_id VARCHAR(64) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    started_at TIMESTAMPTZ,
+    expires_at TIMESTAMPTZ,
+    destroyed_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_sandboxes_agent_id ON sandboxes(agent_id);
+CREATE INDEX IF NOT EXISTS idx_sandboxes_status ON sandboxes(status);
+CREATE INDEX IF NOT EXISTS idx_sandboxes_node_id ON sandboxes(node_id);
+
+-- ==========================================================================
+-- 18. HITL 表（审批、反馈、干预、确认）
+-- ==========================================================================
+CREATE TABLE IF NOT EXISTS approval_requests (
+    id VARCHAR(64) PRIMARY KEY,
+    run_id VARCHAR(64) NOT NULL,
+    type VARCHAR(64) NOT NULL,
+    status VARCHAR(32) DEFAULT 'pending',
+    operation TEXT NOT NULL,
+    reason TEXT,
+    context JSONB,
+    expires_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    resolved_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_approval_requests_run_id ON approval_requests(run_id);
+CREATE INDEX IF NOT EXISTS idx_approval_requests_status ON approval_requests(status);
+
+CREATE TABLE IF NOT EXISTS approval_decisions (
+    id VARCHAR(64) PRIMARY KEY,
+    request_id VARCHAR(64) NOT NULL REFERENCES approval_requests(id) ON DELETE CASCADE,
+    decision VARCHAR(32) NOT NULL,
+    decided_by VARCHAR(128) NOT NULL,
+    comment TEXT,
+    instructions TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_approval_decisions_request_id ON approval_decisions(request_id);
+
+CREATE TABLE IF NOT EXISTS human_feedbacks (
+    id VARCHAR(64) PRIMARY KEY,
+    run_id VARCHAR(64) NOT NULL,
+    type VARCHAR(32) NOT NULL,
+    content TEXT NOT NULL,
+    created_by VARCHAR(128) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    processed_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_human_feedbacks_run_id ON human_feedbacks(run_id);
+
+CREATE TABLE IF NOT EXISTS interventions (
+    id VARCHAR(64) PRIMARY KEY,
+    run_id VARCHAR(64) NOT NULL,
+    action VARCHAR(32) NOT NULL,
+    reason TEXT,
+    parameters JSONB,
+    created_by VARCHAR(128) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    executed_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_interventions_run_id ON interventions(run_id);
+
+CREATE TABLE IF NOT EXISTS confirmations (
+    id VARCHAR(64) PRIMARY KEY,
+    run_id VARCHAR(64) NOT NULL,
+    type VARCHAR(32) NOT NULL,
+    message TEXT NOT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'pending',
+    options JSONB,
+    selected_option VARCHAR(128),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    resolved_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_confirmations_run_id ON confirmations(run_id);
+CREATE INDEX IF NOT EXISTS idx_confirmations_status ON confirmations(status);
+
+-- ==========================================================================
+-- 19. skills — 技能系统
+-- ==========================================================================
+CREATE TABLE IF NOT EXISTS skills (
+    id VARCHAR(64) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    category VARCHAR(32) NOT NULL,
+    level VARCHAR(32) NOT NULL,
+    description TEXT,
+    instructions TEXT,
+    tools JSONB,
+    examples JSONB,
+    parameters JSONB,
+    source VARCHAR(32) NOT NULL,
+    author_id VARCHAR(64),
+    registry_id VARCHAR(64),
+    version VARCHAR(32) NOT NULL DEFAULT '1.0.0',
+    is_builtin BOOLEAN NOT NULL DEFAULT FALSE,
+    tags JSONB,
+    use_count BIGINT NOT NULL DEFAULT 0,
+    rating FLOAT NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_skills_category ON skills(category);
+CREATE INDEX IF NOT EXISTS idx_skills_is_builtin ON skills(is_builtin);
+
+CREATE TABLE IF NOT EXISTS agent_skills (
+    agent_id VARCHAR(64) NOT NULL,
+    skill_id VARCHAR(64) NOT NULL REFERENCES skills(id),
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    config JSONB,
+    priority INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (agent_id, skill_id)
+);
+
+-- ==========================================================================
+-- 20. MCP — Model Context Protocol
+-- ==========================================================================
+CREATE TABLE IF NOT EXISTS mcp_servers (
+    id VARCHAR(64) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    source VARCHAR(32) NOT NULL,
+    transport VARCHAR(32) NOT NULL,
+    command VARCHAR(512),
+    args JSONB,
+    url VARCHAR(512),
+    headers JSONB,
+    capabilities JSONB,
+    version VARCHAR(32) NOT NULL DEFAULT '1.0.0',
+    author VARCHAR(128),
+    repository VARCHAR(512),
+    is_builtin BOOLEAN NOT NULL DEFAULT FALSE,
+    tags JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_mcp_servers_source ON mcp_servers(source);
+CREATE INDEX IF NOT EXISTS idx_mcp_servers_is_builtin ON mcp_servers(is_builtin);
+
+CREATE TABLE IF NOT EXISTS agent_mcp_servers (
+    agent_id VARCHAR(64) NOT NULL,
+    mcp_server_id VARCHAR(64) NOT NULL REFERENCES mcp_servers(id),
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    config JSONB,
+    priority INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (agent_id, mcp_server_id)
+);
+
+-- ==========================================================================
+-- 21. task_templates — 任务模板
+-- ==========================================================================
+CREATE TABLE IF NOT EXISTS task_templates (
+    id VARCHAR(64) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    type VARCHAR(32) NOT NULL,
+    description TEXT,
+    prompt_template JSONB,
+    default_workspace JSONB,
+    default_security JSONB,
+    default_labels JSONB,
+    variables JSONB,
+    is_builtin BOOLEAN NOT NULL DEFAULT FALSE,
+    category VARCHAR(64),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_task_templates_type ON task_templates(type);
+CREATE INDEX IF NOT EXISTS idx_task_templates_is_builtin ON task_templates(is_builtin);
+
+-- ==========================================================================
+-- 22. prompt_templates — 提示词模板
+-- ==========================================================================
+CREATE TABLE IF NOT EXISTS prompt_templates (
+    id VARCHAR(64) PRIMARY KEY,
+    name VARCHAR(200) NOT NULL,
+    description TEXT,
+    content TEXT NOT NULL,
+    variables JSONB DEFAULT '[]',
+    category VARCHAR(64),
+    tags JSONB DEFAULT '[]',
+    source VARCHAR(32) DEFAULT 'custom',
+    source_ref VARCHAR(200),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ==========================================================================
+-- 23. memories — 记忆系统
+-- ==========================================================================
+CREATE TABLE IF NOT EXISTS memories (
+    id VARCHAR(64) PRIMARY KEY,
+    agent_id VARCHAR(64) NOT NULL,
+    type VARCHAR(32) NOT NULL,
+    content TEXT NOT NULL,
+    metadata JSONB,
+    importance FLOAT NOT NULL DEFAULT 0.5,
+    tags JSONB,
+    source_run_id VARCHAR(64),
+    source_task_id VARCHAR(64),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    accessed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_memories_agent_id ON memories(agent_id);
+CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(type);
+
+-- ==========================================================================
+-- 完成
+-- ==========================================================================
+-- 本脚本包含 23 张表，覆盖：
+--   核心: tasks, runs, events, nodes, artifacts
+--   账号: accounts, auth_tasks, instances, terminal_sessions
+--   基础设施: proxies, operations, actions
+--   智能体: agent_templates, agents, runtimes
+--   安全: security_policies, sandboxes
+--   HITL: approval_requests, approval_decisions, human_feedbacks, interventions, confirmations
+--   扩展: skills, mcp_servers, task_templates, prompt_templates, memories

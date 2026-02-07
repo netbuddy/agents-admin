@@ -258,20 +258,20 @@ export default function InstancesPage() {
             </button>
           </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
             {sortedInstances.map(instance => (
-              <div key={instance.id} className="bg-white rounded-lg border p-4">
+              <div key={instance.id} className="bg-white rounded-lg border p-3 sm:p-4">
                 <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
                     {statusIcon(instance.status)}
-                    <div>
-                      <h3 className="font-medium">{instance.name}</h3>
-                      <p className="text-xs text-gray-500">{instance.container_name || '-'}</p>
+                    <div className="min-w-0">
+                      <h3 className="font-medium truncate">{instance.name}</h3>
+                      <p className="text-xs text-gray-500 truncate">{instance.container_name || '-'}</p>
                     </div>
                   </div>
                   <button
                     onClick={() => deleteInstance(instance.id)}
-                    className="p-1.5 text-red-500 hover:bg-red-50 rounded"
+                    className="p-2 sm:p-1.5 text-red-500 hover:bg-red-50 rounded flex-shrink-0"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -351,6 +351,13 @@ export default function InstancesPage() {
   )
 }
 
+interface Template {
+  id: string
+  name: string
+  type: string
+  description?: string
+}
+
 function CreateInstanceWizard({
   agentTypes,
   accounts,
@@ -362,57 +369,172 @@ function CreateInstanceWizard({
   onClose: () => void
   onCreate: (accountId: string, name: string) => void
 }) {
+  const [mode, setMode] = useState<'select' | 'generic' | 'template'>('select')
   const [step, setStep] = useState(1)
   const [selectedType, setSelectedType] = useState('')
   const [selectedAccount, setSelectedAccount] = useState('')
   const [instanceName, setInstanceName] = useState('')
+  const [templates, setTemplates] = useState<Template[]>([])
+  const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null)
 
+  useEffect(() => {
+    if (mode === 'template') {
+      fetch('/api/v1/agent-templates')
+        .then(r => r.json())
+        .then(d => setTemplates(d.templates || []))
+        .catch(() => {})
+    }
+  }, [mode])
+
+  const effectiveType = mode === 'template' && selectedTemplate ? selectedTemplate.type : selectedType
   const filteredAccounts = accounts.filter(
-    a => a.agent_type === selectedType && a.status === 'authenticated'
+    a => a.agent_type === effectiveType && a.status === 'authenticated'
   )
 
+  const totalSteps = mode === 'select' ? 0 : 3
+  const displayStep = mode === 'select' ? '' : `步骤 ${step}/${totalSteps}`
+
+  const handleBack = () => {
+    if (step > 1) {
+      setStep(step - 1)
+    } else {
+      setMode('select')
+      setStep(1)
+      setSelectedType('')
+      setSelectedAccount('')
+      setSelectedTemplate(null)
+    }
+  }
+
+  const canNext = () => {
+    if (step === 1) {
+      return mode === 'generic' ? !!selectedType : !!selectedTemplate
+    }
+    if (step === 2) return !!selectedAccount
+    return true
+  }
+
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg w-full max-w-lg p-6">
+    <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50">
+      <div className="bg-white rounded-t-2xl sm:rounded-lg w-full sm:max-w-lg p-4 sm:p-6 max-h-[90vh] overflow-y-auto touch-scroll">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-semibold">创建 Agent 实例</h2>
-          <span className="text-sm text-gray-500">步骤 {step}/3</span>
+          <h2 className="text-lg font-semibold">创建智能体</h2>
+          <div className="flex items-center gap-2">
+            {displayStep && <span className="text-sm text-gray-500">{displayStep}</span>}
+            <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded">
+              <X className="w-4 h-4 text-gray-400" />
+            </button>
+          </div>
         </div>
 
-        {step === 1 && (
+        {/* 模式选择 */}
+        {mode === 'select' && (
           <div>
-            <p className="text-sm text-gray-600 mb-4">选择 Agent 类型：</p>
-            <div className="grid grid-cols-2 gap-3">
-              {agentTypes.map(t => (
-                <button
-                  key={t.id}
-                  onClick={() => setSelectedType(t.id)}
-                  className={`p-4 border rounded-lg text-left transition ${
-                    selectedType === t.id
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'hover:border-gray-300'
-                  }`}
-                >
-                  <p className="font-medium">{t.name}</p>
-                  <p className="text-xs text-gray-500 mt-1">{t.description}</p>
-                </button>
-              ))}
+            <p className="text-sm text-gray-600 mb-4">选择创建方式：</p>
+            <div className="space-y-3">
+              <button
+                onClick={() => { setMode('generic'); setStep(1) }}
+                className="w-full p-4 border rounded-lg text-left hover:border-blue-300 hover:bg-blue-50/50 transition group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+                    <Server className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="font-medium group-hover:text-blue-700">通用智能体</p>
+                    <p className="text-xs text-gray-500 mt-0.5">直接选择 Agent 类型和账号创建实例</p>
+                  </div>
+                </div>
+              </button>
+              <button
+                onClick={() => { setMode('template'); setStep(1) }}
+                className="w-full p-4 border rounded-lg text-left hover:border-purple-300 hover:bg-purple-50/50 transition group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
+                    <Plus className="w-5 h-5 text-purple-600" />
+                  </div>
+                  <div>
+                    <p className="font-medium group-hover:text-purple-700">从模板创建</p>
+                    <p className="text-xs text-gray-500 mt-0.5">基于预配置的模板快速创建，包含技能和指令</p>
+                  </div>
+                </div>
+              </button>
             </div>
           </div>
         )}
 
-        {step === 2 && (
+        {/* 步骤 1：选择类型 或 选择模板 */}
+        {mode !== 'select' && step === 1 && (
+          <div>
+            {mode === 'generic' ? (
+              <>
+                <p className="text-sm text-gray-600 mb-4">选择 Agent 类型：</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {agentTypes.map(t => (
+                    <button
+                      key={t.id}
+                      onClick={() => setSelectedType(t.id)}
+                      className={`p-4 border rounded-lg text-left transition ${
+                        selectedType === t.id
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'hover:border-gray-300'
+                      }`}
+                    >
+                      <p className="font-medium">{t.name}</p>
+                      <p className="text-xs text-gray-500 mt-1">{t.description}</p>
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-gray-600 mb-4">选择模板：</p>
+                {templates.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-gray-500 mb-4">暂无可用模板</p>
+                    <a href="/agents" className="text-blue-600 hover:underline">
+                      前往创建模板 →
+                    </a>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {templates.map(tmpl => (
+                      <button
+                        key={tmpl.id}
+                        onClick={() => setSelectedTemplate(tmpl)}
+                        className={`w-full p-3 border rounded-lg text-left transition ${
+                          selectedTemplate?.id === tmpl.id
+                            ? 'border-purple-500 bg-purple-50'
+                            : 'hover:border-gray-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <p className="font-medium">{tmpl.name}</p>
+                          <span className="px-2 py-0.5 text-xs bg-gray-100 rounded">{tmpl.type}</span>
+                        </div>
+                        {tmpl.description && (
+                          <p className="text-xs text-gray-500 mt-1 line-clamp-2">{tmpl.description}</p>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* 步骤 2：选择账号 */}
+        {mode !== 'select' && step === 2 && (
           <div>
             <p className="text-sm text-gray-600 mb-4">
-              选择账号（{agentTypes.find(t => t.id === selectedType)?.name}）：
+              选择账号（{mode === 'template' ? selectedTemplate?.name : agentTypes.find(t => t.id === selectedType)?.name}）：
             </p>
             {filteredAccounts.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-gray-500 mb-4">没有可用的已认证账号</p>
-                <a
-                  href="/accounts"
-                  className="text-blue-600 hover:underline"
-                >
+                <a href="/accounts" className="text-blue-600 hover:underline">
                   前往添加账号 →
                 </a>
               </div>
@@ -437,7 +559,8 @@ function CreateInstanceWizard({
           </div>
         )}
 
-        {step === 3 && (
+        {/* 步骤 3：配置 */}
+        {mode !== 'select' && step === 3 && (
           <div>
             <p className="text-sm text-gray-600 mb-4">配置实例：</p>
             <div>
@@ -450,37 +573,44 @@ function CreateInstanceWizard({
                 placeholder="留空将自动生成"
               />
             </div>
-            <div className="mt-4 p-3 bg-gray-50 rounded-lg text-sm">
-              <p><span className="text-gray-500">Agent 类型:</span> {agentTypes.find(t => t.id === selectedType)?.name}</p>
+            <div className="mt-4 p-3 bg-gray-50 rounded-lg text-sm space-y-1">
+              <p><span className="text-gray-500">创建方式:</span> {mode === 'generic' ? '通用智能体' : '从模板创建'}</p>
+              {mode === 'template' && selectedTemplate && (
+                <p><span className="text-gray-500">模板:</span> {selectedTemplate.name}</p>
+              )}
+              <p><span className="text-gray-500">Agent 类型:</span> {agentTypes.find(t => t.id === effectiveType)?.name || effectiveType}</p>
               <p><span className="text-gray-500">使用账号:</span> {accounts.find(a => a.id === selectedAccount)?.name}</p>
             </div>
           </div>
         )}
 
-        <div className="flex justify-between mt-6">
-          <button
-            onClick={() => step > 1 ? setStep(step - 1) : onClose()}
-            className="px-4 py-2 border rounded-lg hover:bg-gray-100"
-          >
-            {step > 1 ? '上一步' : '取消'}
-          </button>
-          {step < 3 ? (
+        {/* 操作按钮 */}
+        {mode !== 'select' && (
+          <div className="flex justify-between mt-6">
             <button
-              onClick={() => setStep(step + 1)}
-              disabled={(step === 1 && !selectedType) || (step === 2 && !selectedAccount)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              onClick={handleBack}
+              className="px-4 py-2 border rounded-lg hover:bg-gray-100"
             >
-              下一步
+              上一步
             </button>
-          ) : (
-            <button
-              onClick={() => onCreate(selectedAccount, instanceName)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-            >
-              创建实例
-            </button>
-          )}
-        </div>
+            {step < 3 ? (
+              <button
+                onClick={() => setStep(step + 1)}
+                disabled={!canNext()}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                下一步
+              </button>
+            ) : (
+              <button
+                onClick={() => onCreate(selectedAccount, instanceName)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                创建实例
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -492,8 +622,8 @@ function TerminalModal({ session, onClose }: { session: TerminalSession, onClose
   const iframeUrl = ready ? `http://${host}:${session.port}/` : 'about:blank'
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 rounded-lg w-full max-w-4xl h-[600px] flex flex-col">
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-2 sm:p-4">
+      <div className="bg-gray-900 rounded-lg w-full max-w-4xl h-[85vh] sm:h-[600px] flex flex-col">
         <div className="flex items-center justify-between px-4 py-2 border-b border-gray-700">
           <div className="flex items-center gap-2 text-white">
             <Terminal className="w-5 h-5" />

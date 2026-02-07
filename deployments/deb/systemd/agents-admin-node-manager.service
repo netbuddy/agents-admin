@@ -1,0 +1,34 @@
+[Unit]
+Description=Agents Admin Node Manager
+Documentation=https://github.com/agents-admin
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=agents-admin
+Group=agents-admin
+EnvironmentFile=-/etc/agents-admin/node-manager.env
+ExecStart=/usr/bin/agents-admin-node-manager --config /etc/agents-admin
+Restart=on-failure
+RestartSec=5
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+# 工作目录（存放 agent workspace）
+WorkingDirectory=/var/lib/agents-admin
+
+# 安全加固
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/agents-admin /var/log/agents-admin /tmp
+PrivateTmp=true
+
+# 日志
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=agents-admin-node-manager
+
+[Install]
+WantedBy=multi-user.target

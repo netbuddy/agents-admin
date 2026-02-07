@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"agents-admin/internal/apiserver/scheduler"
 	"agents-admin/internal/shared/cache"
@@ -63,10 +64,22 @@ type Handler struct {
 	redisStore storage.CacheStore    // Deprecated: 使用上述具体接口
 	eventBus   *storage.EtcdEventBus // Deprecated: 已弃用
 
+	// 认证配置
+	authConfig AuthConfigCompat
+
 	// 内部组件
 	scheduler    *scheduler.Scheduler // 任务调度器
 	eventGateway *EventGateway        // WebSocket 事件网关
 	metrics      *Metrics             // Prometheus 指标
+}
+
+// AuthConfigCompat 认证配置（避免直接依赖 config 包）
+type AuthConfigCompat struct {
+	JWTSecret       string
+	AccessTokenTTL  time.Duration
+	RefreshTokenTTL time.Duration
+	AdminEmail      string
+	AdminPassword   string
 }
 
 // NewHandler 创建 Handler 实例
@@ -102,6 +115,11 @@ func NewHandler(store storage.PersistentStore, redisStore storage.CacheStore) *H
 	h.eventGateway = NewEventGateway(store, h.runEventBus)
 	h.metrics = NewMetrics("api")
 	return h
+}
+
+// SetAuthConfig 设置认证配置
+func (h *Handler) SetAuthConfig(cfg AuthConfigCompat) {
+	h.authConfig = cfg
 }
 
 // GetRedisStore 获取 Redis 存储层

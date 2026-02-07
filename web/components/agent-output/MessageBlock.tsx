@@ -81,7 +81,7 @@ export default function MessageBlock({ content, timestamp }: MessageBlockProps) 
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
       {/* 头部 */}
-      <div className="flex items-center justify-between px-4 py-2 bg-blue-50 border-b border-gray-200">
+      <div className="flex items-center justify-between px-3 sm:px-4 py-2 bg-blue-50 border-b border-gray-200">
         <div className="flex items-center gap-2">
           <Bot className="w-4 h-4 text-blue-500" />
           <span className="text-sm font-medium text-blue-700">Agent</span>
@@ -99,7 +99,7 @@ export default function MessageBlock({ content, timestamp }: MessageBlockProps) 
       </div>
       
       {/* 内容 */}
-      <div className="px-4 py-3 text-sm text-gray-700">
+      <div className="px-3 sm:px-4 py-2 sm:py-3 text-sm text-gray-700">
         {renderContent(displayContent)}
       </div>
       

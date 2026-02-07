@@ -6,9 +6,12 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"agents-admin/internal/shared/model"
+	"agents-admin/internal/shared/storagetypes"
 )
 
 // CreateTask 创建任务
@@ -131,6 +134,69 @@ func (s *Store) ListTasks(ctx context.Context, status string, limit, offset int)
 		tasks = append(tasks, task)
 	}
 	return tasks, rows.Err()
+}
+
+// ListTasksWithFilter 带过滤条件列出任务（支持搜索、时间范围、状态筛选）
+func (s *Store) ListTasksWithFilter(ctx context.Context, filter storagetypes.TaskFilter) ([]*model.Task, int, error) {
+	// 构建 WHERE 条件
+	conditions := []string{}
+	args := []interface{}{}
+	argIdx := 1
+
+	if filter.Status != "" {
+		conditions = append(conditions, "status = $"+strconv.Itoa(argIdx))
+		args = append(args, filter.Status)
+		argIdx++
+	}
+	if filter.Search != "" {
+		conditions = append(conditions, "name ILIKE $"+strconv.Itoa(argIdx))
+		args = append(args, "%"+filter.Search+"%")
+		argIdx++
+	}
+	if !filter.Since.IsZero() {
+		conditions = append(conditions, "created_at >= $"+strconv.Itoa(argIdx))
+		args = append(args, filter.Since)
+		argIdx++
+	}
+	if !filter.Until.IsZero() {
+		conditions = append(conditions, "created_at <= $"+strconv.Itoa(argIdx))
+		args = append(args, filter.Until)
+		argIdx++
+	}
+
+	where := ""
+	if len(conditions) > 0 {
+		where = " WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	// 查询总数
+	countQuery := s.rebind("SELECT COUNT(*) FROM tasks" + where)
+	var total int
+	if err := s.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	// 查询数据
+	selectCols := "id, parent_id, name, status, type, prompt, workspace, security, labels, context, template_id, agent_id, created_at, updated_at"
+	dataQuery := s.rebind("SELECT " + selectCols + " FROM tasks" + where +
+		" ORDER BY created_at DESC LIMIT $" + strconv.Itoa(argIdx) + " OFFSET $" + strconv.Itoa(argIdx+1))
+	dataArgs := append(args, filter.Limit, filter.Offset)
+
+	rows, err := s.db.QueryContext(ctx, dataQuery, dataArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var tasks []*model.Task
+	for rows.Next() {
+		task, err := scanTask(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		tasks = append(tasks, task)
+	}
+	return tasks, total, rows.Err()
 }
 
 // UpdateTaskStatus 更新任务状态

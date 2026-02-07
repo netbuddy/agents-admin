@@ -116,40 +116,40 @@ export default function RunnersPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-semibold flex items-center gap-2">
-              <Server className="w-6 h-6" />
-              Runner 管理
+      <header className="bg-white border-b px-3 sm:px-6 py-3 sm:py-4">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <h1 className="text-base sm:text-xl font-semibold flex items-center gap-2">
+              <Server className="w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0" />
+              <span className="truncate">Runner 管理</span>
             </h1>
-            <p className="text-sm text-gray-500">
+            <p className="text-xs sm:text-sm text-gray-500 hidden sm:block">
               管理 Qwen-Code Runner 容器和登录状态
             </p>
           </div>
-          <div className="flex gap-2">
-            <Link href="/" className="px-4 py-2 border rounded-lg hover:bg-gray-100">
+          <div className="flex gap-1 sm:gap-2 flex-shrink-0">
+            <Link href="/" className="hidden sm:flex px-4 py-2 border rounded-lg hover:bg-gray-100 text-sm">
               返回看板
             </Link>
             <button
               onClick={fetchRunners}
-              className="flex items-center gap-2 px-4 py-2 border rounded-lg hover:bg-gray-100"
+              className="p-2 sm:px-4 sm:py-2 border rounded-lg hover:bg-gray-100"
             >
               <RefreshCw className="w-4 h-4" />
-              刷新
             </button>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
             >
               <Plus className="w-4 h-4" />
-              添加账户
+              <span className="hidden sm:inline">添加账户</span>
+              <span className="sm:hidden">添加</span>
             </button>
           </div>
         </div>
       </header>
 
-      <main className="p-6">
+      <main className="p-3 sm:p-6">
         {loading ? (
           <div className="flex items-center justify-center h-64">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
@@ -167,7 +167,7 @@ export default function RunnersPage() {
             </button>
           </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
             {runners.map(runner => (
               <div key={runner.container} className="bg-white rounded-lg border p-4">
                 <div className="flex items-start justify-between mb-3">
@@ -240,8 +240,8 @@ function CreateRunnerModal({ onClose, onCreate }: { onClose: () => void, onCreat
   const [account, setAccount] = useState('')
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg w-full max-w-md p-6">
+    <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50">
+      <div className="bg-white rounded-t-2xl sm:rounded-lg w-full sm:max-w-md p-4 sm:p-6">
         <h2 className="text-lg font-semibold mb-4">添加 Runner 账户</h2>
         <div className="mb-4">
           <label className="block text-sm font-medium mb-1">账户名/邮箱</label>
@@ -279,8 +279,8 @@ function TerminalModal({ session, onClose }: { session: TerminalSession, onClose
   const iframeUrl = `http://${host}:${session.port}/`
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 rounded-lg w-full max-w-4xl h-[600px] flex flex-col">
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-2 sm:p-4">
+      <div className="bg-gray-900 rounded-lg w-full max-w-4xl h-[85vh] sm:h-[600px] flex flex-col">
         <div className="flex items-center justify-between px-4 py-2 border-b border-gray-700">
           <div className="flex items-center gap-2 text-white">
             <Terminal className="w-5 h-5" />

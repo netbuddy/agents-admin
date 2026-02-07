@@ -164,3 +164,13 @@ const (
 	SchedulerConsumerGroup   = "schedulers"
 	NodeManagerConsumerGroup = "node_managers"
 )
+
+// TaskFilter 任务查询过滤条件
+type TaskFilter struct {
+	Status string    // 状态筛选
+	Search string    // 名称模糊搜索
+	Since  time.Time // 创建时间下限
+	Until  time.Time // 创建时间上限
+	Limit  int
+	Offset int
+}

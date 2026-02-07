@@ -17,8 +17,9 @@ import (
 
 // Handler 节点领域 HTTP 处理器
 type Handler struct {
-	store     NodePersistentStore
-	nodeCache cache.NodeHeartbeatCache
+	store       NodePersistentStore
+	nodeCache   cache.NodeHeartbeatCache
+	provisioner *Provisioner
 }
 
 // NodePersistentStore 节点处理器所需的持久化存储接口
@@ -30,11 +31,17 @@ type NodePersistentStore interface {
 	ListOnlineNodes(ctx context.Context) ([]*model.Node, error)
 	DeleteNode(ctx context.Context, id string) error
 	ListRunsByNode(ctx context.Context, nodeID string) ([]*model.Run, error)
+	CreateNodeProvision(ctx context.Context, p *model.NodeProvision) error
+	UpdateNodeProvision(ctx context.Context, p *model.NodeProvision) error
+	GetNodeProvision(ctx context.Context, id string) (*model.NodeProvision, error)
+	ListNodeProvisions(ctx context.Context) ([]*model.NodeProvision, error)
 }
 
 // NewHandler 创建节点处理器
 func NewHandler(store NodePersistentStore, nodeCache cache.NodeHeartbeatCache) *Handler {
-	return &Handler{store: store, nodeCache: nodeCache}
+	h := &Handler{store: store, nodeCache: nodeCache}
+	h.provisioner = NewProvisioner(store, store)
+	return h
 }
 
 // RegisterRoutes 注册节点相关路由
@@ -48,6 +55,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/nodes/{id}/env-config", h.GetEnvConfig)
 	mux.HandleFunc("PUT /api/v1/nodes/{id}/env-config", h.UpdateEnvConfig)
 	mux.HandleFunc("POST /api/v1/nodes/{id}/env-config/test-proxy", h.TestProxy)
+	mux.HandleFunc("POST /api/v1/node-provisions", h.Provision)
+	mux.HandleFunc("GET /api/v1/node-provisions", h.ListProvisions)
+	mux.HandleFunc("GET /api/v1/node-provisions/{id}", h.GetProvision)
 }
 
 // ============================================================================
@@ -434,6 +444,70 @@ func (h *Handler) buildNodeResponse(ctx context.Context, n *model.Node) Response
 		CreatedAt:     n.CreatedAt,
 		UpdatedAt:     n.UpdatedAt,
 	}
+}
+
+// Provision 创建节点部署任务
+// POST /api/v1/nodes/provision
+func (h *Handler) Provision(w http.ResponseWriter, r *http.Request) {
+	var req ProvisionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.Host == "" || req.SSHUser == "" || req.Version == "" || req.APIServerURL == "" {
+		writeError(w, http.StatusBadRequest, "host, ssh_user, version, api_server_url are required")
+		return
+	}
+	if req.NodeID == "" {
+		req.NodeID = fmt.Sprintf("node-%s", req.Host)
+	}
+	if req.AuthMethod == "" {
+		req.AuthMethod = "password"
+	}
+
+	prov, err := h.provisioner.StartProvision(r.Context(), req)
+	if err != nil {
+		log.Printf("[node.provision] ERROR: %v", err)
+		writeError(w, http.StatusInternalServerError, "failed to start provision")
+		return
+	}
+
+	writeJSON(w, http.StatusAccepted, prov)
+}
+
+// ListProvisions 列出所有部署记录
+// GET /api/v1/nodes/provisions
+func (h *Handler) ListProvisions(w http.ResponseWriter, r *http.Request) {
+	provisions, err := h.store.ListNodeProvisions(r.Context())
+	if err != nil {
+		log.Printf("[node.provisions] ERROR: %v", err)
+		writeError(w, http.StatusInternalServerError, "failed to list provisions")
+		return
+	}
+	if provisions == nil {
+		provisions = []*model.NodeProvision{}
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"provisions": provisions,
+		"count":      len(provisions),
+	})
+}
+
+// GetProvision 获取单个部署记录
+// GET /api/v1/nodes/provisions/{id}
+func (h *Handler) GetProvision(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	prov, err := h.store.GetNodeProvision(r.Context(), id)
+	if err != nil {
+		log.Printf("[node.provision] ERROR: %v", err)
+		writeError(w, http.StatusInternalServerError, "failed to get provision")
+		return
+	}
+	if prov == nil {
+		writeError(w, http.StatusNotFound, "provision not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, prov)
 }
 
 // ============================================================================

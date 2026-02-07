@@ -210,6 +210,26 @@ func (s *Store) ListAgentTemplates(ctx context.Context, category string) ([]*mod
 	return templates, rows.Err()
 }
 
+// UpdateAgentTemplate 更新 Agent 模板
+func (s *Store) UpdateAgentTemplate(ctx context.Context, tmpl *model.AgentTemplate) error {
+	personalityJSON, _ := json.Marshal(tmpl.Personality)
+	skillsJSON, _ := json.Marshal(tmpl.Skills)
+	mcpServersJSON, _ := json.Marshal(tmpl.MCPServers)
+
+	query := s.rebind(`
+		UPDATE agent_templates
+		SET name = $1, type = $2, role = $3, description = $4, personality = $5,
+		    model = $6, temperature = $7, max_context = $8, skills = $9, mcp_servers = $10,
+		    category = $11, updated_at = $12
+		WHERE id = $13
+	`)
+	_, err := s.db.ExecContext(ctx, query,
+		tmpl.Name, tmpl.Type, tmpl.Role, tmpl.Description, personalityJSON,
+		tmpl.Model, tmpl.Temperature, tmpl.MaxContext, skillsJSON, mcpServersJSON,
+		tmpl.Category, tmpl.UpdatedAt, tmpl.ID)
+	return err
+}
+
 // DeleteAgentTemplate 删除 Agent 模板
 func (s *Store) DeleteAgentTemplate(ctx context.Context, id string) error {
 	_, err := s.db.ExecContext(ctx, s.rebind(`DELETE FROM agent_templates WHERE id = $1`), id)

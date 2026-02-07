@@ -240,22 +240,22 @@ export default function AccountsPage() {
                   </div>
                   <div className="divide-y">
                     {typeAccounts.map(account => (
-                      <div key={account.id} className="px-4 py-3 flex items-center justify-between">
-                        <div className="flex items-center gap-3">
+                      <div key={account.id} className="px-3 sm:px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="flex items-center gap-3 min-w-0">
                           {statusIcon(account.status)}
-                          <div>
-                            <p className="font-medium">{account.name}</p>
-                            <p className="text-sm text-gray-500">
+                          <div className="min-w-0">
+                            <p className="font-medium truncate">{account.name}</p>
+                            <p className="text-sm text-gray-500 truncate">
                               {statusText(account.status)}
                               {account.last_used_at && ` · 上次使用: ${new Date(account.last_used_at).toLocaleDateString()}`}
                             </p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-shrink-0 ml-8 sm:ml-0">
                           {account.status !== 'authenticated' && (
                             <button
                               onClick={() => startAuth(account.id)}
-                              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-50 text-blue-700 rounded hover:bg-blue-100"
+                              className="flex items-center gap-1 px-3 py-2 sm:py-1.5 text-sm bg-blue-50 text-blue-700 rounded hover:bg-blue-100"
                             >
                               <Key className="w-4 h-4" />
                               认证
@@ -263,7 +263,7 @@ export default function AccountsPage() {
                           )}
                           <button
                             onClick={() => deleteAccount(account.id)}
-                            className="p-1.5 text-red-500 hover:bg-red-50 rounded"
+                            className="p-2 sm:p-1.5 text-red-500 hover:bg-red-50 rounded"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -322,8 +322,8 @@ function CreateAccountModal({
   const [proxyId, setProxyId] = useState(defaultProxy?.id || '')
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg w-full max-w-md p-6">
+    <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50">
+      <div className="bg-white rounded-t-2xl sm:rounded-lg w-full sm:max-w-md p-4 sm:p-6 max-h-[90vh] overflow-y-auto touch-scroll">
         <h2 className="text-lg font-semibold mb-4">添加账号</h2>
         
         <div className="space-y-4">
@@ -418,8 +418,8 @@ function AuthModal({ session, onClose, onRetry }: {
   const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost'
   
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg w-full max-w-lg p-6">
+    <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50">
+      <div className="bg-white rounded-t-2xl sm:rounded-lg w-full sm:max-w-lg p-4 sm:p-6 max-h-[90vh] overflow-y-auto touch-scroll">
         <h2 className="text-lg font-semibold mb-4">账号认证</h2>
         
         {session.status === 'pending' && (

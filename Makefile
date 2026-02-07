@@ -64,6 +64,33 @@ build: generate-api
 	@echo "Building NodeManager..."
 	CGO_ENABLED=0 go build -o bin/nodemanager ./cmd/nodemanager
 
+# ========== 前端构建 ==========
+.PHONY: web-build web-clean
+
+web-build: ## 构建前端静态文件（用于嵌入 Go 二进制）
+	@echo "Building frontend for static export..."
+	cd web && STATIC_EXPORT=true npm run build
+	@echo "Frontend built: web/out/"
+
+web-clean: ## 清理前端构建产物
+	rm -rf web/out web/.next
+
+# ========== 生产构建（前后端合一） ==========
+.PHONY: release release-linux release-darwin release-windows
+
+release: web-build generate-api ## 完整生产构建（前端嵌入，多平台）
+	@echo "Building release binaries with embedded frontend..."
+	mkdir -p bin
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o bin/api-server-linux-amd64 ./cmd/api-server
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o bin/api-server-darwin-amd64 ./cmd/api-server
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o bin/api-server-darwin-arm64 ./cmd/api-server
+	@echo "Release binaries built in bin/"
+
+release-linux: web-build generate-api ## 仅构建 Linux 版本
+	mkdir -p bin
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o bin/api-server-linux-amd64 ./cmd/api-server
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o bin/nodemanager-linux-amd64 ./cmd/nodemanager
+
 # 测试
 test:
 	go test -v -race ./internal/... ./pkg/...
@@ -149,6 +176,12 @@ run-web:
 	@echo "Starting Web UI on port 3002..."
 	cd web && npm run dev
 
+run-api-dev: ## 开发模式运行后端（不嵌入前端，需单独启动 Next.js dev server）
+	@echo "Starting API Server in dev mode (no embedded frontend)..."
+	DATABASE_URL="postgres://agents:agents_dev_password@localhost:5432/agents_admin?sslmode=disable" \
+	REDIS_URL="redis://localhost:6380/0" \
+	go run -tags dev ./cmd/api-server
+
 stop-web:
 	@echo "Stopping Web UI on port 3002..."
 	@PID=$$(lsof -ti tcp:3002 || true); \
@@ -190,6 +223,13 @@ monitoring-down:
 monitoring-logs:
 	docker compose -f deployments/docker-compose.monitoring.yml logs -f
 
+# Deb 打包
+.PHONY: deb
+
+deb: release-linux ## 构建 Linux 二进制并打包为 .deb
+	@echo "Building .deb packages..."
+	./deployments/deb/build-deb.sh
+
 # Docker 构建
 docker-build:
 	docker build -f deployments/Dockerfile.api -t agents-admin/api-server:dev .
@@ -198,12 +238,21 @@ docker-build:
 # 清理
 clean:
 	rm -rf bin/
+	rm -rf web/out web/.next
 	rm -f coverage.out coverage.html
 	docker compose -f deployments/docker-compose.yml down -v
 
 # 帮助
 help:
 	@echo "Available targets:"
+	@echo ""
+	@echo "  Frontend:"
+	@echo "    web-build        - Build frontend for static export (embed into Go)"
+	@echo "    web-clean        - Clean frontend build artifacts"
+	@echo ""
+	@echo "  Release (frontend + backend combined):"
+	@echo "    release          - Build multi-platform release binaries"
+	@echo "    release-linux    - Build Linux release binary only"
 	@echo ""
 	@echo "  Code Generation (by type):"
 	@echo "    generate-api         - Generate all OpenAPI code (incremental)"
@@ -228,6 +277,7 @@ help:
 	@echo "    run-api          - Run API Server locally"
 	@echo "    run-nodemanager  - Run NodeManager locally"
 	@echo "    run-web          - Run Web UI locally"
+	@echo "    run-api-dev      - Run API Server in dev mode (no embedded frontend)"
 	@echo "    watch-api        - Run API Server with hot reload (air)"
 	@echo "    watch-nodemanager - Run NodeManager with hot reload (air)"
 	@echo ""

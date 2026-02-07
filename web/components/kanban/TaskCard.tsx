@@ -7,7 +7,10 @@ interface Task {
   id: string
   name: string
   status: string
-  spec: any
+  type?: string
+  prompt?: { content?: string }
+  agent_id?: string
+  spec?: any
   created_at: string
 }
 
@@ -57,9 +60,9 @@ export default function TaskCard({
 }: TaskCardProps) {
   const [loading, setLoading] = useState(false)
   
-  const agentType = task.spec?.agent?.type || 'unknown'
-  const accountId = task.spec?.agent?.account_id
-  const prompt = task.spec?.prompt || ''
+  const agentType = task.type || task.spec?.agent?.type || 'unknown'
+  const accountId = task.agent_id || task.spec?.agent?.account_id
+  const prompt = task.prompt?.content || task.spec?.prompt || ''
   
   const status = statusConfig[task.status] || statusConfig.pending
 
@@ -140,39 +143,39 @@ export default function TaskCard({
             minute: '2-digit'
           })}
         </span>
-        <div className="flex gap-1">
+        <div className="flex gap-0.5 sm:gap-1">
           <button
             onClick={(e) => { e.stopPropagation(); onSelect(); }}
-            className="p-1.5 rounded hover:bg-gray-100 text-gray-500"
+            className="p-2 sm:p-1.5 rounded hover:bg-gray-100 text-gray-500"
             title="查看详情"
           >
-            <Eye className="w-3.5 h-3.5" />
+            <Eye className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
           </button>
           {task.status === 'pending' && (
             <button
               onClick={handleStartRun}
               disabled={loading}
-              className="p-1.5 rounded hover:bg-blue-100 text-blue-600 disabled:opacity-50"
+              className="p-2 sm:p-1.5 rounded hover:bg-blue-100 text-blue-600 disabled:opacity-50"
               title="开始执行"
             >
-              <Play className="w-3.5 h-3.5" />
+              <Play className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
             </button>
           )}
           {task.status === 'running' && (
             <button
               onClick={handleStopRun}
-              className="p-1.5 rounded hover:bg-red-100 text-red-600"
+              className="p-2 sm:p-1.5 rounded hover:bg-red-100 text-red-600"
               title="停止"
             >
-              <Square className="w-3.5 h-3.5" />
+              <Square className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
             </button>
           )}
           <button
             onClick={handleDelete}
-            className="p-1.5 rounded hover:bg-red-100 text-red-600"
+            className="p-2 sm:p-1.5 rounded hover:bg-red-100 text-red-600"
             title="删除"
           >
-            <Trash2 className="w-3.5 h-3.5" />
+            <Trash2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
           </button>
         </div>
       </div>
