@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -70,9 +71,14 @@ func NewAuthControllerV2(cfg Config) (*AuthControllerV2, error) {
 	registry := auth.NewRegistry()
 	registry.Register(qwencode.New())
 
+	httpClient := cfg.HTTPClient
+	if httpClient == nil {
+		httpClient = &http.Client{Timeout: 30 * time.Second}
+	}
+
 	return &AuthControllerV2{
 		config:          cfg,
-		httpClient:      &http.Client{Timeout: 30 * time.Second},
+		httpClient:      httpClient,
 		containerClient: containerClient,
 		authRegistry:    registry,
 		runningActions:  make(map[string]*runningAction),
@@ -251,11 +257,22 @@ func (c *AuthControllerV2) executeAuthAction(ctx context.Context, action *NodeAc
 
 	// 获取最终状态
 	finalStatus := authenticator.GetStatus()
+	accountID := authTask.AccountID
 	switch finalStatus.State {
 	case auth.AuthStateSuccess:
 		log.Printf("[AuthController] Action %s completed successfully", actionID)
+
+		// 1. 先上报 success — 触发 API Server 创建 Account 记录
 		result, _ := json.Marshal(map[string]string{"volume_name": volumeName})
 		c.reportActionStatus(actionID, "success", "finalizing", "Authentication completed successfully", 100, result, "")
+
+		// 2. 再上传 volume 归档 — 此时 Account 已存在，PUT volume-archive 可通过验证
+		log.Printf("[AuthController] Uploading volume archive for account %s", accountID)
+		if err := c.uploadVolumeArchive(ctx, accountID, volumeName, agentTypeCfg.AuthDir); err != nil {
+			log.Printf("[AuthController] Failed to upload volume archive: %v (non-fatal)", err)
+		} else {
+			log.Printf("[AuthController] Volume archive uploaded for account %s", accountID)
+		}
 	case auth.AuthStateFailed:
 		log.Printf("[AuthController] Action %s failed: %v", actionID, finalStatus.Error)
 		c.reportActionStatus(actionID, "failed", "", finalStatus.Message, 0, nil, finalStatus.Message)
@@ -363,6 +380,82 @@ func (c *AuthControllerV2) cleanupAllActions() {
 		}
 	}
 	c.runningActions = make(map[string]*runningAction)
+}
+
+// uploadVolumeArchive 导出 Docker Volume 并上传到 API Server（由 API Server 代理存入 MinIO）
+func (c *AuthControllerV2) uploadVolumeArchive(ctx context.Context, accountID, volumeName, mountPath string) error {
+	// 1. 导出 volume 为 tar 流
+	log.Printf("[AuthController] Exporting volume %s for account %s", volumeName, accountID)
+	tarReader, err := c.containerClient.ExportVolume(ctx, volumeName, mountPath)
+	if err != nil {
+		return fmt.Errorf("export volume: %w", err)
+	}
+	defer tarReader.Close()
+
+	// 2. 上传到 API Server
+	apiURL := fmt.Sprintf("%s/api/v1/accounts/%s/volume-archive", c.config.APIServerURL, accountID)
+	req, err := http.NewRequestWithContext(ctx, "PUT", apiURL, tarReader)
+	if err != nil {
+		return fmt.Errorf("create upload request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/gzip")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("upload request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("upload failed: %d %s", resp.StatusCode, string(body))
+	}
+
+	log.Printf("[AuthController] Volume archive uploaded: %s -> %s", volumeName, accountID)
+	return nil
+}
+
+// EnsureVolumeFromArchive 确保本地 volume 可用：本地已存在则跳过，否则从 API Server 下载
+func (c *AuthControllerV2) EnsureVolumeFromArchive(ctx context.Context, accountID, volumeName, mountPath string) error {
+	// 1. 检查本地 volume 是否已存在
+	exists, err := c.containerClient.VolumeExists(ctx, volumeName)
+	if err != nil {
+		return fmt.Errorf("check volume: %w", err)
+	}
+	if exists {
+		log.Printf("[AuthController] Volume %s already exists locally, skip download", volumeName)
+		return nil
+	}
+
+	// 2. 从 API Server 下载 archive
+	log.Printf("[AuthController] Volume %s not found locally, downloading from API Server", volumeName)
+	apiURL := fmt.Sprintf("%s/api/v1/accounts/%s/volume-archive", c.config.APIServerURL, accountID)
+	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
+	if err != nil {
+		return fmt.Errorf("create download request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("download request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return fmt.Errorf("no volume archive available for account %s", accountID)
+	}
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("download failed: %d %s", resp.StatusCode, string(body))
+	}
+
+	// 3. 导入到本地 Docker volume
+	if err := c.containerClient.ImportVolume(ctx, volumeName, mountPath, resp.Body); err != nil {
+		return fmt.Errorf("import volume: %w", err)
+	}
+
+	log.Printf("[AuthController] Volume %s restored from archive", volumeName)
+	return nil
 }
 
 // sanitizeForVolume 将名称中的特殊字符替换（用于 volume 名称）

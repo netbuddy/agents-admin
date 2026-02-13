@@ -80,6 +80,13 @@ func (m *mockRunStore) UpdateRunStatus(ctx context.Context, id string, status mo
 	return nil
 }
 
+func (m *mockRunStore) UpdateTaskStatus(ctx context.Context, id string, status model.TaskStatus) error {
+	if t, ok := m.tasks[id]; ok {
+		t.Status = status
+	}
+	return nil
+}
+
 // mockRunScheduler 模拟调度队列（仅实现 RunScheduler 接口）
 type mockRunScheduler struct {
 	scheduledRuns []string
@@ -103,11 +110,14 @@ func TestCreate_Basic(t *testing.T) {
 	queue := &mockRunScheduler{}
 
 	// 创建测试任务
+	instanceID := "inst-test-001"
 	task := &model.Task{
-		ID:     "task-test-001",
-		Name:   "test task",
-		Status: model.TaskStatusPending,
-		Prompt: &model.Prompt{Content: "test prompt"},
+		ID:      "task-test-001",
+		Name:    "test task",
+		Type:    model.TaskType("qwen-code"),
+		Status:  model.TaskStatusPending,
+		Prompt:  &model.Prompt{Content: "test prompt"},
+		AgentID: &instanceID,
 	}
 	store.tasks[task.ID] = task
 
@@ -156,6 +166,35 @@ func TestCreate_Basic(t *testing.T) {
 	// 验证 Redis 已调度
 	if len(queue.scheduledRuns) != 1 {
 		t.Errorf("Redis 调度数量 = %d, 期望 1", len(queue.scheduledRuns))
+	}
+
+	// 验证 snapshot 格式：NodeManager 期望 agent 对象和 flat prompt
+	for _, run := range store.runs {
+		var snapshot map[string]interface{}
+		if err := json.Unmarshal(run.Snapshot, &snapshot); err != nil {
+			t.Fatalf("snapshot 解析失败: %v", err)
+		}
+
+		// agent 必须是 map，包含 type 和 instance_id
+		agent, ok := snapshot["agent"].(map[string]interface{})
+		if !ok {
+			t.Fatal("snapshot.agent 缺失或不是 object")
+		}
+		if agent["type"] != "qwen-code" {
+			t.Errorf("snapshot.agent.type = %v, 期望 qwen-code", agent["type"])
+		}
+		if agent["instance_id"] != "inst-test-001" {
+			t.Errorf("snapshot.agent.instance_id = %v, 期望 inst-test-001", agent["instance_id"])
+		}
+
+		// prompt 必须是 string
+		prompt, ok := snapshot["prompt"].(string)
+		if !ok {
+			t.Fatalf("snapshot.prompt 不是 string, 实际类型: %T, 值: %v", snapshot["prompt"], snapshot["prompt"])
+		}
+		if prompt != "test prompt" {
+			t.Errorf("snapshot.prompt = %q, 期望 'test prompt'", prompt)
+		}
 	}
 }
 
@@ -469,6 +508,48 @@ func TestUpdate_Basic(t *testing.T) {
 	// 验证状态已更新
 	if store.runs["run-update-1"].Status != model.RunStatusRunning {
 		t.Errorf("Run 状态 = %s, 期望 running", store.runs["run-update-1"].Status)
+	}
+}
+
+// ============================================================================
+// TestUpdate: Run 终态联动更新 Task 状态
+// ============================================================================
+
+func TestUpdate_TaskStatusSync(t *testing.T) {
+	store := newMockStore()
+
+	// 创建任务和 Run
+	task := &model.Task{ID: "task-sync-001", Name: "test", Status: model.TaskStatusInProgress}
+	store.tasks[task.ID] = task
+	store.runs["run-sync-001"] = &model.Run{
+		ID:     "run-sync-001",
+		TaskID: "task-sync-001",
+		Status: model.RunStatusRunning,
+	}
+
+	handler := NewHandlerWithInterfaces(store, nil)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	// Run 状态更新为 done → Task 应联动更新为 completed
+	body := strings.NewReader(`{"status": "done"}`)
+	req := httptest.NewRequest("PATCH", "/api/v1/runs/run-sync-001", body)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("HTTP 状态码 = %d, 期望 200", w.Code)
+	}
+
+	// 验证 Run 状态
+	if store.runs["run-sync-001"].Status != model.RunStatusDone {
+		t.Errorf("Run 状态 = %s, 期望 done", store.runs["run-sync-001"].Status)
+	}
+
+	// 验证 Task 状态联动更新
+	if store.tasks["task-sync-001"].Status != model.TaskStatusCompleted {
+		t.Errorf("Task 状态 = %s, 期望 completed", store.tasks["task-sync-001"].Status)
 	}
 }
 

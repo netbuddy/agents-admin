@@ -80,37 +80,37 @@ type TemplateVariable struct {
 //   - 从 MCP Server 的 Prompts 能力获取的模板
 type PromptTemplate struct {
 	// ID 唯一标识
-	ID string `json:"id" db:"id"`
+	ID string `json:"id" bson:"_id" db:"id"`
 
 	// Name 模板名称
-	Name string `json:"name" db:"name"`
+	Name string `json:"name" bson:"name" db:"name"`
 
 	// Description 模板描述/说明
-	Description string `json:"description" db:"description"`
+	Description string `json:"description" bson:"description" db:"description"`
 
 	// Content 模板内容（支持变量插值，如 {{.variable_name}}）
-	Content string `json:"content" db:"content"`
+	Content string `json:"content" bson:"content" db:"content"`
 
 	// Variables 变量定义
-	Variables []TemplateVariable `json:"variables,omitempty" db:"variables"`
+	Variables []TemplateVariable `json:"variables,omitempty" bson:"variables,omitempty" db:"variables"`
 
 	// Category 分类（如 development, testing, documentation）
-	Category string `json:"category,omitempty" db:"category"`
+	Category string `json:"category,omitempty" bson:"category,omitempty" db:"category"`
 
 	// Tags 标签
-	Tags []string `json:"tags,omitempty" db:"tags"`
+	Tags []string `json:"tags,omitempty" bson:"tags,omitempty" db:"tags"`
 
 	// Source 来源（builtin/custom/mcp）
-	Source PromptSource `json:"source,omitempty" db:"source"`
+	Source PromptSource `json:"source,omitempty" bson:"source,omitempty" db:"source"`
 
 	// SourceRef 来源引用（如 MCP Server ID）
-	SourceRef string `json:"source_ref,omitempty" db:"source_ref"`
+	SourceRef string `json:"source_ref,omitempty" bson:"source_ref,omitempty" db:"source_ref"`
 
 	// CreatedAt 创建时间
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	CreatedAt time.Time `json:"created_at" bson:"created_at" db:"created_at"`
 
 	// UpdatedAt 更新时间
-	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+	UpdatedAt time.Time `json:"updated_at" bson:"updated_at" db:"updated_at"`
 }
 
 // ============================================================================

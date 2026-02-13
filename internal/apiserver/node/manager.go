@@ -7,7 +7,6 @@ import (
 	"log"
 	"time"
 
-	"agents-admin/internal/shared/cache"
 	"agents-admin/internal/shared/model"
 	"agents-admin/internal/shared/storage"
 )
@@ -17,7 +16,6 @@ import (
 // 负责管理节点的在线状态、容量信息和运行任务计数
 type Manager struct {
 	store       storage.PersistentStore
-	nodeCache   cache.NodeHeartbeatCache
 	nodeRunning map[string]int // 节点当前运行的任务数（内存缓存）
 }
 
@@ -29,37 +27,22 @@ func NewManager(store storage.PersistentStore) *Manager {
 	}
 }
 
-// SetNodeCache 设置节点心跳缓存
-func (m *Manager) SetNodeCache(nodeCache cache.NodeHeartbeatCache) {
-	m.nodeCache = nodeCache
-}
-
 // ListOnlineNodes 获取在线节点列表
 //
-// - 优先使用 Redis 缓存心跳（带 TTL）：缓存有心跳 = online，无心跳 = offline
-// - 当缓存不可用时，回退到 PostgreSQL 的 last_heartbeat 时间窗口过滤
+// 基于 MongoDB last_heartbeat 时间窗口过滤，排除行政状态节点
 func (m *Manager) ListOnlineNodes(ctx context.Context) ([]*model.Node, error) {
-	// 缓存可用：以缓存心跳为准
-	if m.nodeCache != nil {
-		nodes, err := m.store.ListAllNodes(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		online := MergeOnlineNodesFromCache(ctx, nodes, m.nodeCache)
-		if online != nil {
-			// online 为非 nil（含空切片）表示缓存正常
-			return online, nil
-		}
-
-		// online == nil 表示缓存异常，回退到 PostgreSQL 心跳过滤
-		log.Printf("[node.manager] cache error, fallback to postgres heartbeat filter")
-		return FilterNodesByFreshHeartbeat(nodes, 45*time.Second), nil
+	nodes, err := m.store.ListAllNodes(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	// 缓存不可用：回退到 PostgreSQL 的 status=online
-	nodes, err := m.store.ListOnlineNodes(ctx)
-	return nodes, err
+	var online []*model.Node
+	for _, n := range FilterNodesByFreshHeartbeat(nodes, HeartbeatFreshWindow) {
+		if !n.IsAdminStatus() {
+			online = append(online, n)
+		}
+	}
+	return online, nil
 }
 
 // RefreshRunningCount 刷新节点运行任务计数
@@ -92,7 +75,7 @@ func (m *Manager) IncrementRunning(nodeID string) {
 
 // ResolvePreferredNodeID 解析优先节点 ID（用于亲和性调度）
 func (m *Manager) ResolvePreferredNodeID(ctx context.Context, taskID string, snapshot json.RawMessage) string {
-	instanceID, accountID := ExtractAgentIDs(snapshot)
+	instanceID, _ := ExtractAgentIDs(snapshot)
 
 	// 兼容：如果 instance_id 没放在 snapshot，从 Task.AgentID 补齐
 	if instanceID == "" && taskID != "" {
@@ -105,20 +88,11 @@ func (m *Manager) ResolvePreferredNodeID(ctx context.Context, taskID string, sna
 	}
 
 	if instanceID != "" {
-		inst, err := m.store.GetInstance(ctx, instanceID)
+		inst, err := m.store.GetAgentInstance(ctx, instanceID)
 		if err != nil {
-			log.Printf("[node.manager] GetInstance error: %v", err)
+			log.Printf("[node.manager] GetAgentInstance error: %v", err)
 		} else if inst != nil && inst.NodeID != nil && *inst.NodeID != "" {
 			return *inst.NodeID
-		}
-	}
-
-	if accountID != "" {
-		acc, err := m.store.GetAccount(ctx, accountID)
-		if err != nil {
-			log.Printf("[node.manager] GetAccount error: %v", err)
-		} else if acc != nil && acc.NodeID != "" {
-			return acc.NodeID
 		}
 	}
 

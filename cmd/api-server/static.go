@@ -36,6 +36,8 @@ func newSPAHandler(apiHandler http.Handler, staticFS fs.FS) http.Handler {
 		if strings.HasPrefix(urlPath, "/api/") ||
 			strings.HasPrefix(urlPath, "/ws/") ||
 			strings.HasPrefix(urlPath, "/ttyd/") ||
+			strings.HasPrefix(urlPath, "/spec") ||
+			strings.HasPrefix(urlPath, "/docs") ||
 			urlPath == "/health" ||
 			urlPath == "/metrics" {
 			apiHandler.ServeHTTP(w, r)

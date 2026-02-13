@@ -23,6 +23,7 @@ type ProvisionStore interface {
 // ProvisionRequest 部署请求（含敏感信息，不持久化）
 type ProvisionRequest struct {
 	NodeID       string `json:"node_id"`
+	DisplayName  string `json:"display_name"`
 	Host         string `json:"host"`
 	Port         int    `json:"port"`
 	SSHUser      string `json:"ssh_user"`
@@ -57,6 +58,7 @@ func (p *Provisioner) StartProvision(ctx context.Context, req ProvisionRequest) 
 	provision := &model.NodeProvision{
 		ID:           fmt.Sprintf("prov-%s", generateShortID()),
 		NodeID:       req.NodeID,
+		DisplayName:  req.DisplayName,
 		Host:         req.Host,
 		Port:         req.Port,
 		SSHUser:      req.SSHUser,
@@ -164,9 +166,9 @@ tls:
 `
 	}
 
-	writeCmd := fmt.Sprintf("cat > /etc/agents-admin/nodemanager.yaml << 'CFGEOF'\n%sCFGEOF", configContent)
+	writeCmd := fmt.Sprintf("cat > /etc/agents-admin/prod.yaml << 'CFGEOF'\n%sCFGEOF", configContent)
 	if req.SSHUser != "root" {
-		writeCmd = fmt.Sprintf("sudo bash -c \"cat > /etc/agents-admin/nodemanager.yaml << 'CFGEOF'\n%sCFGEOF\"", configContent)
+		writeCmd = fmt.Sprintf("sudo bash -c \"cat > /etc/agents-admin/prod.yaml << 'CFGEOF'\n%sCFGEOF\"", configContent)
 	}
 	if _, err := p.remoteExec(client, writeCmd); err != nil {
 		updateStatus(model.NodeProvisionStatusFailed, fmt.Sprintf("config write failed: %v", err))
@@ -191,6 +193,14 @@ tls:
 	if p.waitForHeartbeat(ctx, prov.NodeID, 30*time.Second) {
 		updateStatus(model.NodeProvisionStatusCompleted, "")
 		log.Printf("[provision] %s: node %s is online!", prov.ID, prov.NodeID)
+		// 设置节点显示名称
+		if prov.DisplayName != "" {
+			if node, err := p.nodeStore.GetNode(ctx, prov.NodeID); err == nil && node != nil {
+				node.DisplayName = prov.DisplayName
+				node.UpdatedAt = time.Now()
+				_ = p.nodeStore.UpsertNode(ctx, node)
+			}
+		}
 	} else {
 		updateStatus(model.NodeProvisionStatusCompleted, "service started but heartbeat not yet received")
 		log.Printf("[provision] %s: service started, heartbeat pending", prov.ID)

@@ -1,0 +1,144 @@
+openapi: 3.0.3
+info:
+  title: Terminals API
+  version: 1.0.0
+
+# Terminal 终端会话 API
+
+paths:
+  /api/v1/terminal-sessions:
+    get:
+      tags: [Terminals]
+      operationId: listTerminalSessions
+      summary: 列出终端会话
+      responses:
+        '200':
+          description: 终端会话列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TerminalSession'
+    post:
+      tags: [Terminals]
+      operationId: createTerminalSession
+      summary: 创建终端会话
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTerminalSessionRequest'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TerminalSession'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+
+  /api/v1/terminal-sessions/{id}:
+    get:
+      tags: [Terminals]
+      operationId: getTerminalSession
+      summary: 获取终端会话详情
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 终端会话详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TerminalSession'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+    patch:
+      tags: [Terminals]
+      operationId: updateTerminalSession
+      summary: 更新终端会话状态
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TerminalSession'
+    delete:
+      tags: [Terminals]
+      operationId: deleteTerminalSession
+      summary: 删除终端会话
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '204':
+          description: 删除成功
+
+  /api/v1/nodes/{node_id}/terminal-sessions:
+    get:
+      tags: [Terminals]
+      operationId: listPendingTerminalSessions
+      summary: 获取节点的待处理终端会话（Node Manager 轮询）
+      parameters:
+        - name: node_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 待处理终端会话列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TerminalSession'
+
+components:
+  schemas:
+    TerminalSession:
+      type: object
+      required: [id, status]
+      properties:
+        id:
+          type: string
+        node_id:
+          type: string
+        container_name:
+          type: string
+        port:
+          type: integer
+        status:
+          type: string
+          enum: [pending, active, closed]
+        url:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateTerminalSessionRequest:
+      type: object
+      properties:
+        node_id:
+          type: string
+        container_name:
+          type: string

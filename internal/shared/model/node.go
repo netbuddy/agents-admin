@@ -79,13 +79,16 @@ const (
 //   - Capacity：节点容量（如 max_concurrent=4）
 //   - LastHeartbeat：最后心跳时间（用于判断节点是否在线）
 type Node struct {
-	ID            string          `json:"id" db:"id"`                                   // 节点 ID
-	Status        NodeStatus      `json:"status" db:"status"`                           // 节点状态
-	Labels        json.RawMessage `json:"labels" db:"labels"`                           // 节点标签
-	Capacity      json.RawMessage `json:"capacity" db:"capacity"`                       // 节点容量
-	LastHeartbeat *time.Time      `json:"last_heartbeat,omitempty" db:"last_heartbeat"` // 最后心跳
-	CreatedAt     time.Time       `json:"created_at" db:"created_at"`                   // 创建时间
-	UpdatedAt     time.Time       `json:"updated_at" db:"updated_at"`                   // 更新时间
+	ID            string          `json:"id" bson:"_id" db:"id"`                                                        // 节点 ID
+	DisplayName   string          `json:"display_name,omitempty" bson:"display_name,omitempty" db:"display_name"`       // 用户设置的显示名称
+	Status        NodeStatus      `json:"status" bson:"status" db:"status"`                                             // 节点状态
+	Hostname      string          `json:"hostname,omitempty" bson:"hostname,omitempty" db:"hostname"`                   // 主机名
+	IPs           string          `json:"ips,omitempty" bson:"ips,omitempty" db:"ips"`                                  // IP 地址列表（逗号分隔）
+	Labels        json.RawMessage `json:"labels" bson:"labels" db:"labels"`                                             // 节点标签
+	Capacity      json.RawMessage `json:"capacity" bson:"capacity" db:"capacity"`                                       // 节点容量
+	LastHeartbeat *time.Time      `json:"last_heartbeat,omitempty" bson:"last_heartbeat,omitempty" db:"last_heartbeat"` // 最后心跳
+	CreatedAt     time.Time       `json:"created_at" bson:"created_at" db:"created_at"`                                 // 创建时间
+	UpdatedAt     time.Time       `json:"updated_at" bson:"updated_at" db:"updated_at"`                                 // 更新时间
 }
 
 // ============================================================================

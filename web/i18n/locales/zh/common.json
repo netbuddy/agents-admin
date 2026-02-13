@@ -1,0 +1,102 @@
+{
+  "nav": {
+    "taskBoard": "任务看板",
+    "monitor": "工作流监控",
+    "accounts": "账号管理",
+    "agents": "智能体",
+    "instances": "实例管理",
+    "nodes": "节点管理",
+    "proxies": "代理管理",
+    "settings": "系统设置",
+    "runners": "Runner 管理"
+  },
+  "action": {
+    "save": "保存",
+    "cancel": "取消",
+    "delete": "删除",
+    "edit": "编辑",
+    "create": "创建",
+    "refresh": "刷新",
+    "confirm": "确认",
+    "goBack": "返回",
+    "close": "关闭",
+    "viewDetail": "查看详情",
+    "start": "启动",
+    "stop": "停止",
+    "test": "测试",
+    "search": "搜索",
+    "saving": "保存中...",
+    "creating": "创建中...",
+    "loading": "加载中...",
+    "nextStep": "下一步",
+    "prevStep": "上一步",
+    "loadMore": "加载更多"
+  },
+  "status": {
+    "pending": "待处理",
+    "running": "运行中",
+    "completed": "已完成",
+    "failed": "失败",
+    "cancelled": "已取消",
+    "online": "在线",
+    "offline": "离线",
+    "idle": "空闲",
+    "busy": "忙碌",
+    "active": "活跃",
+    "expired": "已过期",
+    "disabled": "已禁用",
+    "stopped": "已停止",
+    "stopping": "停止中...",
+    "creating": "创建中...",
+    "waiting": "等待中",
+    "authenticated": "已认证",
+    "error": "错误",
+    "unknown": "未知",
+    "loggedIn": "已登录",
+    "notLoggedIn": "未登录"
+  },
+  "error": {
+    "notFound": "未找到",
+    "unknown": "未知错误",
+    "networkError": "网络错误",
+    "terminalError": "无法打开终端",
+    "terminalTimeout": "终端启动失败或超时，请重试"
+  },
+  "time": {
+    "justNow": "刚刚",
+    "minutesAgo": "{{count}} 分钟前",
+    "hoursAgo": "{{count}} 小时前",
+    "daysAgo": "{{count}} 天前",
+    "createdAt": "创建于",
+    "lastUsed": "上次使用",
+    "lastHeartbeat": "最后心跳",
+    "executionTime": "执行时间",
+    "neverReported": "从未上报",
+    "startTime": "开始时间",
+    "duration": "持续时间"
+  },
+  "confirm": {
+    "deleteTitle": "确认删除",
+    "deleteMessage": "确定要删除吗？此操作不可撤销。"
+  },
+  "header": {
+    "refresh": "刷新",
+    "notifications": "通知",
+    "openMenu": "打开菜单",
+    "profileSettings": "个人设置",
+    "logout": "退出登录"
+  },
+  "label": {
+    "type": "类型",
+    "account": "账号",
+    "node": "节点",
+    "name": "名称",
+    "description": "描述",
+    "version": "版本",
+    "total": "总计",
+    "noData": "暂无数据",
+    "progress": "进度",
+    "metadata": "元数据",
+    "terminal": "终端"
+  }
+}

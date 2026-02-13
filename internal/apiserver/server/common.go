@@ -27,6 +27,7 @@ import (
 	"agents-admin/internal/apiserver/scheduler"
 	"agents-admin/internal/shared/cache"
 	"agents-admin/internal/shared/eventbus"
+	objstore "agents-admin/internal/shared/minio"
 	"agents-admin/internal/shared/queue"
 	"agents-admin/internal/shared/storage"
 )
@@ -58,14 +59,18 @@ type Handler struct {
 	// 缓存接口
 	authCache     cache.AuthSessionCache   // 认证会话缓存
 	workflowCache cache.WorkflowStateCache // 工作流状态缓存
-	nodeCache     cache.NodeHeartbeatCache // 节点心跳缓存
 
 	// 废弃字段（向后兼容，将逐步移除）
-	redisStore storage.CacheStore    // Deprecated: 使用上述具体接口
-	eventBus   *storage.EtcdEventBus // Deprecated: 已弃用
+	redisStore storage.CacheStore // Deprecated: 使用上述具体接口
 
 	// 认证配置
 	authConfig AuthConfigCompat
+
+	// 引导配置（Node Manager 零配置安装）
+	bootstrapConfig BootstrapConfig
+
+	// 对象存储
+	minioClient *objstore.Client // MinIO 客户端（volume archive）
 
 	// 内部组件
 	scheduler    *scheduler.Scheduler // 任务调度器
@@ -80,6 +85,7 @@ type AuthConfigCompat struct {
 	RefreshTokenTTL time.Duration
 	AdminEmail      string
 	AdminPassword   string
+	NodeToken       string // NodeManager 共享密钥（X-Node-Token 认证）
 }
 
 // NewHandler 创建 Handler 实例
@@ -104,14 +110,10 @@ func NewHandler(store storage.PersistentStore, redisStore storage.CacheStore) *H
 		h.workflowEventBus = redisStore
 		h.authCache = redisStore
 		h.workflowCache = redisStore
-		h.nodeCache = redisStore
 	}
 
-	// 创建调度器，使用队列接口和缓存接口
+	// 创建调度器
 	h.scheduler = scheduler.NewScheduler(store, h.schedulerQueue, h.nodeQueue, "api-server")
-	if h.nodeCache != nil {
-		h.scheduler.SetNodeCache(h.nodeCache)
-	}
 	h.eventGateway = NewEventGateway(store, h.runEventBus)
 	h.metrics = NewMetrics("api")
 	return h
@@ -133,17 +135,33 @@ func (h *Handler) GetMetrics() *Metrics {
 	return h.metrics
 }
 
-// SetEventBus 设置事件总线（用于事件驱动模式）
-func (h *Handler) SetEventBus(eventBus *storage.EtcdEventBus) {
-	h.eventBus = eventBus
-	if h.eventGateway != nil {
-		h.eventGateway.SetEventBus(eventBus)
-	}
+// BootstrapConfig Node Manager 引导配置（HTTP-Only 架构：不再包含 Redis URL）
+type BootstrapConfig struct {
+	TLSEnabled bool `json:"tls_enabled"`
 }
 
-// GetEventBus 获取事件总线
-func (h *Handler) GetEventBus() *storage.EtcdEventBus {
-	return h.eventBus
+// SetMinIOClient 设置 MinIO 客户端（用于 volume archive 代理）
+func (h *Handler) SetMinIOClient(mc *objstore.Client) {
+	h.minioClient = mc
+}
+
+// SetBootstrapConfig 设置引导配置
+func (h *Handler) SetBootstrapConfig(cfg BootstrapConfig) {
+	h.bootstrapConfig = cfg
+}
+
+// NodeBootstrap 返回 Node Manager 引导配置
+// GET /api/v1/node-bootstrap （免认证）
+//
+// HTTP-Only 架构：Node Manager 只需 TLS 信息，不再需要 Redis URL。
+func (h *Handler) NodeBootstrap(w http.ResponseWriter, r *http.Request) {
+	resp := map[string]interface{}{
+		"tls": map[string]interface{}{
+			"enabled": h.bootstrapConfig.TLSEnabled,
+			"ca_url":  "/ca.pem",
+		},
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // writeJSON 将数据以 JSON 格式写入 HTTP 响应

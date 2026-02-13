@@ -88,6 +88,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		Password:  req.Password,
 		NoProxy:   req.NoProxy,
 		IsDefault: req.IsDefault,
+		Status:    model.ProxyStatusActive,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}

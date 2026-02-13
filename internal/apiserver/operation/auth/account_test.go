@@ -119,10 +119,14 @@ func TestDeleteAccount_NotFound(t *testing.T) {
 }
 
 func TestSanitizeName(t *testing.T) {
+	// 注意：必须与 nodemanager/auth_controller.go 的 sanitizeForVolume 保持一致
 	cases := []struct{ input, want string }{
 		{"test@email.com", "test_email_com"},
 		{"simple", "simple"},
 		{"with space", "with_space"},
+		{"test-name", "test_name"},         // 连字符必须替换（与 sanitizeForVolume 一致）
+		{"test-free-net", "test_free_net"}, // 真实场景
+		{"a-b.c@d e", "a_b_c_d_e"},         // 混合特殊字符
 	}
 	for _, tc := range cases {
 		got := sanitizeName(tc.input)

@@ -1,3 +1,8 @@
+openapi: 3.0.3
+info:
+  title: Tasks API
+  version: 1.0.0
+
 # Task 任务管理 API
 
 paths:
@@ -58,6 +63,29 @@ paths:
                 $ref: '#/components/schemas/Task'
         '404':
           $ref: 'common.yaml#/components/responses/NotFound'
+    put:
+      tags: [Tasks]
+      operationId: updateTask
+      summary: 更新任务
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTaskRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
     delete:
       tags: [Tasks]
       operationId: deleteTask
@@ -73,6 +101,59 @@ paths:
                 $ref: 'common.yaml#/components/schemas/MessageResponse'
         '404':
           $ref: 'common.yaml#/components/responses/NotFound'
+
+  /api/v1/tasks/{id}/subtasks:
+    get:
+      tags: [Tasks]
+      operationId: listSubTasks
+      summary: 列出子任务
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 子任务列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Task'
+
+  /api/v1/tasks/{id}/tree:
+    get:
+      tags: [Tasks]
+      operationId: getTaskTree
+      summary: 获取任务树（含子任务层级）
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 任务树
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/v1/tasks/{id}/context:
+    put:
+      tags: [Tasks]
+      operationId: updateTaskContext
+      summary: 更新任务上下文
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskContext'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
 
 components:
   schemas:
@@ -143,6 +224,23 @@ components:
           type: string
         context:
           $ref: '#/components/schemas/TaskContext'
+
+    UpdateTaskRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [pending, in_progress, completed, failed, cancelled]
+        prompt:
+          type: string
+        labels:
+          type: object
+          additionalProperties:
+            type: string
 
     TaskContext:
       type: object

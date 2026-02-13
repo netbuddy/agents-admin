@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -34,8 +35,6 @@ import (
 
 	"agents-admin/internal/nodemanager/adapter"
 	"agents-admin/internal/nodemanager/handler"
-	"agents-admin/internal/shared/queue"
-	"agents-admin/internal/shared/storage"
 )
 
 // Config 节点管理器配置
@@ -46,10 +45,14 @@ type Config struct {
 	WorkspaceDir string            // 工作空间根目录
 	Labels       map[string]string // 节点标签（用于调度匹配）
 	HTTPClient   *http.Client      // 自定义 HTTP 客户端（可选，用于 TLS）
+	NodeToken    string            // 共享密钥（X-Node-Token 认证）
 }
 
 // NodeManager 节点管理器核心结构
 // 负责与 API Server 通信、执行任务、上报事件
+//
+// HTTP-Only 架构：所有通信仅通过 HTTPS 与 API Server 交互，
+// 不直接连接 Redis 或其他中间件。借鉴 K8s hub-and-spoke 模式。
 type NodeManager struct {
 	config           Config                        // 配置
 	httpClient       *http.Client                  // HTTP 客户端
@@ -57,9 +60,7 @@ type NodeManager struct {
 	mu               sync.Mutex                    // 保护 running map
 	running          map[string]context.CancelFunc // 运行中的任务
 	authController   *AuthControllerV2             // 认证任务控制器
-	eventBus         *storage.EtcdEventBus         // 事件总线（可选，用于事件驱动模式）
-	nodeQueue        queue.NodeRunQueue            // 节点队列（用于接收分配的 Run）
-	instanceWorker   *InstanceWorker               // Instance 工作线程（P2-1）
+	agentWorker      *AgentWorker                  // Agent 工作线程（P2-1）
 	terminalWorker   *TerminalWorker               // Terminal 工作线程（P2-1）
 	workspaceManager *WorkspaceManager             // Workspace 管理器
 
@@ -79,13 +80,27 @@ func NewNodeManager(cfg Config) (*NodeManager, error) {
 		httpClient = &http.Client{Timeout: 30 * time.Second}
 	}
 
+	// 注入 X-Node-Token header（如果配置了 NodeToken）
+	if cfg.NodeToken != "" {
+		base := httpClient.Transport
+		if base == nil {
+			base = http.DefaultTransport
+		}
+		httpClient = &http.Client{
+			Timeout:   httpClient.Timeout,
+			Jar:       httpClient.Jar,
+			Transport: &nodeTokenTransport{base: base, token: cfg.NodeToken},
+		}
+		cfg.HTTPClient = httpClient
+	}
+
 	return &NodeManager{
 		config:           cfg,
 		httpClient:       httpClient,
 		adapters:         adapter.NewRegistry(),
 		running:          make(map[string]context.CancelFunc),
 		authController:   authController,
-		instanceWorker:   NewInstanceWorker(cfg),                // P2-1: Instance 工作线程
+		agentWorker:      NewAgentWorker(cfg),                   // P2-1: Agent 工作线程
 		terminalWorker:   NewTerminalWorker(cfg),                // P2-1: Terminal 工作线程
 		workspaceManager: NewWorkspaceManager(cfg.WorkspaceDir), // Workspace 管理器
 		handlerRegistry:  handler.NewRegistry(),                 // 新架构：Handler 注册表
@@ -109,16 +124,6 @@ func (nm *NodeManager) GetHandlerRegistry() *handler.Registry {
 // RegisterAdapter 注册 Agent CLI 适配器
 func (nm *NodeManager) RegisterAdapter(a adapter.Adapter) {
 	nm.adapters.Register(a)
-}
-
-// SetEventBus 设置事件总线（用于事件驱动模式）
-func (nm *NodeManager) SetEventBus(eventBus *storage.EtcdEventBus) {
-	nm.eventBus = eventBus
-}
-
-// SetNodeQueue 设置节点队列（用于接收分配的 Run）
-func (nm *NodeManager) SetNodeQueue(q queue.NodeRunQueue) {
-	nm.nodeQueue = q
 }
 
 // Start 启动节点管理器
@@ -151,12 +156,12 @@ func (nm *NodeManager) Start(ctx context.Context) {
 		}()
 	}
 
-	// P2-1: Instance 工作线程（处理容器创建/启动/停止）
-	if nm.instanceWorker != nil {
+	// P2-1: Agent 工作线程（处理容器创建/启动/停止）
+	if nm.agentWorker != nil {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			nm.instanceWorker.Start(ctx)
+			nm.agentWorker.Start(ctx)
 		}()
 	}
 
@@ -195,13 +200,27 @@ func (nm *NodeManager) heartbeatLoop(ctx context.Context) {
 }
 
 func (nm *NodeManager) sendHeartbeat(ctx context.Context) {
+	// 收集当前正在执行的 Run ID 列表（用于声明式状态协调）
+	nm.mu.Lock()
+	runningRuns := make([]string, 0, len(nm.running))
+	for runID := range nm.running {
+		runningRuns = append(runningRuns, runID)
+	}
+	nm.mu.Unlock()
+
+	hostname, _ := os.Hostname()
+	ips := getLocalIPs()
+
 	payload := map[string]interface{}{
-		"node_id": nm.config.NodeID,
-		"status":  "online",
-		"labels":  nm.config.Labels,
+		"node_id":      nm.config.NodeID,
+		"status":       "online",
+		"hostname":     hostname,
+		"ips":          strings.Join(ips, ","),
+		"labels":       nm.config.Labels,
+		"running_runs": runningRuns,
 		"capacity": map[string]interface{}{
 			"max_concurrent": 2,
-			"available":      2 - len(nm.running),
+			"available":      2 - len(runningRuns),
 		},
 	}
 
@@ -220,95 +239,40 @@ func (nm *NodeManager) sendHeartbeat(ctx context.Context) {
 
 	if resp.StatusCode != http.StatusOK {
 		log.Printf("Heartbeat returned status: %d", resp.StatusCode)
+		return
+	}
+
+	// 解析心跳响应中的控制指令
+	var hbResp struct {
+		Status     string `json:"status"`
+		Directives *struct {
+			CancelRuns []string `json:"cancel_runs,omitempty"`
+		} `json:"directives,omitempty"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&hbResp); err != nil {
+		return
+	}
+
+	// 执行取消指令
+	if hbResp.Directives != nil && len(hbResp.Directives.CancelRuns) > 0 {
+		for _, runID := range hbResp.Directives.CancelRuns {
+			log.Printf("[nodemanager.directive] cancel run: %s", runID)
+			nm.CancelRun(runID)
+		}
 	}
 }
 
-// taskLoop 任务获取主循环
+// taskLoop 任务获取主循环（HTTP-Only 架构）
 //
-// 实现两种模式：
-//  1. 事件驱动模式（主路径）：消费 Redis Stream nodes:{node_id}:tasks
-//  2. 保底轮询模式：每 60 秒从 API Server 获取分配的任务
-//
-// 如果 Redis 可用，优先使用事件驱动模式；否则只使用轮询模式。
+// 通过 HTTP 轮询 API Server 获取分配给本节点的任务。
+// 借鉴 K8s kubelet 模式：节点主动拉取，控制面不直连节点。
 func (nm *NodeManager) taskLoop(ctx context.Context) {
-	var wg sync.WaitGroup
-
-	// 主路径：Redis Streams 消费（如果 Redis 可用）
-	if nm.nodeQueue != nil {
-		// 创建消费者组
-		if err := nm.nodeQueue.CreateNodeConsumerGroup(ctx, nm.config.NodeID); err != nil {
-			log.Printf("[nodemanager.redis.group.failed] node_id=%s error=%v", nm.config.NodeID, err)
-		} else {
-			log.Printf("[nodemanager.redis.group.created] node_id=%s", nm.config.NodeID)
-		}
-
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			nm.consumeNodeTasks(ctx)
-		}()
-	}
-
-	// 保底路径：HTTP 轮询（60 秒间隔）
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		nm.fallbackTaskPolling(ctx)
-	}()
-
-	wg.Wait()
-}
-
-// consumeNodeTasks 消费 Redis Stream 中的任务事件
-func (nm *NodeManager) consumeNodeTasks(ctx context.Context) {
-	log.Printf("[nodemanager.redis.start] node_id=%s", nm.config.NodeID)
-
-	for {
-		select {
-		case <-ctx.Done():
-			log.Printf("[nodemanager.redis.stop] reason=context_cancelled")
-			return
-		default:
-		}
-
-		// 消费消息（阻塞等待 5 秒）
-		messages, err := nm.nodeQueue.ConsumeNodeRuns(ctx, nm.config.NodeID, nm.config.NodeID, 10, 5*time.Second)
-		if err != nil {
-			log.Printf("[nodemanager.redis.consume.failed] error=%v", err)
-			time.Sleep(1 * time.Second) // 出错后短暂休眠
-			continue
-		}
-
-		if len(messages) == 0 {
-			continue // 超时，没有新消息
-		}
-
-		log.Printf("[nodemanager.redis.received] count=%d", len(messages))
-
-		for _, msg := range messages {
-			// 获取 Run 详情并执行
-			nm.processTaskMessage(ctx, msg.RunID)
-
-			// 确认消息
-			if err := nm.nodeQueue.AckNodeRun(ctx, nm.config.NodeID, msg.ID); err != nil {
-				log.Printf("[nodemanager.redis.ack.failed] msg_id=%s error=%v", msg.ID, err)
-			}
-		}
-	}
-}
-
-// fallbackTaskPolling 保底轮询：每 60 秒从 API Server 获取任务
-func (nm *NodeManager) fallbackTaskPolling(ctx context.Context) {
-	// 如果没有 Redis，使用更短的间隔
-	interval := 60 * time.Second
-	if nm.nodeQueue == nil {
-		interval = 5 * time.Second // 无 Redis 时保持原有的 5 秒间隔
-	}
+	const pollInterval = 3 * time.Second
 
 	// 启动时立即执行一次
 	nm.checkAndExecuteRuns(ctx)
 
-	ticker := time.NewTicker(interval)
+	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()
 
 	for {
@@ -762,7 +726,7 @@ func normalizeAdapterName(agentType string) string {
 // getContainerForInstance 通过 instance_id 获取容器名称
 func (nm *NodeManager) getContainerForInstance(ctx context.Context, instanceID string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET",
-		nm.config.APIServerURL+"/api/v1/instances/"+instanceID, nil)
+		nm.config.APIServerURL+"/api/v1/agents/"+instanceID, nil)
 	if err != nil {
 		return "", fmt.Errorf("创建请求失败: %w", err)
 	}
@@ -825,7 +789,7 @@ func (nm *NodeManager) getContainerForAccount(ctx context.Context, accountID str
 // getContainerFromAPI 从 API Server 获取实例信息
 func (nm *NodeManager) getContainerFromAPI(ctx context.Context, accountID string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET",
-		nm.config.APIServerURL+"/api/v1/instances?account_id="+accountID, nil)
+		nm.config.APIServerURL+"/api/v1/agents?account_id="+accountID, nil)
 	if err != nil {
 		return "", fmt.Errorf("创建请求失败: %w", err)
 	}
@@ -841,20 +805,20 @@ func (nm *NodeManager) getContainerFromAPI(ctx context.Context, accountID string
 	}
 
 	var result struct {
-		Instances []struct {
+		Agents []struct {
 			ID            string `json:"id"`
 			ContainerName string `json:"container_name"`
 			// 兼容旧字段（避免历史数据/旧 API 返回）
 			Container string `json:"container"`
 			Status    string `json:"status"`
-		} `json:"instances"`
+		} `json:"agents"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return "", fmt.Errorf("解析响应失败: %w", err)
 	}
 
 	// 查找运行中的实例
-	for _, inst := range result.Instances {
+	for _, inst := range result.Agents {
 		container := inst.ContainerName
 		if container == "" {
 			container = inst.Container
@@ -865,10 +829,10 @@ func (nm *NodeManager) getContainerFromAPI(ctx context.Context, accountID string
 	}
 
 	// 如果没有运行中的实例，返回第一个实例
-	if len(result.Instances) > 0 {
-		container := result.Instances[0].ContainerName
+	if len(result.Agents) > 0 {
+		container := result.Agents[0].ContainerName
 		if container == "" {
-			container = result.Instances[0].Container
+			container = result.Agents[0].Container
 		}
 		if container != "" {
 			return container, nil
@@ -943,4 +907,58 @@ func (nm *NodeManager) copyFromContainer(ctx context.Context, containerName, src
 
 	log.Printf("[Workspace] 复制完成: %s:%s -> %s", containerName, srcPath, destPath)
 	return nil
+}
+
+// getLocalIPs 获取本机物理网卡的 IPv4 地址（过滤 docker/veth/bridge 等虚拟网卡）
+func getLocalIPs() []string {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil
+	}
+	var ips []string
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		if isVirtualInterface(iface.Name) {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			if ipnet, ok := addr.(*net.IPNet); ok && ipnet.IP.To4() != nil {
+				ips = append(ips, ipnet.IP.String())
+			}
+		}
+	}
+	return ips
+}
+
+// nodeTokenTransport 包装 http.RoundTripper，自动注入 X-Node-Token header
+type nodeTokenTransport struct {
+	base  http.RoundTripper
+	token string
+}
+
+func (t *nodeTokenTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	req = req.Clone(req.Context())
+	req.Header.Set("X-Node-Token", t.token)
+	return t.base.RoundTrip(req)
+}
+
+// isVirtualInterface 判断是否为虚拟网卡
+func isVirtualInterface(name string) bool {
+	// Linux: 物理网卡在 sysfs 中有 /device 符号链接
+	if _, err := os.Stat("/sys/class/net/" + name + "/device"); err == nil {
+		return false
+	}
+	// 回退：已知物理网卡命名前缀（systemd predictable naming + legacy）
+	for _, prefix := range []string{"en", "eth", "wl", "ww"} {
+		if strings.HasPrefix(name, prefix) {
+			return false
+		}
+	}
+	return true
 }

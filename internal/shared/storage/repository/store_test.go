@@ -520,36 +520,36 @@ func TestInstanceCRUD(t *testing.T) {
 		UpdatedAt: now,
 	}
 
-	require.NoError(t, s.CreateInstance(ctx, inst))
+	require.NoError(t, s.CreateAgentInstance(ctx, inst))
 
-	got, err := s.GetInstance(ctx, "inst-001")
+	got, err := s.GetAgentInstance(ctx, "inst-001")
 	require.NoError(t, err)
 	assert.Equal(t, "Test Instance", got.Name)
 
-	insts, err := s.ListInstances(ctx)
+	insts, err := s.ListAgentInstances(ctx)
 	require.NoError(t, err)
 	assert.Len(t, insts, 1)
 
-	insts, err = s.ListInstancesByNode(ctx, "node-1")
+	insts, err = s.ListAgentInstancesByNode(ctx, "node-1")
 	require.NoError(t, err)
 	assert.Len(t, insts, 1)
 
-	insts, err = s.ListPendingInstances(ctx, "node-1")
+	insts, err = s.ListPendingAgentInstances(ctx, "node-1")
 	require.NoError(t, err)
 	assert.Len(t, insts, 1)
 
 	// Update
 	cn := "container-abc"
-	require.NoError(t, s.UpdateInstance(ctx, "inst-001", model.InstanceStatusRunning, &cn))
-	got, _ = s.GetInstance(ctx, "inst-001")
+	require.NoError(t, s.UpdateAgentInstance(ctx, "inst-001", model.InstanceStatusRunning, &cn))
+	got, _ = s.GetAgentInstance(ctx, "inst-001")
 	assert.Equal(t, model.InstanceStatusRunning, got.Status)
 
 	// Update not found
-	err = s.UpdateInstance(ctx, "nonexistent", model.InstanceStatusRunning, nil)
+	err = s.UpdateAgentInstance(ctx, "nonexistent", model.InstanceStatusRunning, nil)
 	assert.Equal(t, sql.ErrNoRows, err)
 
 	// Delete
-	require.NoError(t, s.DeleteInstance(ctx, "inst-001"))
+	require.NoError(t, s.DeleteAgentInstance(ctx, "inst-001"))
 }
 
 // ============================================================================

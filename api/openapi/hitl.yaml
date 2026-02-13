@@ -1,0 +1,316 @@
+openapi: 3.0.3
+info:
+  title: HITL API
+  version: 1.0.0
+
+# HITL 人机协作 API（审批、反馈、干预、确认）
+
+paths:
+  # 审批请求
+  /api/v1/runs/{id}/approvals:
+    get:
+      tags: [HITL]
+      operationId: listApprovalRequests
+      summary: 列出 Run 的审批请求
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 审批请求列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApprovalRequest'
+
+  /api/v1/approvals/{id}:
+    get:
+      tags: [HITL]
+      operationId: getApprovalRequest
+      summary: 获取审批请求详情
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 审批请求详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalRequest'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+  /api/v1/approvals/{id}/decision:
+    post:
+      tags: [HITL]
+      operationId: createApprovalDecision
+      summary: 提交审批决策
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApprovalDecision'
+      responses:
+        '200':
+          description: 决策已提交
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalRequest'
+
+  # 人工反馈
+  /api/v1/runs/{id}/feedbacks:
+    get:
+      tags: [HITL]
+      operationId: listFeedbacks
+      summary: 列出 Run 的反馈
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 反馈列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Feedback'
+    post:
+      tags: [HITL]
+      operationId: createFeedback
+      summary: 提交反馈
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFeedbackRequest'
+      responses:
+        '201':
+          description: 反馈已提交
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Feedback'
+
+  # 干预操作
+  /api/v1/runs/{id}/interventions:
+    get:
+      tags: [HITL]
+      operationId: listInterventions
+      summary: 列出 Run 的干预操作
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 干预列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Intervention'
+    post:
+      tags: [HITL]
+      operationId: createIntervention
+      summary: 创建干预操作
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInterventionRequest'
+      responses:
+        '201':
+          description: 干预已创建
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Intervention'
+
+  # 确认请求
+  /api/v1/runs/{id}/confirmations:
+    get:
+      tags: [HITL]
+      operationId: listConfirmations
+      summary: 列出 Run 的确认请求
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 确认请求列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Confirmation'
+
+  /api/v1/confirmations/{id}:
+    get:
+      tags: [HITL]
+      operationId: getConfirmation
+      summary: 获取确认请求详情
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 确认请求详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Confirmation'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+  /api/v1/confirmations/{id}/resolve:
+    post:
+      tags: [HITL]
+      operationId: resolveConfirmation
+      summary: 处理确认请求
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                approved:
+                  type: boolean
+                message:
+                  type: string
+      responses:
+        '200':
+          description: 确认已处理
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Confirmation'
+
+  # HITL 汇总
+  /api/v1/runs/{id}/hitl/pending:
+    get:
+      tags: [HITL]
+      operationId: getPendingHITLItems
+      summary: 获取 Run 的所有待处理 HITL 项
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 待处理 HITL 项
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  approvals:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ApprovalRequest'
+                  confirmations:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Confirmation'
+
+components:
+  schemas:
+    ApprovalRequest:
+      type: object
+      properties:
+        id:
+          type: string
+        run_id:
+          type: string
+        type:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+        created_at:
+          type: string
+          format: date-time
+
+    ApprovalDecision:
+      type: object
+      required: [approved]
+      properties:
+        approved:
+          type: boolean
+        reason:
+          type: string
+
+    Feedback:
+      type: object
+      properties:
+        id:
+          type: string
+        run_id:
+          type: string
+        content:
+          type: string
+        type:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    CreateFeedbackRequest:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+        type:
+          type: string
+
+    Intervention:
+      type: object
+      properties:
+        id:
+          type: string
+        run_id:
+          type: string
+        type:
+          type: string
+        content:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    CreateInterventionRequest:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+        content:
+          type: string
+
+    Confirmation:
+      type: object
+      properties:
+        id:
+          type: string
+        run_id:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+        created_at:
+          type: string
+          format: date-time

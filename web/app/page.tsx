@@ -5,6 +5,7 @@ import { Plus, Search, X } from 'lucide-react'
 import { AdminLayout } from '@/components/layout'
 import { KanbanColumn, TaskDetailPanel } from '@/components/kanban'
 import CreateTaskModal from '@/components/CreateTaskModal'
+import { useTranslation } from 'react-i18next'
 
 interface Task {
   id: string
@@ -16,18 +17,18 @@ interface Task {
   parent_id?: string
 }
 
-const columns = [
-  { id: 'pending', title: '待处理', color: 'bg-gray-100' },
-  { id: 'running', title: '运行中', color: 'bg-blue-100' },
-  { id: 'completed', title: '已完成', color: 'bg-green-100' },
-  { id: 'failed', title: '失败', color: 'bg-red-100' },
+const columnDefs = [
+  { id: 'pending', titleKey: 'column.pending', color: 'bg-gray-100' },
+  { id: 'in_progress', titleKey: 'column.running', color: 'bg-blue-100' },
+  { id: 'completed', titleKey: 'column.completed', color: 'bg-green-100' },
+  { id: 'failed', titleKey: 'column.failed', color: 'bg-red-100' },
 ]
 
-const TIME_RANGES = [
-  { label: '全部', value: '' },
-  { label: '今天', value: 'today' },
-  { label: '近7天', value: '7d' },
-  { label: '近30天', value: '30d' },
+const TIME_RANGE_KEYS = [
+  { labelKey: 'board.allTime', value: '' },
+  { labelKey: 'board.last24h', value: 'today' },
+  { labelKey: 'board.last7d', value: '7d' },
+  { labelKey: 'board.last30d', value: '30d' },
 ]
 
 function getSinceDate(range: string): string {
@@ -51,6 +52,7 @@ function getSinceDate(range: string): string {
 const PAGE_SIZE = 20
 
 export default function Home() {
+  const { t } = useTranslation('tasks')
   const [tasks, setTasks] = useState<Task[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -158,7 +160,7 @@ export default function Home() {
   }
 
   return (
-    <AdminLayout title="任务看板" onRefresh={fetchTasks} loading={loading}>
+    <AdminLayout title={t('board.title')} onRefresh={fetchTasks} loading={loading}>
       <div className="flex flex-col md:flex-row h-[calc(100vh-120px)] md:h-[calc(100vh-120px)]">
         {/* 主看板区域 - 移动端详情面板打开时隐藏 */}
         <div className={`flex-1 overflow-hidden flex flex-col min-w-0 ${
@@ -168,15 +170,15 @@ export default function Home() {
           <div className="mb-3 sm:mb-4 flex flex-col gap-2 flex-shrink-0">
             <div className="flex items-center justify-between">
               <p className="text-sm text-gray-500">
-                共 {total} 个任务{search && <span>，搜索: &quot;{search}&quot;</span>}
+                {t('board.total', { count: total })}{search && <span>，{t('action.search', { ns: 'common' })}: &quot;{search}&quot;</span>}
               </p>
               <button
                 onClick={() => setShowCreateModal(true)}
                 className="flex items-center gap-2 px-3 py-2 sm:px-4 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-sm"
               >
                 <Plus className="w-4 h-4" />
-                <span className="hidden sm:inline">新建任务</span>
-                <span className="sm:hidden">新建</span>
+                <span className="hidden sm:inline">{t('board.newTask')}</span>
+                <span className="sm:hidden">{t('board.newTask')}</span>
               </button>
             </div>
             <div className="flex items-center gap-2">
@@ -187,7 +189,7 @@ export default function Home() {
                   value={searchInput}
                   onChange={e => setSearchInput(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleSearch()}
-                  placeholder="搜索任务..."
+                  placeholder={t('board.searchPlaceholder')}
                   className="w-full pl-8 pr-8 py-1.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 {searchInput && (
@@ -197,7 +199,7 @@ export default function Home() {
                 )}
               </div>
               <div className="flex gap-1">
-                {TIME_RANGES.map(r => (
+                {TIME_RANGE_KEYS.map(r => (
                   <button
                     key={r.value}
                     onClick={() => { setTimeRange(r.value); setColumnLimits({}) }}
@@ -207,7 +209,7 @@ export default function Home() {
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
                   >
-                    {r.label}
+                    {t(r.labelKey)}
                   </button>
                 ))}
               </div>
@@ -226,9 +228,9 @@ export default function Home() {
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
-                全部 ({tasks.length})
+                {t('board.allTime', { ns: 'tasks' })} ({tasks.length})
               </button>
-              {columns.map(col => {
+              {columnDefs.map(col => {
                 const count = getTasksByStatus(col.id).length
                 return (
                   <button
@@ -240,7 +242,7 @@ export default function Home() {
                         : `${col.color} text-gray-700 hover:opacity-80`
                     }`}
                   >
-                    {col.title} ({count})
+                    {t(col.titleKey)} ({count})
                   </button>
                 )
               })}
@@ -253,7 +255,7 @@ export default function Home() {
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
                 </div>
               ) : filteredTasks.length === 0 ? (
-                <div className="text-center py-8 text-sm text-gray-400">暂无任务</div>
+                <div className="text-center py-8 text-sm text-gray-400">{t('board.noTasks')}</div>
               ) : (
                 filteredTasks.map(task => (
                   <div key={task.id}>
@@ -283,14 +285,14 @@ export default function Home() {
               </div>
             ) : (
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4 h-full overflow-auto pb-4 touch-scroll">
-                {columns.map(col => {
+                {columnDefs.map(col => {
                   const allTasks = getTasksByStatus(col.id)
                   const visible = getVisibleTasks(col.id)
                   const hasMore = visible.length < allTasks.length
                   return (
                     <div key={col.id} className="flex flex-col min-h-0">
                       <KanbanColumn
-                        title={col.title}
+                        title={t(col.titleKey)}
                         status={col.id}
                         tasks={visible}
                         color={col.color}
@@ -306,7 +308,7 @@ export default function Home() {
                           onClick={() => showMore(col.id)}
                           className="mt-1 w-full py-1.5 text-xs text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                         >
-                          加载更多（还有 {allTasks.length - visible.length} 条）
+                          {t('action.loadMore', { ns: 'common' })} ({allTasks.length - visible.length})
                         </button>
                       )}
                     </div>

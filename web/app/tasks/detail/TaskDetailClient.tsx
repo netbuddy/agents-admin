@@ -4,6 +4,8 @@ import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Play, Square, RefreshCw, Terminal, FileText, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
+import { useTranslation } from 'react-i18next'
+import { useFormatDate } from '@/i18n/useFormatDate'
 
 interface Task {
   id: string
@@ -56,6 +58,8 @@ const eventTypeColors: Record<string, string> = {
 }
 
 export default function TaskDetailClient({ taskId }: { taskId: string }) {
+  const { t } = useTranslation('tasks')
+  const { formatDateTime } = useFormatDate()
   const router = useRouter()
   
   const [task, setTask] = useState<Task | null>(null)
@@ -198,8 +202,8 @@ export default function TaskDetailClient({ taskId }: { taskId: string }) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <h2 className="text-xl font-semibold mb-2">任务不存在</h2>
-          <Link href="/" className="text-blue-600 hover:underline">返回首页</Link>
+          <h2 className="text-xl font-semibold mb-2">{t('detail.notFound')}</h2>
+          <Link href="/" className="text-blue-600 hover:underline">{t('detail.goHome')}</Link>
         </div>
       </div>
     )
@@ -215,7 +219,7 @@ export default function TaskDetailClient({ taskId }: { taskId: string }) {
           <div className="flex-1 min-w-0">
             <h1 className="text-base sm:text-xl font-semibold truncate">{task.name}</h1>
             <p className="text-xs sm:text-sm text-gray-500 truncate">
-              {task.spec?.agent?.type || 'unknown'} · 创建于 {new Date(task.created_at).toLocaleString('zh-CN')}
+              {task.spec?.agent?.type || 'unknown'} · {t('detail.createdAt')} {formatDateTime(task.created_at)}
             </p>
           </div>
           <button
@@ -223,7 +227,7 @@ export default function TaskDetailClient({ taskId }: { taskId: string }) {
             className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm flex-shrink-0"
           >
             <Play className="w-4 h-4" />
-            <span className="hidden sm:inline">新建 Run</span>
+            <span className="hidden sm:inline">{t('detail.newRun')}</span>
             <span className="sm:hidden">Run</span>
           </button>
         </div>
@@ -234,14 +238,14 @@ export default function TaskDetailClient({ taskId }: { taskId: string }) {
             className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-gray-100 rounded-lg text-sm"
           >
             <FileText className="w-4 h-4" />
-            运行记录 ({runs.length})
+            {t('detail.runHistory', { count: runs.length })}
           </button>
           <button
             onClick={() => setShowConfigPanel(!showConfigPanel)}
             className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-gray-100 rounded-lg text-sm"
           >
             <Terminal className="w-4 h-4" />
-            任务配置
+            {t('detail.taskConfig')}
           </button>
         </div>
       </header>
@@ -263,7 +267,7 @@ export default function TaskDetailClient({ taskId }: { taskId: string }) {
                   <span className="font-medium text-sm truncate">{run.id.slice(-8)}</span>
                 </div>
                 <div className="text-xs text-gray-500">
-                  {new Date(run.created_at).toLocaleString('zh-CN')}
+                  {formatDateTime(run.created_at)}
                 </div>
                 {run.status === 'running' && (
                   <button
@@ -271,13 +275,13 @@ export default function TaskDetailClient({ taskId }: { taskId: string }) {
                     className="mt-2 flex items-center gap-1 text-xs text-red-600 hover:text-red-700"
                   >
                     <Square className="w-3 h-3" />
-                    取消
+                    {t('detail.cancelRun')}
                   </button>
                 )}
               </button>
             ))}
             {runs.length === 0 && (
-              <div className="p-4 text-sm text-gray-500 text-center">暂无运行记录</div>
+              <div className="p-4 text-sm text-gray-500 text-center">{t('detail.noRuns')}</div>
             )}
           </div>
         </div>
@@ -307,7 +311,7 @@ export default function TaskDetailClient({ taskId }: { taskId: string }) {
         {/* 桌面端运行记录侧栏 */}
         <aside className="hidden md:block w-56 lg:w-64 bg-white border-r overflow-y-auto touch-scroll flex-shrink-0">
           <div className="p-4 border-b">
-            <h2 className="font-semibold text-sm text-gray-500">运行记录 ({runs.length})</h2>
+            <h2 className="font-semibold text-sm text-gray-500">{t('detail.runHistory', { count: runs.length })}</h2>
           </div>
           <div className="divide-y">
             {runs.map(run => (
@@ -323,7 +327,7 @@ export default function TaskDetailClient({ taskId }: { taskId: string }) {
                   <span className="font-medium text-sm truncate">{run.id.slice(-8)}</span>
                 </div>
                 <div className="text-xs text-gray-500">
-                  {new Date(run.created_at).toLocaleString('zh-CN')}
+                  {formatDateTime(run.created_at)}
                 </div>
                 {run.status === 'running' && (
                   <button
@@ -331,14 +335,14 @@ export default function TaskDetailClient({ taskId }: { taskId: string }) {
                     className="mt-2 flex items-center gap-1 text-xs text-red-600 hover:text-red-700"
                   >
                     <Square className="w-3 h-3" />
-                    取消
+                    {t('detail.cancelRun')}
                   </button>
                 )}
               </button>
             ))}
             {runs.length === 0 && (
               <div className="p-4 text-sm text-gray-500 text-center">
-                暂无运行记录
+                {t('detail.noRuns')}
               </div>
             )}
           </div>
@@ -362,19 +366,19 @@ export default function TaskDetailClient({ taskId }: { taskId: string }) {
                   {wsConnected && (
                     <span className="hidden sm:flex items-center gap-1 text-xs text-green-600">
                       <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                      实时连接
+                      {t('detail.liveConnection')}
                     </span>
                   )}
                 </div>
                 <div className="text-xs sm:text-sm text-gray-500 hidden sm:block">
-                  {selectedRun.node_id && `节点: ${selectedRun.node_id}`}
+                  {selectedRun.node_id && `${t('detail.executionNode')}: ${selectedRun.node_id}`}
                 </div>
               </div>
 
               <div className="flex-1 overflow-y-auto p-2 sm:p-4 bg-gray-900 font-mono text-xs sm:text-sm touch-scroll">
                 {events.length === 0 ? (
                   <div className="text-gray-500 text-center py-8">
-                    等待事件...
+                    {t('detail.waitingEvents')}
                   </div>
                 ) : (
                   <div className="space-y-1 sm:space-y-2">
@@ -410,7 +414,7 @@ export default function TaskDetailClient({ taskId }: { taskId: string }) {
                 <div className="bg-red-50 border-t border-red-200 px-3 sm:px-4 py-3">
                   <div className="flex items-center gap-2 text-red-800">
                     <XCircle className="w-4 h-4" />
-                    <span className="font-medium text-sm">错误</span>
+                    <span className="font-medium text-sm">{t('detail.error')}</span>
                   </div>
                   <p className="text-red-700 text-sm mt-1">{selectedRun.error}</p>
                 </div>
@@ -418,7 +422,7 @@ export default function TaskDetailClient({ taskId }: { taskId: string }) {
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">
-              选择一个 Run 查看详情
+              {t('detail.selectRun')}
             </div>
           )}
         </main>
@@ -426,7 +430,7 @@ export default function TaskDetailClient({ taskId }: { taskId: string }) {
         {/* 桌面端配置侧栏 */}
         <aside className="hidden lg:block w-72 xl:w-80 bg-white border-l overflow-y-auto touch-scroll flex-shrink-0">
           <div className="p-4 border-b">
-            <h2 className="font-semibold text-sm text-gray-500">任务配置</h2>
+            <h2 className="font-semibold text-sm text-gray-500">{t('detail.taskConfig')}</h2>
           </div>
           <div className="p-4 space-y-4">
             <div>

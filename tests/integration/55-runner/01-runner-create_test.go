@@ -102,7 +102,7 @@ func cleanupAccount(accountID string) {
 // cleanupInstance 清理测试实例
 func cleanupInstance(instanceID string) {
 	ctx := context.Background()
-	testStore.DeleteInstance(ctx, instanceID)
+	testStore.DeleteAgentInstance(ctx, instanceID)
 }
 
 // ============================================================================
@@ -120,10 +120,10 @@ func TestRunnerCreate_Basic(t *testing.T) {
 	accountID := createTestAccount(t, "basic", model.AccountStatusAuthenticated, true)
 	defer cleanupAccount(accountID)
 
-	// 步骤：POST /api/v1/instances
+	// 步骤：POST /api/v1/agents
 	createBody := `{"account_id": "` + accountID + `", "name": "test-runner"}`
 	resp, err := http.Post(
-		testServer.URL+"/api/v1/instances",
+		testServer.URL+"/api/v1/agents",
 		"application/json",
 		bytes.NewBufferString(createBody),
 	)
@@ -175,7 +175,7 @@ func TestRunnerCreate_Basic(t *testing.T) {
 	}
 
 	// 验证 DB: instances 表存在记录
-	instance, err := testStore.GetInstance(ctx, instanceID)
+	instance, err := testStore.GetAgentInstance(ctx, instanceID)
 	if err != nil {
 		t.Fatalf("TC-RUNNER-CREATE-001: 查询数据库失败: %v", err)
 	}
@@ -212,7 +212,7 @@ func TestRunnerCreate_AccountNotFound(t *testing.T) {
 
 	createBody := `{"account_id": "not-exist-account-xxx"}`
 	resp, err := http.Post(
-		testServer.URL+"/api/v1/instances",
+		testServer.URL+"/api/v1/agents",
 		"application/json",
 		bytes.NewBufferString(createBody),
 	)
@@ -250,7 +250,7 @@ func TestRunnerCreate_AccountNotAuthenticated(t *testing.T) {
 
 	createBody := `{"account_id": "` + accountID + `"}`
 	resp, err := http.Post(
-		testServer.URL+"/api/v1/instances",
+		testServer.URL+"/api/v1/agents",
 		"application/json",
 		bytes.NewBufferString(createBody),
 	)
@@ -287,7 +287,7 @@ func TestRunnerCreate_AccountNoVolume(t *testing.T) {
 
 	createBody := `{"account_id": "` + accountID + `"}`
 	resp, err := http.Post(
-		testServer.URL+"/api/v1/instances",
+		testServer.URL+"/api/v1/agents",
 		"application/json",
 		bytes.NewBufferString(createBody),
 	)
@@ -320,7 +320,7 @@ func TestRunnerCreate_MissingAccountID(t *testing.T) {
 
 	createBody := `{}`
 	resp, err := http.Post(
-		testServer.URL+"/api/v1/instances",
+		testServer.URL+"/api/v1/agents",
 		"application/json",
 		bytes.NewBufferString(createBody),
 	)
@@ -358,7 +358,7 @@ func TestRunnerCreate_DefaultNodeID(t *testing.T) {
 
 	createBody := `{"account_id": "` + accountID + `"}`
 	resp, err := http.Post(
-		testServer.URL+"/api/v1/instances",
+		testServer.URL+"/api/v1/agents",
 		"application/json",
 		bytes.NewBufferString(createBody),
 	)
@@ -378,7 +378,7 @@ func TestRunnerCreate_DefaultNodeID(t *testing.T) {
 	defer cleanupInstance(instanceID)
 
 	// 验证 DB: node_id = 账号的 node_id (node-test-001)
-	instance, _ := testStore.GetInstance(ctx, instanceID)
+	instance, _ := testStore.GetAgentInstance(ctx, instanceID)
 	if instance == nil {
 		t.Fatalf("TC-RUNNER-CREATE-006: DB 中不存在记录")
 	}
@@ -405,7 +405,7 @@ func TestRunnerGet(t *testing.T) {
 
 	// 先创建
 	createBody := `{"account_id": "` + accountID + `"}`
-	createResp, _ := http.Post(testServer.URL+"/api/v1/instances", "application/json", bytes.NewBufferString(createBody))
+	createResp, _ := http.Post(testServer.URL+"/api/v1/agents", "application/json", bytes.NewBufferString(createBody))
 	var created map[string]interface{}
 	json.NewDecoder(createResp.Body).Decode(&created)
 	createResp.Body.Close()
@@ -413,7 +413,7 @@ func TestRunnerGet(t *testing.T) {
 	defer cleanupInstance(instanceID)
 
 	// GET
-	resp, err := http.Get(testServer.URL + "/api/v1/instances/" + instanceID)
+	resp, err := http.Get(testServer.URL + "/api/v1/agents/" + instanceID)
 	if err != nil {
 		t.Fatalf("TC-RUNNER-GET: HTTP 请求失败: %v", err)
 	}
@@ -441,7 +441,7 @@ func TestRunnerGet_NotFound(t *testing.T) {
 		t.Skip("Database not available")
 	}
 
-	resp, err := http.Get(testServer.URL + "/api/v1/instances/not-exist-inst")
+	resp, err := http.Get(testServer.URL + "/api/v1/agents/not-exist-inst")
 	if err != nil {
 		t.Fatalf("TC-RUNNER-GET-NOTFOUND: HTTP 请求失败: %v", err)
 	}
@@ -468,14 +468,14 @@ func TestRunnerDelete(t *testing.T) {
 
 	// 先创建
 	createBody := `{"account_id": "` + accountID + `"}`
-	createResp, _ := http.Post(testServer.URL+"/api/v1/instances", "application/json", bytes.NewBufferString(createBody))
+	createResp, _ := http.Post(testServer.URL+"/api/v1/agents", "application/json", bytes.NewBufferString(createBody))
 	var created map[string]interface{}
 	json.NewDecoder(createResp.Body).Decode(&created)
 	createResp.Body.Close()
 	instanceID := created["id"].(string)
 
 	// DELETE
-	req, _ := http.NewRequest("DELETE", testServer.URL+"/api/v1/instances/"+instanceID, nil)
+	req, _ := http.NewRequest("DELETE", testServer.URL+"/api/v1/agents/"+instanceID, nil)
 	delResp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("TC-RUNNER-DELETE-001: DELETE 请求失败: %v", err)
@@ -488,14 +488,14 @@ func TestRunnerDelete(t *testing.T) {
 	}
 
 	// 验证 DB 已删除
-	instance, _ := testStore.GetInstance(ctx, instanceID)
+	instance, _ := testStore.GetAgentInstance(ctx, instanceID)
 	if instance != nil {
 		t.Errorf("TC-RUNNER-DELETE-001: DB 中仍存在已删除的记录")
 		cleanupInstance(instanceID)
 	}
 
 	// 再次 GET 应返回 404
-	getResp, err := http.Get(testServer.URL + "/api/v1/instances/" + instanceID)
+	getResp, err := http.Get(testServer.URL + "/api/v1/agents/" + instanceID)
 	if err != nil {
 		t.Fatalf("TC-RUNNER-DELETE-001: GET 请求失败: %v", err)
 	}

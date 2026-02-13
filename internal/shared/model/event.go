@@ -140,13 +140,13 @@ const (
 //   - Payload：事件数据（JSON）
 //   - Raw：原始输出（可选，用于调试）
 type Event struct {
-	ID        int64           `json:"id" db:"id"`                     // 事件 ID
-	RunID     string          `json:"run_id" db:"run_id"`             // 所属 Run ID
-	Seq       int             `json:"seq" db:"seq"`                   // 事件序号
-	Type      string          `json:"type" db:"type"`                 // 事件类型
-	Timestamp time.Time       `json:"timestamp" db:"timestamp"`       // 事件时间
-	Payload   json.RawMessage `json:"payload,omitempty" db:"payload"` // 事件数据
-	Raw       *string         `json:"raw,omitempty" db:"raw"`         // 原始输出
+	ID        int64           `json:"id" bson:"id" db:"id"`                                    // 事件 ID（SQL 自增；MongoDB 自动生成 _id）
+	RunID     string          `json:"run_id" bson:"run_id" db:"run_id"`                        // 所属 Run ID
+	Seq       int             `json:"seq" bson:"seq" db:"seq"`                                 // 事件序号
+	Type      string          `json:"type" bson:"type" db:"type"`                              // 事件类型
+	Timestamp time.Time       `json:"timestamp" bson:"timestamp" db:"timestamp"`               // 事件时间
+	Payload   json.RawMessage `json:"payload,omitempty" bson:"payload,omitempty" db:"payload"` // 事件数据
+	Raw       *string         `json:"raw,omitempty" bson:"raw,omitempty" db:"raw"`             // 原始输出
 }
 
 // ============================================================================

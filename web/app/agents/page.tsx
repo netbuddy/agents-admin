@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import {
   Bot, Plus, Search, Filter, ChevronRight, X, Trash2, Play, Square,
   Terminal, Cpu, Sparkles, BookOpen, Shield, Tag, RefreshCw, Zap,
@@ -8,6 +8,8 @@ import {
 } from 'lucide-react'
 import { AdminLayout } from '@/components/layout'
 import { AGENT_TYPE_CONFIGS, getAgentTypeConfig, getAgentTypeOptions } from '@/lib/agent-models'
+import { useTranslation } from 'react-i18next'
+import { useFormatDate } from '@/i18n/useFormatDate'
 
 // ============================================================================
 // Types
@@ -59,6 +61,13 @@ interface Instance {
   created_at: string
 }
 
+interface Node {
+  id: string
+  display_name?: string
+  hostname?: string
+  status: string
+}
+
 interface TerminalSession {
   id: string
   url?: string | null
@@ -87,21 +96,24 @@ function getTypeColor(type: string) {
 // ============================================================================
 
 export default function AgentsPage() {
+  const { t } = useTranslation('agents')
   const [activeTab, setActiveTab] = useState<'templates' | 'agents'>('agents')
   const [templates, setTemplates] = useState<AgentTemplate[]>([])
   const [instances, setInstances] = useState<Instance[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
   const [agentTypes, setAgentTypes] = useState<AgentType[]>([])
+  const [nodes, setNodes] = useState<Node[]>([])
   const [loading, setLoading] = useState(true)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const [tmplRes, instRes, accRes, typesRes] = await Promise.all([
+      const [tmplRes, instRes, accRes, typesRes, nodesRes] = await Promise.all([
         fetch('/api/v1/agent-templates'),
-        fetch('/api/v1/instances'),
+        fetch('/api/v1/agents'),
         fetch('/api/v1/accounts'),
         fetch('/api/v1/agent-types'),
+        fetch('/api/v1/nodes'),
       ])
       if (tmplRes.ok) {
         const data = await tmplRes.json()
@@ -109,7 +121,7 @@ export default function AgentsPage() {
       }
       if (instRes.ok) {
         const data = await instRes.json()
-        setInstances(data.instances || [])
+        setInstances(data.agents || [])
       }
       if (accRes.ok) {
         const data = await accRes.json()
@@ -118,6 +130,10 @@ export default function AgentsPage() {
       if (typesRes.ok) {
         const data = await typesRes.json()
         setAgentTypes(data.agent_types || [])
+      }
+      if (nodesRes.ok) {
+        const data = await nodesRes.json()
+        setNodes((data.nodes || []).filter((n: Node) => n.status === 'online'))
       }
     } catch (err) {
       console.error('Failed to fetch data:', err)
@@ -130,8 +146,24 @@ export default function AgentsPage() {
     fetchData()
   }, [fetchData])
 
+  // 有过渡态实例时自动轮询（3 秒间隔）
+  const hasTransitional = instances.some(i => ['pending', 'creating', 'stopping'].includes(i.status))
+  useEffect(() => {
+    if (!hasTransitional) return
+    const timer = setInterval(async () => {
+      try {
+        const res = await fetch('/api/v1/agents')
+        if (res.ok) {
+          const data = await res.json()
+          setInstances(data.agents || [])
+        }
+      } catch {}
+    }, 3000)
+    return () => clearInterval(timer)
+  }, [hasTransitional])
+
   return (
-    <AdminLayout title="智能体" onRefresh={fetchData} loading={loading}>
+    <AdminLayout title={t('title')} onRefresh={fetchData} loading={loading}>
       {/* Tab 切换 */}
       <div className="flex items-center gap-1 mb-5 border-b border-gray-200">
         <button
@@ -144,7 +176,7 @@ export default function AgentsPage() {
         >
           <div className="flex items-center gap-2">
             <Bot className="w-4 h-4" />
-            智能体实例
+            {t('tab.agents')}
           </div>
         </button>
         <button
@@ -157,7 +189,7 @@ export default function AgentsPage() {
         >
           <div className="flex items-center gap-2">
             <BookOpen className="w-4 h-4" />
-            模板库
+            {t('tab.templates')}
           </div>
         </button>
       </div>
@@ -168,6 +200,7 @@ export default function AgentsPage() {
           accounts={accounts}
           agentTypes={agentTypes}
           templates={templates}
+          nodes={nodes}
           loading={loading}
           onRefresh={fetchData}
         />
@@ -187,15 +220,17 @@ export default function AgentsPage() {
 // ============================================================================
 
 function AgentsTab({
-  instances, accounts, agentTypes, templates, loading, onRefresh
+  instances, accounts, agentTypes, templates, nodes, loading, onRefresh
 }: {
   instances: Instance[]
   accounts: Account[]
   agentTypes: AgentType[]
   templates: AgentTemplate[]
+  nodes: Node[]
   loading: boolean
   onRefresh: () => void
 }) {
+  const { t } = useTranslation('agents')
   const [showCreate, setShowCreate] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [terminalSession, setTerminalSession] = useState<TerminalSession | null>(null)
@@ -204,18 +239,18 @@ function AgentsTab({
   const getTypeName = (id: string) => agentTypes.find(t => t.id === id)?.name || id
 
   const startInstance = async (id: string) => {
-    await fetch(`/api/v1/instances/${id}/start`, { method: 'POST' })
+    await fetch(`/api/v1/agents/${id}/start`, { method: 'POST' })
     onRefresh()
   }
 
   const stopInstance = async (id: string) => {
-    await fetch(`/api/v1/instances/${id}/stop`, { method: 'POST' })
+    await fetch(`/api/v1/agents/${id}/stop`, { method: 'POST' })
     onRefresh()
   }
 
   const deleteInstance = async (id: string) => {
-    if (!confirm('确定要删除此智能体？')) return
-    await fetch(`/api/v1/instances/${id}`, { method: 'DELETE' })
+    if (!confirm(t('confirmDeleteAgent'))) return
+    await fetch(`/api/v1/agents/${id}`, { method: 'DELETE' })
     onRefresh()
   }
 
@@ -226,7 +261,7 @@ function AgentsTab({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ instance_id: inst.id }),
       })
-      if (!res.ok) { alert('无法打开终端'); return }
+      if (!res.ok) { alert(t('terminalError')); return }
       const data = await res.json()
       setTerminalSession({ id: data.id, status: data.status || 'pending', port: data.port ?? null, url: data.url ?? null })
 
@@ -246,7 +281,7 @@ function AgentsTab({
       }
       throw new Error('terminal timeout')
     } catch {
-      alert('终端启动失败或超时')
+      alert(t('terminalTimeout'))
       setTerminalSession(null)
     }
   }
@@ -264,12 +299,14 @@ function AgentsTab({
 
   const selected = selectedId ? instances.find(i => i.id === selectedId) : null
 
-  const createInstance = async (accountId: string, name: string) => {
+  const createInstance = async (accountId: string, name: string, nodeId: string, templateId?: string) => {
     try {
-      const res = await fetch('/api/v1/instances', {
+      const body: Record<string, string> = { account_id: accountId, name, node_id: nodeId }
+      if (templateId) body.template_id = templateId
+      const res = await fetch('/api/v1/agents', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ account_id: accountId, name }),
+        body: JSON.stringify(body),
       })
       if (res.ok) {
         onRefresh()
@@ -285,17 +322,17 @@ function AgentsTab({
       {/* 统计 + 创建按钮 */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <StatBadge label="总计" value={instances.length} color="text-gray-900" />
-          <StatBadge label="运行中" value={runningCount} color="text-green-600" />
-          <StatBadge label="已停止" value={stoppedCount} color="text-gray-500" />
-          {pendingCount > 0 && <StatBadge label="创建中" value={pendingCount} color="text-blue-600" />}
+          <StatBadge label={t('stats.total')} value={instances.length} color="text-gray-900" />
+          <StatBadge label={t('stats.running')} value={runningCount} color="text-green-600" />
+          <StatBadge label={t('stats.stopped')} value={stoppedCount} color="text-gray-500" />
+          {pendingCount > 0 && <StatBadge label={t('stats.creating')} value={pendingCount} color="text-blue-600" />}
         </div>
         <button
           onClick={() => setShowCreate(true)}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
         >
           <Plus className="w-4 h-4" />
-          创建智能体
+          {t('createAgent')}
         </button>
       </div>
 
@@ -306,9 +343,9 @@ function AgentsTab({
       ) : instances.length === 0 ? (
         <EmptyState
           icon={Bot}
-          title="暂无智能体"
-          description="创建一个智能体开始使用，它将基于 AI Agent 模板运行"
-          action={<button onClick={() => setShowCreate(true)} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">创建智能体</button>}
+          title={t('noAgents')}
+          description={t('noAgentsHint')}
+          action={<button onClick={() => setShowCreate(true)} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">{t('createAgent')}</button>}
         />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
@@ -347,6 +384,8 @@ function AgentsTab({
         <CreateAgentWizard
           agentTypes={agentTypes}
           accounts={accounts}
+          templates={templates}
+          nodes={nodes}
           onClose={() => setShowCreate(false)}
           onCreate={createInstance}
         />
@@ -376,10 +415,12 @@ function AgentCard({
   onDelete: () => void
   onClick: () => void
 }) {
+  const { t } = useTranslation('agents')
   const isRunning = instance.status === 'running'
   const isPending = instance.status === 'pending' || instance.status === 'creating'
+  const isStarting = isPending && !!instance.container_name
   const statusColor = isRunning ? 'bg-green-500' : isPending ? 'bg-blue-500' : instance.status === 'error' ? 'bg-red-500' : 'bg-gray-400'
-  const statusLabel = isRunning ? '运行中' : isPending ? '创建中' : instance.status === 'stopping' ? '停止中' : instance.status === 'error' ? '错误' : '已停止'
+  const statusLabel = isRunning ? t('statusRunning') : isStarting ? t('statusStarting') : isPending ? t('statusCreating') : instance.status === 'stopping' ? t('statusStopping') : instance.status === 'error' ? t('statusError') : t('statusStopped')
   const typeColor = getTypeColor(instance.agent_type_id.includes('qwen') ? 'qwen' : instance.agent_type_id.includes('codex') ? 'codex' : 'custom')
 
   return (
@@ -405,8 +446,8 @@ function AgentCard({
 
       {/* Info */}
       <div className="space-y-1 text-xs text-gray-500 mb-3">
-        <p>账号: {accountName}</p>
-        <p>节点: {instance.node_id || '-'}</p>
+        <p>{t('account')}: {accountName}</p>
+        <p>{t('node')}: {instance.node_id || '-'}</p>
       </div>
 
       {/* Actions */}
@@ -415,23 +456,23 @@ function AgentCard({
           <>
             <button onClick={onTerminal} className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 text-sm">
               <Terminal className="w-4 h-4" />
-              终端
+              {t('terminal')}
             </button>
             <button onClick={onStop} className="flex items-center justify-center gap-1 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm">
               <Square className="w-4 h-4" />
-              停止
+              {t('stop')}
             </button>
           </>
         ) : isPending ? (
           <div className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-blue-50 text-blue-600 rounded-lg text-sm">
             <RefreshCw className="w-4 h-4 animate-spin" />
-            正在创建...
+            {isStarting ? t('startingProgress') : t('creatingProgress')}
           </div>
         ) : (
           <>
             <button onClick={onStart} className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 text-sm">
               <Play className="w-4 h-4" />
-              启动
+              {t('start')}
             </button>
             <button onClick={onDelete} className="flex items-center justify-center gap-1 px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 text-sm">
               <Trash2 className="w-4 h-4" />
@@ -459,6 +500,8 @@ function AgentDetail({
   onTerminal: () => void
   onDelete: () => void
 }) {
+  const { t } = useTranslation('agents')
+  const { formatDateTime } = useFormatDate()
   const isRunning = instance.status === 'running'
 
   return (
@@ -482,14 +525,14 @@ function AgentDetail({
 
         <div className="p-5 space-y-5">
           <div>
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">基本信息</h3>
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">{t('detail.basicInfo')}</h3>
             <div className="grid grid-cols-2 gap-3">
-              <InfoItem label="ID" value={instance.id} />
-              <InfoItem label="状态" value={instance.status} />
-              <InfoItem label="账号" value={accountName} />
-              <InfoItem label="节点" value={instance.node_id || '-'} />
-              <InfoItem label="容器" value={instance.container_name || '-'} />
-              <InfoItem label="创建时间" value={new Date(instance.created_at).toLocaleString('zh-CN')} />
+              <InfoItem label={t('detail.id')} value={instance.id} />
+              <InfoItem label={t('detail.status')} value={instance.status} />
+              <InfoItem label={t('detail.account')} value={accountName} />
+              <InfoItem label={t('detail.node')} value={instance.node_id || '-'} />
+              <InfoItem label={t('detail.container')} value={instance.container_name || '-'} />
+              <InfoItem label={t('detail.createdAt')} value={formatDateTime(instance.created_at)} />
             </div>
           </div>
 
@@ -498,22 +541,22 @@ function AgentDetail({
               <>
                 <button onClick={onTerminal} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
                   <Terminal className="w-4 h-4" />
-                  打开终端
+                  {t('openTerminal')}
                 </button>
                 <button onClick={onStop} className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm">
                   <Square className="w-4 h-4" />
-                  停止
+                  {t('stop')}
                 </button>
               </>
             ) : (
               <>
                 <button onClick={onStart} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm">
                   <Play className="w-4 h-4" />
-                  启动
+                  {t('start')}
                 </button>
                 <button onClick={onDelete} className="flex items-center justify-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg text-sm">
                   <Trash2 className="w-4 h-4" />
-                  删除
+                  {t('action.delete', { ns: 'common' })}
                 </button>
               </>
             )}
@@ -535,6 +578,7 @@ function TemplatesTab({
   loading: boolean
   onRefresh: () => void
 }) {
+  const { t } = useTranslation('agents')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState<AgentTemplate | null>(null)
@@ -551,7 +595,7 @@ function TemplatesTab({
   const selected = selectedId ? templates.find(t => t.id === selectedId) : null
 
   const deleteTemplate = async (id: string) => {
-    if (!confirm('确定要删除此模板？')) return
+    if (!confirm(t('confirmDeleteTemplate'))) return
     await fetch(`/api/v1/agent-templates/${id}`, { method: 'DELETE' })
     onRefresh()
     setSelectedId(null)
@@ -562,9 +606,9 @@ function TemplatesTab({
       {/* 统计 + 操作 */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <StatBadge label="总计" value={templates.length} color="text-gray-900" />
-          <StatBadge label="内置" value={builtinCount} color="text-blue-600" />
-          <StatBadge label="自定义" value={customCount} color="text-purple-600" />
+          <StatBadge label={t('stats.total')} value={templates.length} color="text-gray-900" />
+          <StatBadge label={t('stats.builtin')} value={builtinCount} color="text-blue-600" />
+          <StatBadge label={t('stats.custom')} value={customCount} color="text-purple-600" />
         </div>
         <div className="flex items-center gap-2">
           <select
@@ -572,7 +616,7 @@ function TemplatesTab({
             onChange={e => setFilterType(e.target.value)}
             className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="">所有类型</option>
+            <option value="">{t('template.allTypes')}</option>
             {typeOptions.map(opt => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
@@ -582,7 +626,7 @@ function TemplatesTab({
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
           >
             <Plus className="w-4 h-4" />
-            创建模板
+            {t('template.createTemplate')}
           </button>
         </div>
       </div>
@@ -594,8 +638,8 @@ function TemplatesTab({
       ) : filtered.length === 0 ? (
         <EmptyState
           icon={BookOpen}
-          title="暂无模板"
-          description="系统预置了内置模板，首次使用请导入数据库初始化脚本"
+          title={t('template.noTemplates')}
+          description={t('template.noTemplatesHint')}
         />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
@@ -641,6 +685,7 @@ function TemplatesTab({
 // ============================================================================
 
 function TemplateCard({ template, onClick }: { template: AgentTemplate; onClick: () => void }) {
+  const { t } = useTranslation('agents')
   const color = getTypeColor(template.type)
   const skillCount = template.skills?.length || 0
 
@@ -658,7 +703,7 @@ function TemplateCard({ template, onClick }: { template: AgentTemplate; onClick:
             <div className="flex items-center gap-2">
               <h3 className="font-semibold text-gray-900 truncate">{template.name}</h3>
               {template.is_builtin && (
-                <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-medium rounded">内置</span>
+                <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-medium rounded">{t('template.builtin')}</span>
               )}
             </div>
             <p className="text-xs text-gray-500 mt-0.5">{template.role || template.type}</p>
@@ -680,7 +725,7 @@ function TemplateCard({ template, onClick }: { template: AgentTemplate; onClick:
         {skillCount > 0 && (
           <div className="flex items-center gap-1">
             <Zap className="w-3 h-3" />
-            <span>{skillCount} 技能</span>
+            <span>{skillCount} {t('template.skills')}</span>
           </div>
         )}
         {template.temperature !== undefined && template.temperature > 0 && (
@@ -702,6 +747,8 @@ function TemplateDetail({ template, onClose, onDelete, onEdit }: {
   onDelete: () => void
   onEdit: () => void
 }) {
+  const { t } = useTranslation('agents')
+  const { formatDateTime } = useFormatDate()
   const color = getTypeColor(template.type)
 
   return (
@@ -716,7 +763,7 @@ function TemplateDetail({ template, onClose, onDelete, onEdit }: {
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <h2 className="font-bold text-gray-900 truncate">{template.name}</h2>
-                {template.is_builtin && <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-medium rounded">内置</span>}
+                {template.is_builtin && <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-medium rounded">{t('template.builtin')}</span>}
               </div>
               <p className="text-xs text-gray-500">{template.role || template.type}</p>
             </div>
@@ -733,19 +780,19 @@ function TemplateDetail({ template, onClose, onDelete, onEdit }: {
 
           {/* 身份与性格 */}
           <div>
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">身份与运行参数</h3>
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">{t('template.identity')}</h3>
             <div className="grid grid-cols-2 gap-3">
-              <InfoItem label="模型类型" value={template.type} />
-              <InfoItem label="模型" value={template.model || '-'} />
-              <InfoItem label="温度" value={template.temperature?.toString() || '-'} />
-              <InfoItem label="上下文" value={template.max_context ? `${(template.max_context / 1000).toFixed(0)}K` : '-'} />
+              <InfoItem label={t('template.modelType')} value={template.type} />
+              <InfoItem label={t('template.model')} value={template.model || '-'} />
+              <InfoItem label={t('template.temperature')} value={template.temperature?.toString() || '-'} />
+              <InfoItem label={t('template.context')} value={template.max_context ? `${(template.max_context / 1000).toFixed(0)}K` : '-'} />
             </div>
           </div>
 
           {/* 性格 */}
           {template.personality && template.personality.length > 0 && (
             <div>
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">性格特征</h3>
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">{t('template.personality')}</h3>
               <div className="flex flex-wrap gap-2">
                 {template.personality.map((p, i) => (
                   <span key={i} className="px-2.5 py-1 rounded-full text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200">
@@ -759,7 +806,7 @@ function TemplateDetail({ template, onClose, onDelete, onEdit }: {
           {/* System Prompt */}
           {template.system_prompt && (
             <div>
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">系统提示词</h3>
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">{t('template.systemPrompt')}</h3>
               <div className="bg-gray-50 rounded-lg p-3">
                 <pre className="text-xs text-gray-600 whitespace-pre-wrap">{template.system_prompt}</pre>
               </div>
@@ -769,7 +816,7 @@ function TemplateDetail({ template, onClose, onDelete, onEdit }: {
           {/* Skills */}
           {template.skills && template.skills.length > 0 && (
             <div>
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">技能</h3>
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">{t('template.skills')}</h3>
               <div className="flex flex-wrap gap-2">
                 {template.skills.map((s, i) => (
                   <span key={i} className="px-2.5 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">
@@ -783,7 +830,7 @@ function TemplateDetail({ template, onClose, onDelete, onEdit }: {
           {/* Tags */}
           {template.tags && template.tags.length > 0 && (
             <div>
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">标签</h3>
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">{t('template.tags')}</h3>
               <div className="flex flex-wrap gap-2">
                 {template.tags.map((tag, i) => (
                   <span key={i} className="px-2.5 py-1 rounded-full text-xs bg-gray-100 text-gray-600">
@@ -797,17 +844,17 @@ function TemplateDetail({ template, onClose, onDelete, onEdit }: {
           {/* Actions */}
           <div className="border-t pt-4 flex items-center justify-between">
             <p className="text-xs text-gray-400">
-              创建于 {new Date(template.created_at).toLocaleString('zh-CN')}
+              {t('template.createdAt')} {formatDateTime(template.created_at)}
             </p>
             {!template.is_builtin && (
               <div className="flex items-center gap-2">
                 <button onClick={onEdit} className="flex items-center gap-2 px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg">
                   <Pencil className="w-4 h-4" />
-                  编辑
+                  {t('action.edit', { ns: 'common' })}
                 </button>
                 <button onClick={onDelete} className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg">
                   <Trash2 className="w-4 h-4" />
-                  删除
+                  {t('action.delete', { ns: 'common' })}
                 </button>
               </div>
             )}
@@ -822,65 +869,142 @@ function TemplateDetail({ template, onClose, onDelete, onEdit }: {
 // Create Agent Wizard (复用 Instance 创建流程)
 // ============================================================================
 
+// 模板类型 → 兼容的 agent_type_id 映射
+const TEMPLATE_TYPE_TO_AGENT_TYPES: Record<string, string[]> = {
+  qwen: ['qwen-code'],
+  codex: ['openai-codex'],
+  claude: ['claude-dev'],
+  gemini: ['gemini-dev'],
+}
+
 function CreateAgentWizard({
-  agentTypes, accounts, onClose, onCreate
+  agentTypes, accounts, templates, nodes, onClose, onCreate
 }: {
   agentTypes: AgentType[]
   accounts: Account[]
+  templates: AgentTemplate[]
+  nodes: Node[]
   onClose: () => void
-  onCreate: (accountId: string, name: string) => void
+  onCreate: (accountId: string, name: string, nodeId: string, templateId?: string) => void
 }) {
+  const { t } = useTranslation('agents')
   const [step, setStep] = useState(1)
+  const [mode, setMode] = useState<'generic' | 'template' | ''>('')
   const [selectedType, setSelectedType] = useState('')
+  const [selectedTemplate, setSelectedTemplate] = useState('')
   const [selectedAccount, setSelectedAccount] = useState('')
+  const [selectedNode, setSelectedNode] = useState(nodes.length === 1 ? nodes[0].id : '')
   const [name, setName] = useState('')
 
-  const filteredAccounts = accounts.filter(
-    a => a.agent_type === selectedType && a.status === 'authenticated'
-  )
+  // Step 1 选择后自动选定模式
+  const selectAgentType = (id: string) => {
+    setSelectedType(id)
+    setMode('generic')
+    setSelectedTemplate('')
+  }
+  const selectTemplate = (id: string) => {
+    setSelectedTemplate(id)
+    setMode('template')
+    setSelectedType('')
+  }
+
+  // 筛选兼容账号
+  const filteredAccounts = accounts.filter(a => {
+    if (a.status !== 'authenticated') return false
+    if (mode === 'generic') return a.agent_type === selectedType
+    if (mode === 'template') {
+      const tmpl = templates.find(t => t.id === selectedTemplate)
+      if (!tmpl) return false
+      const compatTypes = TEMPLATE_TYPE_TO_AGENT_TYPES[tmpl.type] || []
+      return compatTypes.includes(a.agent_type)
+    }
+    return false
+  })
+
+  const selectedTemplateName = templates.find(t => t.id === selectedTemplate)?.name
+  const selectedTypeName = agentTypes.find(at => at.id === selectedType)?.name
+
+  const canNext1 = mode === 'generic' ? !!selectedType : !!selectedTemplate
+  const canNext2 = !!selectedAccount
+  const canCreate = !!selectedNode
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50">
       <div className="bg-white rounded-t-2xl sm:rounded-xl w-full sm:max-w-lg p-5 sm:p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-semibold">创建智能体</h2>
+          <h2 className="text-lg font-semibold">{t('wizard.title')}</h2>
           <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-500">步骤 {step}/3</span>
+            <span className="text-sm text-gray-500">{t('wizard.step', { current: step })}</span>
             <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded">
               <X className="w-5 h-5 text-gray-400" />
             </button>
           </div>
         </div>
 
+        {/* Step 1: 选择类型或模板 */}
         {step === 1 && (
           <div>
-            <p className="text-sm text-gray-600 mb-4">选择 Agent 类型：</p>
-            <div className="grid grid-cols-2 gap-3">
-              {agentTypes.map(t => (
+            {/* 通用类型区域 */}
+            <p className="text-sm text-gray-600 mb-3">{t('wizard.selectType')}</p>
+            <div className="grid grid-cols-2 gap-3 mb-5">
+              {agentTypes.map(at => (
                 <button
-                  key={t.id}
-                  onClick={() => setSelectedType(t.id)}
+                  key={at.id}
+                  onClick={() => selectAgentType(at.id)}
                   className={`p-4 border rounded-xl text-left transition-all ${
-                    selectedType === t.id ? 'border-blue-500 bg-blue-50 shadow-sm' : 'hover:border-gray-300'
+                    mode === 'generic' && selectedType === at.id ? 'border-blue-500 bg-blue-50 shadow-sm' : 'hover:border-gray-300'
                   }`}
                 >
-                  <p className="font-medium">{t.name}</p>
-                  <p className="text-xs text-gray-500 mt-1">{t.description}</p>
+                  <p className="font-medium">{at.name}</p>
+                  <p className="text-xs text-gray-500 mt-1">{at.description}</p>
                 </button>
               ))}
             </div>
+
+            {/* 模板区域 */}
+            {templates.length > 0 && (
+              <>
+                <p className="text-sm text-gray-600 mb-3">{t('wizard.selectTemplate')}</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {templates.map(tmpl => {
+                    const color = getTypeColor(tmpl.type)
+                    return (
+                      <button
+                        key={tmpl.id}
+                        onClick={() => selectTemplate(tmpl.id)}
+                        className={`p-4 border rounded-xl text-left transition-all ${
+                          mode === 'template' && selectedTemplate === tmpl.id ? 'border-blue-500 bg-blue-50 shadow-sm' : 'hover:border-gray-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <Sparkles className={`w-4 h-4 ${color.text}`} />
+                          <p className="font-medium text-sm">{tmpl.name}</p>
+                        </div>
+                        <p className="text-xs text-gray-500">{tmpl.role || tmpl.type}</p>
+                        {tmpl.is_builtin && (
+                          <span className="mt-1 inline-block px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-medium rounded">{t('template.builtin')}</span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              </>
+            )}
           </div>
         )}
 
+        {/* Step 2: 选择账号 */}
         {step === 2 && (
           <div>
             <p className="text-sm text-gray-600 mb-4">
-              选择账号（{agentTypes.find(t => t.id === selectedType)?.name}）：
+              {t('wizard.selectAccount')} ({mode === 'generic' ? selectedTypeName : selectedTemplateName}):
             </p>
             {filteredAccounts.length === 0 ? (
               <div className="text-center py-8">
-                <p className="text-gray-500 mb-4">没有可用的已认证账号</p>
-                <a href="/accounts" className="text-blue-600 hover:underline text-sm">前往添加账号 →</a>
+                <p className="text-gray-500 mb-4">
+                  {mode === 'template' ? t('wizard.noCompatibleAccounts') : t('wizard.noAuthAccounts')}
+                </p>
+                <a href="/accounts" className="text-blue-600 hover:underline text-sm">{t('wizard.goAddAccount')}</a>
               </div>
             ) : (
               <div className="space-y-2">
@@ -893,7 +1017,7 @@ function CreateAgentWizard({
                     }`}
                   >
                     <p className="font-medium">{acc.name}</p>
-                    <p className="text-xs text-gray-500">已认证</p>
+                    <p className="text-xs text-gray-500">{t('wizard.authenticated')}</p>
                   </button>
                 ))}
               </div>
@@ -901,22 +1025,43 @@ function CreateAgentWizard({
           </div>
         )}
 
+        {/* Step 3: 配置（名称 + 节点 + 摘要） */}
         {step === 3 && (
           <div>
-            <p className="text-sm text-gray-600 mb-4">配置智能体：</p>
-            <div>
-              <label className="block text-sm font-medium mb-1">名称（可选）</label>
-              <input
-                type="text"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="留空将自动生成"
-              />
+            <p className="text-sm text-gray-600 mb-4">{t('wizard.configAgent')}</p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">{t('wizard.instanceName')}</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder={t('wizard.autoGenerate')}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">{t('detail.node')} *</label>
+                <select
+                  value={selectedNode}
+                  onChange={e => setSelectedNode(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">--</option>
+                  {nodes.map(n => (
+                    <option key={n.id} value={n.id}>{n.display_name || n.hostname || n.id}</option>
+                  ))}
+                </select>
+              </div>
             </div>
             <div className="mt-4 p-3 bg-gray-50 rounded-lg text-sm space-y-1">
-              <p><span className="text-gray-500">类型:</span> {agentTypes.find(t => t.id === selectedType)?.name}</p>
-              <p><span className="text-gray-500">账号:</span> {accounts.find(a => a.id === selectedAccount)?.name}</p>
+              {mode === 'generic' ? (
+                <p><span className="text-gray-500">{t('wizard.typeSummary')}:</span> {selectedTypeName}</p>
+              ) : (
+                <p><span className="text-gray-500">{t('wizard.templateSummary')}:</span> {selectedTemplateName}</p>
+              )}
+              <p><span className="text-gray-500">{t('wizard.accountSummary')}:</span> {accounts.find(a => a.id === selectedAccount)?.name}</p>
+              <p><span className="text-gray-500">{t('detail.node')}:</span> {nodes.find(n => n.id === selectedNode)?.display_name || nodes.find(n => n.id === selectedNode)?.hostname || selectedNode || '-'}</p>
             </div>
           </div>
         )}
@@ -926,22 +1071,23 @@ function CreateAgentWizard({
             onClick={() => step > 1 ? setStep(step - 1) : onClose()}
             className="px-4 py-2 border rounded-lg hover:bg-gray-100 text-sm"
           >
-            {step > 1 ? '上一步' : '取消'}
+            {step > 1 ? t('action.prevStep', { ns: 'common' }) : t('action.cancel', { ns: 'common' })}
           </button>
           {step < 3 ? (
             <button
               onClick={() => setStep(step + 1)}
-              disabled={(step === 1 && !selectedType) || (step === 2 && !selectedAccount)}
+              disabled={(step === 1 && !canNext1) || (step === 2 && !canNext2)}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm"
             >
-              下一步
+              {t('action.nextStep', { ns: 'common' })}
             </button>
           ) : (
             <button
-              onClick={() => onCreate(selectedAccount, name)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+              onClick={() => onCreate(selectedAccount, name, selectedNode, mode === 'template' ? selectedTemplate : undefined)}
+              disabled={!canCreate}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm"
             >
-              创建智能体
+              {t('createAgent')}
             </button>
           )}
         </div>
@@ -962,6 +1108,7 @@ function TemplateFormModal({
   onClose: () => void
   onSaved: () => void
 }) {
+  const { t } = useTranslation('agents')
   const typeOptions = getAgentTypeOptions()
   const [name, setName] = useState(initial?.name || '')
   const [type, setType] = useState(initial?.type || 'claude')
@@ -1014,7 +1161,7 @@ function TemplateFormModal({
     <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50">
       <div className="bg-white rounded-t-2xl sm:rounded-xl w-full sm:max-w-lg p-5 sm:p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-semibold">{mode === 'edit' ? '编辑模板' : '创建模板'}</h2>
+          <h2 className="text-lg font-semibold">{mode === 'edit' ? t('form.editTemplate') : t('form.createTemplate')}</h2>
           <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded">
             <X className="w-5 h-5 text-gray-400" />
           </button>
@@ -1022,13 +1169,13 @@ function TemplateFormModal({
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1">名称 *</label>
+            <label className="block text-sm font-medium mb-1">{t('form.name')}</label>
             <input value={name} onChange={e => setName(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="例：代码审查助手" />
+              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder={t('form.namePlaceholder')} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium mb-1">类型</label>
+              <label className="block text-sm font-medium mb-1">{t('form.type')}</label>
               <select value={type} onChange={e => handleTypeChange(e.target.value)}
                 className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                 {typeOptions.map(opt => (
@@ -1037,19 +1184,19 @@ function TemplateFormModal({
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">角色</label>
+              <label className="block text-sm font-medium mb-1">{t('form.role')}</label>
               <input value={role} onChange={e => setRole(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="例：代码助手" />
+                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder={t('form.rolePlaceholder')} />
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">描述</label>
+            <label className="block text-sm font-medium mb-1">{t('form.description')}</label>
             <input value={description} onChange={e => setDescription(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="模板的简要描述" />
+              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder={t('form.descPlaceholder')} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium mb-1">模型</label>
+              <label className="block text-sm font-medium mb-1">{t('form.model')}</label>
               {hasModelList ? (
                 <select value={model} onChange={e => setModel(e.target.value)}
                   className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -1060,7 +1207,7 @@ function TemplateFormModal({
               ) : (
                 <input value={customModel} onChange={e => setCustomModel(e.target.value)}
                   className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="输入模型名称" />
+                  placeholder={t('form.modelPlaceholder')} />
               )}
               {hasModelList && (
                 <p className="text-xs text-gray-400 mt-1">
@@ -1069,25 +1216,25 @@ function TemplateFormModal({
               )}
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">温度 ({temperature})</label>
+              <label className="block text-sm font-medium mb-1">{t('form.temperature')} ({temperature})</label>
               <input type="range" min="0" max="1" step="0.1" value={temperature}
                 onChange={e => setTemperature(parseFloat(e.target.value))}
                 className="w-full mt-2" />
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">系统提示词</label>
+            <label className="block text-sm font-medium mb-1">{t('form.systemPrompt')}</label>
             <textarea value={systemPrompt} onChange={e => setSystemPrompt(e.target.value)}
               rows={4} className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-              placeholder="可选：定义智能体的核心使命和行为规范" />
+              placeholder={t('form.promptPlaceholder')} />
           </div>
         </div>
 
         <div className="flex justify-end gap-3 mt-6">
-          <button onClick={onClose} className="px-4 py-2 border rounded-lg hover:bg-gray-100 text-sm">取消</button>
+          <button onClick={onClose} className="px-4 py-2 border rounded-lg hover:bg-gray-100 text-sm">{t('action.cancel', { ns: 'common' })}</button>
           <button onClick={handleSubmit} disabled={!name || submitting}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm">
-            {submitting ? (mode === 'edit' ? '保存中...' : '创建中...') : (mode === 'edit' ? '保存' : '创建模板')}
+            {submitting ? (mode === 'edit' ? t('action.saving', { ns: 'common' }) : t('action.creating', { ns: 'common' })) : (mode === 'edit' ? t('action.save', { ns: 'common' }) : t('form.createTemplate'))}
           </button>
         </div>
       </div>
@@ -1104,9 +1251,9 @@ function CreateTemplateModal({ onClose, onCreated }: { onClose: () => void; onCr
 // ============================================================================
 
 function TerminalModal({ session, onClose }: { session: TerminalSession; onClose: () => void }) {
-  const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost'
+  const { t } = useTranslation('agents')
   const ready = session.status === 'running' && !!session.port
-  const iframeUrl = ready ? `http://${host}:${session.port}/` : 'about:blank'
+  const iframeUrl = ready ? `/terminal/${session.id}/` : 'about:blank'
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-2 sm:p-4">
@@ -1114,7 +1261,7 @@ function TerminalModal({ session, onClose }: { session: TerminalSession; onClose
         <div className="flex items-center justify-between px-4 py-2 border-b border-gray-700">
           <div className="flex items-center gap-2 text-white">
             <Terminal className="w-5 h-5" />
-            <span className="font-medium">终端</span>
+            <span className="font-medium">{t('terminalTitle')}</span>
           </div>
           <button onClick={onClose} className="p-1 text-gray-400 hover:text-white hover:bg-gray-700 rounded">
             <X className="w-5 h-5" />
@@ -1123,7 +1270,7 @@ function TerminalModal({ session, onClose }: { session: TerminalSession; onClose
         <div className="flex-1 bg-black relative">
           {!ready && (
             <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-gray-200 text-sm">终端启动中…（{session.status || 'pending'}）</div>
+              <div className="text-gray-200 text-sm">{t('terminalStarting')}({session.status || 'pending'})</div>
             </div>
           )}
           <iframe key={`${session.id}-${ready ? 'ready' : 'pending'}`} src={iframeUrl} className="w-full h-full border-0" title="Terminal" />

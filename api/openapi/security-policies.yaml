@@ -1,0 +1,254 @@
+openapi: 3.0.3
+info:
+  title: Security Policies API
+  version: 1.0.0
+
+# SecurityPolicy 安全策略管理 API
+# 独立的治理资源，定义 Agent 的安全约束
+# Agent/AgentTemplate 通过 security_policy_id 引用
+
+paths:
+  /api/v1/security-policies:
+    get:
+      tags: [SecurityPolicies]
+      operationId: listSecurityPolicies
+      summary: 列出安全策略
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+          description: 按分类过滤
+      responses:
+        '200':
+          description: 安全策略列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SecurityPolicy'
+    post:
+      tags: [SecurityPolicies]
+      operationId: createSecurityPolicy
+      summary: 创建安全策略
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSecurityPolicyRequest'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecurityPolicy'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+
+  /api/v1/security-policies/{id}:
+    get:
+      tags: [SecurityPolicies]
+      operationId: getSecurityPolicy
+      summary: 获取安全策略详情
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 安全策略详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecurityPolicy'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+    put:
+      tags: [SecurityPolicies]
+      operationId: updateSecurityPolicy
+      summary: 更新安全策略
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSecurityPolicyRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecurityPolicy'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+    delete:
+      tags: [SecurityPolicies]
+      operationId: deleteSecurityPolicy
+      summary: 删除安全策略
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '204':
+          description: 删除成功
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+components:
+  schemas:
+    SecurityPolicy:
+      type: object
+      required: [id, name, level]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        level:
+          type: string
+          enum: [strict, standard, permissive]
+          description: 安全等级
+        tool_permissions:
+          $ref: '#/components/schemas/ToolPermissions'
+        resource_limits:
+          $ref: '#/components/schemas/ResourceLimits'
+        network_policy:
+          $ref: '#/components/schemas/NetworkPolicy'
+        sandbox_config:
+          type: object
+          description: 沙箱配置
+        is_builtin:
+          type: boolean
+        category:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ToolPermissions:
+      type: object
+      description: 工具权限配置
+      properties:
+        allowed:
+          type: array
+          items:
+            type: string
+          description: 允许使用的工具列表
+        denied:
+          type: array
+          items:
+            type: string
+          description: 禁止使用的工具列表
+        require_approval:
+          type: array
+          items:
+            type: string
+          description: 需要审批的工具列表
+
+    ResourceLimits:
+      type: object
+      description: 资源限制
+      properties:
+        max_cpu:
+          type: string
+          description: CPU 限制（如 "2"）
+        max_memory:
+          type: string
+          description: 内存限制（如 "4Gi"）
+        max_disk:
+          type: string
+          description: 磁盘限制
+        max_network_bandwidth:
+          type: string
+          description: 网络带宽限制
+        max_execution_time:
+          type: integer
+          description: 最大执行时间（秒）
+
+    NetworkPolicy:
+      type: object
+      description: 网络策略
+      properties:
+        allow_internet:
+          type: boolean
+          description: 是否允许访问互联网
+        allowed_domains:
+          type: array
+          items:
+            type: string
+          description: 允许访问的域名白名单
+        denied_domains:
+          type: array
+          items:
+            type: string
+          description: 禁止访问的域名黑名单
+        allowed_ports:
+          type: array
+          items:
+            type: integer
+          description: 允许的端口
+
+    CreateSecurityPolicyRequest:
+      type: object
+      required: [name, level]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        level:
+          type: string
+          enum: [strict, standard, permissive]
+        tool_permissions:
+          $ref: '#/components/schemas/ToolPermissions'
+        resource_limits:
+          $ref: '#/components/schemas/ResourceLimits'
+        network_policy:
+          $ref: '#/components/schemas/NetworkPolicy'
+        sandbox_config:
+          type: object
+        category:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+
+    UpdateSecurityPolicyRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        level:
+          type: string
+          enum: [strict, standard, permissive]
+        tool_permissions:
+          $ref: '#/components/schemas/ToolPermissions'
+        resource_limits:
+          $ref: '#/components/schemas/ResourceLimits'
+        network_policy:
+          $ref: '#/components/schemas/NetworkPolicy'
+        sandbox_config:
+          type: object
+        category:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string

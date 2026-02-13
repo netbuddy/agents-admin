@@ -148,6 +148,9 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE TABLE IF NOT EXISTS nodes (
     id VARCHAR(64) PRIMARY KEY,
     status VARCHAR(32) DEFAULT 'online',
+    hostname VARCHAR(255) DEFAULT '',
+    ips TEXT DEFAULT '',
+    display_name VARCHAR(255) DEFAULT '',
     labels TEXT DEFAULT '{}',
     capacity TEXT DEFAULT '{}',
     last_heartbeat DATETIME,
@@ -160,7 +163,6 @@ CREATE TABLE IF NOT EXISTS accounts (
     id VARCHAR(64) PRIMARY KEY,
     name VARCHAR(200),
     agent_type_id VARCHAR(64),
-    node_id VARCHAR(64),
     volume_name VARCHAR(200),
     status VARCHAR(32) DEFAULT 'pending',
     created_at DATETIME DEFAULT (datetime('now')),
@@ -227,12 +229,13 @@ CREATE TABLE IF NOT EXISTS proxies (
     updated_at DATETIME DEFAULT (datetime('now'))
 );
 
--- instances
-CREATE TABLE IF NOT EXISTS instances (
+-- agents (formerly instances)
+CREATE TABLE IF NOT EXISTS agents (
     id VARCHAR(64) PRIMARY KEY,
     name VARCHAR(200),
     account_id VARCHAR(64),
     agent_type_id VARCHAR(64),
+    template_id VARCHAR(100),
     container_name VARCHAR(200),
     node_id VARCHAR(64),
     status VARCHAR(32) DEFAULT 'pending',

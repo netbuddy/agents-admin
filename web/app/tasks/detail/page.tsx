@@ -2,9 +2,11 @@
 
 import { Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { useTranslation } from 'react-i18next'
 import TaskDetailClient from './TaskDetailClient'
 
 function TaskDetailContent() {
+  const { t } = useTranslation('tasks')
   const searchParams = useSearchParams()
   const taskId = searchParams.get('id')
 
@@ -12,8 +14,8 @@ function TaskDetailContent() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <h2 className="text-xl font-semibold mb-2">缺少任务 ID</h2>
-          <a href="/" className="text-blue-600 hover:underline">返回首页</a>
+          <h2 className="text-xl font-semibold mb-2">{t('detail.missingId')}</h2>
+          <a href="/" className="text-blue-600 hover:underline">{t('detail.goHome')}</a>
         </div>
       </div>
     )

@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"agents-admin/internal/shared/model"
+	storageErrors "agents-admin/internal/shared/storage"
 )
 
 // UserStore 用户存储接口
@@ -149,6 +151,8 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("[auth] User registered: %s (%s)", user.Email, user.ID)
+	setAccessTokenCookie(w, accessToken, h.cfg.AccessTokenTTL)
+	setRefreshTokenCookie(w, refreshToken, h.cfg.RefreshTokenTTL)
 	writeJSON(w, http.StatusCreated, authResponse{
 		User:         user,
 		AccessToken:  accessToken,
@@ -196,6 +200,8 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("[auth] User logged in: %s", user.Email)
+	setAccessTokenCookie(w, accessToken, h.cfg.AccessTokenTTL)
+	setRefreshTokenCookie(w, refreshToken, h.cfg.RefreshTokenTTL)
 	writeJSON(w, http.StatusOK, authResponse{
 		User:         user,
 		AccessToken:  accessToken,
@@ -206,11 +212,15 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 // Refresh 刷新访问令牌
 func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	var req refreshRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
-		return
-	}
+	// 允许空 body（cookie-only 模式）
+	_ = json.NewDecoder(r.Body).Decode(&req)
 
+	// 优先 JSON body，回退 Cookie
+	if req.RefreshToken == "" {
+		if c, err := r.Cookie("refresh_token"); err == nil && c.Value != "" {
+			req.RefreshToken = c.Value
+		}
+	}
 	if req.RefreshToken == "" {
 		writeError(w, http.StatusBadRequest, "refresh_token is required")
 		return
@@ -243,6 +253,7 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	setAccessTokenCookie(w, accessToken, h.cfg.AccessTokenTTL)
 	writeJSON(w, http.StatusOK, map[string]string{
 		"access_token": accessToken,
 	})
@@ -323,7 +334,7 @@ func EnsureAdminUser(store UserStore, adminEmail, adminPassword string) error {
 
 	ctx := context.Background()
 	existing, err := store.GetUserByEmail(ctx, adminEmail)
-	if err != nil {
+	if err != nil && !errors.Is(err, storageErrors.ErrNotFound) {
 		return fmt.Errorf("check admin user: %w", err)
 	}
 	if existing != nil {
@@ -362,6 +373,39 @@ func EnsureAdminUser(store UserStore, adminEmail, adminPassword string) error {
 // ============================================================================
 // 工具函数
 // ============================================================================
+
+// setAccessTokenCookie 设置 access_token 为 HttpOnly cookie
+// 浏览器的裸 fetch() 会自动携带此 cookie，无需手动添加 Authorization header
+func setAccessTokenCookie(w http.ResponseWriter, token string, ttl time.Duration) {
+	if ttl == 0 {
+		ttl = 15 * time.Minute
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     "access_token",
+		Value:    token,
+		Path:     "/",
+		MaxAge:   int(ttl.Seconds()),
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+// setRefreshTokenCookie 设置 refresh_token 为 HttpOnly cookie
+func setRefreshTokenCookie(w http.ResponseWriter, token string, ttl time.Duration) {
+	if ttl == 0 {
+		ttl = 7 * 24 * time.Hour
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    token,
+		Path:     "/api/v1/auth",
+		MaxAge:   int(ttl.Seconds()),
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")

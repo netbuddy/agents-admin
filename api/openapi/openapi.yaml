@@ -1,17 +1,29 @@
 # Agents Admin API - 主入口
 # 引用各领域模块的 paths 和 schemas
+# 各领域按独立 YAML 文件组织，通过 $ref 引用
 
 openapi: 3.0.3
 info:
   title: Agents Admin API
-  description: AI Agent 管理系统 API
+  description: |
+    AI Agent 管理系统 API。
+
+    ## 认证方式
+    - **JWT Bearer Token**: 通过 `/api/v1/auth/login` 获取
+    - **HttpOnly Cookie**: 登录后自动设置 `access_token` Cookie
+    - **X-Node-Token**: Node Manager 内部通信使用共享密钥
+
+    ## 架构概览
+    - **API Server**: 统一 HTTPS 入口，管理所有业务逻辑
+    - **Node Manager**: HTTP-Only 通过 API Server 通信，不直连数据库
+    - **存储**: MongoDB（默认）或 PostgreSQL/SQLite
   version: 1.0.0
   contact:
     name: Agents Admin Team
 
 servers:
-  - url: http://localhost:8080
-    description: Development server
+  - url: https://localhost:8080
+    description: Development server (HTTPS)
 
 tags:
   - name: Health
@@ -23,22 +35,62 @@ tags:
   - name: Events
     description: 事件管理
   - name: Nodes
-    description: 节点管理
-  - name: Accounts
-    description: 账号管理
+    description: 节点管理（心跳、部署、环境配置）
+  - name: Auth
+    description: 用户认证（注册、登录、令牌刷新）+ Agent 账号管理（类型、CRUD、Volume 归档）
+  - name: Operations
+    description: 系统操作（统一 Operation/Action 模型，替代旧 auth-tasks）
+  - name: Proxies
+    description: 代理管理
+  - name: Agents
+    description: 智能体管理（Agent CRUD、生命周期、Runtime 子资源）
+  - name: Terminals
+    description: 终端会话管理
+  - name: Templates
+    description: 模板管理（TaskTemplate + AgentTemplate）
+  - name: Skills
+    description: 技能管理（独立能力资源，有生命周期和市场机制）
+  - name: MCPServers
+    description: MCP Server 管理（Model Context Protocol 外部能力实体）
+  - name: SecurityPolicies
+    description: 安全策略管理（独立治理资源）
+  - name: HITL
+    description: 人机协作（审批、反馈、干预、确认）
+  - name: Monitor
+    description: 监控（工作流、统计）
+  - name: SysConfig
+    description: 系统配置
 
 paths:
-  # Health
+  # ========== Health ==========
   /health:
     $ref: 'health.yaml#/paths/~1health'
 
-  # Tasks
+  # ========== Auth ==========
+  /api/v1/auth/register:
+    $ref: 'auth.yaml#/paths/~1api~1v1~1auth~1register'
+  /api/v1/auth/login:
+    $ref: 'auth.yaml#/paths/~1api~1v1~1auth~1login'
+  /api/v1/auth/refresh:
+    $ref: 'auth.yaml#/paths/~1api~1v1~1auth~1refresh'
+  /api/v1/auth/me:
+    $ref: 'auth.yaml#/paths/~1api~1v1~1auth~1me'
+  /api/v1/auth/password:
+    $ref: 'auth.yaml#/paths/~1api~1v1~1auth~1password'
+
+  # ========== Tasks ==========
   /api/v1/tasks:
     $ref: 'tasks.yaml#/paths/~1api~1v1~1tasks'
   /api/v1/tasks/{id}:
     $ref: 'tasks.yaml#/paths/~1api~1v1~1tasks~1{id}'
+  /api/v1/tasks/{id}/subtasks:
+    $ref: 'tasks.yaml#/paths/~1api~1v1~1tasks~1{id}~1subtasks'
+  /api/v1/tasks/{id}/tree:
+    $ref: 'tasks.yaml#/paths/~1api~1v1~1tasks~1{id}~1tree'
+  /api/v1/tasks/{id}/context:
+    $ref: 'tasks.yaml#/paths/~1api~1v1~1tasks~1{id}~1context'
 
-  # Runs
+  # ========== Runs ==========
   /api/v1/tasks/{id}/runs:
     $ref: 'runs.yaml#/paths/~1api~1v1~1tasks~1{id}~1runs'
   /api/v1/runs/{id}:
@@ -46,40 +98,149 @@ paths:
   /api/v1/runs/{id}/cancel:
     $ref: 'runs.yaml#/paths/~1api~1v1~1runs~1{id}~1cancel'
 
-  # Events
+  # ========== Events ==========
   /api/v1/runs/{id}/events:
     $ref: 'events.yaml#/paths/~1api~1v1~1runs~1{id}~1events'
 
-  # Nodes
+  # ========== Nodes ==========
   /api/v1/nodes/heartbeat:
     $ref: 'nodes.yaml#/paths/~1api~1v1~1nodes~1heartbeat'
   /api/v1/nodes:
     $ref: 'nodes.yaml#/paths/~1api~1v1~1nodes'
   /api/v1/nodes/{id}:
     $ref: 'nodes.yaml#/paths/~1api~1v1~1nodes~1{id}'
+  /api/v1/nodes/{id}/drain:
+    $ref: 'nodes.yaml#/paths/~1api~1v1~1nodes~1{id}~1drain'
   /api/v1/nodes/{id}/runs:
     $ref: 'nodes.yaml#/paths/~1api~1v1~1nodes~1{id}~1runs'
+  /api/v1/nodes/{id}/env-config:
+    $ref: 'nodes.yaml#/paths/~1api~1v1~1nodes~1{id}~1env-config'
+  /api/v1/nodes/{id}/env-config/test-proxy:
+    $ref: 'nodes.yaml#/paths/~1api~1v1~1nodes~1{id}~1env-config~1test-proxy'
+  /api/v1/node-provisions:
+    $ref: 'nodes.yaml#/paths/~1api~1v1~1node-provisions'
+  /api/v1/node-provisions/{id}:
+    $ref: 'nodes.yaml#/paths/~1api~1v1~1node-provisions~1{id}'
+  /api/v1/node-bootstrap:
+    $ref: 'nodes.yaml#/paths/~1api~1v1~1node-bootstrap'
 
-  # Accounts
+  # ========== Agent Types & Accounts ==========
   /api/v1/agent-types:
-    $ref: 'accounts.yaml#/paths/~1api~1v1~1agent-types'
+    $ref: 'auth.yaml#/paths/~1api~1v1~1agent-types'
   /api/v1/agent-types/{id}:
-    $ref: 'accounts.yaml#/paths/~1api~1v1~1agent-types~1{id}'
+    $ref: 'auth.yaml#/paths/~1api~1v1~1agent-types~1{id}'
   /api/v1/accounts:
-    $ref: 'accounts.yaml#/paths/~1api~1v1~1accounts'
+    $ref: 'auth.yaml#/paths/~1api~1v1~1accounts'
   /api/v1/accounts/{id}:
-    $ref: 'accounts.yaml#/paths/~1api~1v1~1accounts~1{id}'
-  /api/v1/accounts/{id}/auth:
-    $ref: 'accounts.yaml#/paths/~1api~1v1~1accounts~1{id}~1auth'
-  /api/v1/accounts/{id}/auth/status:
-    $ref: 'accounts.yaml#/paths/~1api~1v1~1accounts~1{id}~1auth~1status'
-  /api/v1/auth-tasks/{id}:
-    $ref: 'accounts.yaml#/paths/~1api~1v1~1auth-tasks~1{id}'
-  /api/v1/nodes/{id}/auth-tasks:
-    $ref: 'accounts.yaml#/paths/~1api~1v1~1nodes~1{id}~1auth-tasks'
+    $ref: 'auth.yaml#/paths/~1api~1v1~1accounts~1{id}'
+  /api/v1/accounts/{id}/volume-archive:
+    $ref: 'auth.yaml#/paths/~1api~1v1~1accounts~1{id}~1volume-archive'
+
+  # ========== Operations ==========
+  /api/v1/operations:
+    $ref: 'operations.yaml#/paths/~1api~1v1~1operations'
+  /api/v1/operations/{id}:
+    $ref: 'operations.yaml#/paths/~1api~1v1~1operations~1{id}'
+  /api/v1/actions/{id}:
+    $ref: 'operations.yaml#/paths/~1api~1v1~1actions~1{id}'
+  /api/v1/nodes/{id}/actions:
+    $ref: 'operations.yaml#/paths/~1api~1v1~1nodes~1{id}~1actions'
+
+  # ========== Proxies ==========
+  /api/v1/proxies:
+    $ref: 'proxies.yaml#/paths/~1api~1v1~1proxies'
+  /api/v1/proxies/{id}:
+    $ref: 'proxies.yaml#/paths/~1api~1v1~1proxies~1{id}'
+  /api/v1/proxies/{id}/test:
+    $ref: 'proxies.yaml#/paths/~1api~1v1~1proxies~1{id}~1test'
+
+  # ========== Agents ==========
+  /api/v1/agents:
+    $ref: 'agents.yaml#/paths/~1api~1v1~1agents'
+  /api/v1/agents/{id}:
+    $ref: 'agents.yaml#/paths/~1api~1v1~1agents~1{id}'
+  /api/v1/agents/{id}/start:
+    $ref: 'agents.yaml#/paths/~1api~1v1~1agents~1{id}~1start'
+  /api/v1/agents/{id}/stop:
+    $ref: 'agents.yaml#/paths/~1api~1v1~1agents~1{id}~1stop'
+  /api/v1/agents/{id}/runtime:
+    $ref: 'agents.yaml#/paths/~1api~1v1~1agents~1{id}~1runtime'
+
+  # ========== Terminals ==========
+  /api/v1/terminal-sessions:
+    $ref: 'terminals.yaml#/paths/~1api~1v1~1terminal-sessions'
+  /api/v1/terminal-sessions/{id}:
+    $ref: 'terminals.yaml#/paths/~1api~1v1~1terminal-sessions~1{id}'
+  /api/v1/nodes/{node_id}/terminal-sessions:
+    $ref: 'terminals.yaml#/paths/~1api~1v1~1nodes~1{node_id}~1terminal-sessions'
+
+  # ========== Templates ==========
+  /api/v1/task-templates:
+    $ref: 'templates.yaml#/paths/~1api~1v1~1task-templates'
+  /api/v1/task-templates/{id}:
+    $ref: 'templates.yaml#/paths/~1api~1v1~1task-templates~1{id}'
+  /api/v1/task-templates/{id}/instantiate:
+    $ref: 'templates.yaml#/paths/~1api~1v1~1task-templates~1{id}~1instantiate'
+  /api/v1/agent-templates:
+    $ref: 'templates.yaml#/paths/~1api~1v1~1agent-templates'
+  /api/v1/agent-templates/{id}:
+    $ref: 'templates.yaml#/paths/~1api~1v1~1agent-templates~1{id}'
+  /api/v1/agent-templates/{id}/create-agent:
+    $ref: 'templates.yaml#/paths/~1api~1v1~1agent-templates~1{id}~1create-agent'
+
+  # ========== Skills ==========
+  /api/v1/skills:
+    $ref: 'skills.yaml#/paths/~1api~1v1~1skills'
+  /api/v1/skills/{id}:
+    $ref: 'skills.yaml#/paths/~1api~1v1~1skills~1{id}'
+
+  # ========== MCP Servers ==========
+  /api/v1/mcp-servers:
+    $ref: 'mcp-servers.yaml#/paths/~1api~1v1~1mcp-servers'
+  /api/v1/mcp-servers/{id}:
+    $ref: 'mcp-servers.yaml#/paths/~1api~1v1~1mcp-servers~1{id}'
+
+  # ========== Security Policies ==========
+  /api/v1/security-policies:
+    $ref: 'security-policies.yaml#/paths/~1api~1v1~1security-policies'
+  /api/v1/security-policies/{id}:
+    $ref: 'security-policies.yaml#/paths/~1api~1v1~1security-policies~1{id}'
+
+  # ========== HITL ==========
+  /api/v1/runs/{id}/approvals:
+    $ref: 'hitl.yaml#/paths/~1api~1v1~1runs~1{id}~1approvals'
+  /api/v1/approvals/{id}:
+    $ref: 'hitl.yaml#/paths/~1api~1v1~1approvals~1{id}'
+  /api/v1/approvals/{id}/decision:
+    $ref: 'hitl.yaml#/paths/~1api~1v1~1approvals~1{id}~1decision'
+  /api/v1/runs/{id}/feedbacks:
+    $ref: 'hitl.yaml#/paths/~1api~1v1~1runs~1{id}~1feedbacks'
+  /api/v1/runs/{id}/interventions:
+    $ref: 'hitl.yaml#/paths/~1api~1v1~1runs~1{id}~1interventions'
+  /api/v1/runs/{id}/confirmations:
+    $ref: 'hitl.yaml#/paths/~1api~1v1~1runs~1{id}~1confirmations'
+  /api/v1/confirmations/{id}:
+    $ref: 'hitl.yaml#/paths/~1api~1v1~1confirmations~1{id}'
+  /api/v1/confirmations/{id}/resolve:
+    $ref: 'hitl.yaml#/paths/~1api~1v1~1confirmations~1{id}~1resolve'
+  /api/v1/runs/{id}/hitl/pending:
+    $ref: 'hitl.yaml#/paths/~1api~1v1~1runs~1{id}~1hitl~1pending'
+
+  # ========== Monitor ==========
+  /api/v1/monitor/workflows:
+    $ref: 'monitor.yaml#/paths/~1api~1v1~1monitor~1workflows'
+  /api/v1/monitor/workflows/{type}/{id}:
+    $ref: 'monitor.yaml#/paths/~1api~1v1~1monitor~1workflows~1{type}~1{id}'
+  /api/v1/monitor/workflows/{type}/{id}/events:
+    $ref: 'monitor.yaml#/paths/~1api~1v1~1monitor~1workflows~1{type}~1{id}~1events'
+  /api/v1/monitor/stats:
+    $ref: 'monitor.yaml#/paths/~1api~1v1~1monitor~1stats'
+
+  # ========== SysConfig ==========
+  /api/v1/config:
+    $ref: 'sysconfig.yaml#/paths/~1api~1v1~1config'
 
 components:
-  # 引用公共组件
   parameters:
     IdParam:
       $ref: 'common.yaml#/components/parameters/IdParam'
@@ -102,55 +263,75 @@ components:
       $ref: 'common.yaml#/components/schemas/MessageResponse'
     HealthResponse:
       $ref: 'common.yaml#/components/schemas/HealthResponse'
-    WorkspaceConfig:
-      $ref: 'common.yaml#/components/schemas/WorkspaceConfig'
-    SecurityConfig:
-      $ref: 'common.yaml#/components/schemas/SecurityConfig'
+
+    # Auth
+    AuthResponse:
+      $ref: 'auth.yaml#/components/schemas/AuthResponse'
+    User:
+      $ref: 'auth.yaml#/components/schemas/User'
 
     # Task
     Task:
       $ref: 'tasks.yaml#/components/schemas/Task'
     CreateTaskRequest:
       $ref: 'tasks.yaml#/components/schemas/CreateTaskRequest'
-    TaskContext:
-      $ref: 'tasks.yaml#/components/schemas/TaskContext'
 
     # Run
     Run:
       $ref: 'runs.yaml#/components/schemas/Run'
-    CreateRunRequest:
-      $ref: 'runs.yaml#/components/schemas/CreateRunRequest'
-    UpdateRunRequest:
-      $ref: 'runs.yaml#/components/schemas/UpdateRunRequest'
 
     # Event
     Event:
       $ref: 'events.yaml#/components/schemas/Event'
-    PostEventsRequest:
-      $ref: 'events.yaml#/components/schemas/PostEventsRequest'
-    EventInput:
-      $ref: 'events.yaml#/components/schemas/EventInput'
 
     # Node
     Node:
       $ref: 'nodes.yaml#/components/schemas/Node'
     HeartbeatRequest:
       $ref: 'nodes.yaml#/components/schemas/HeartbeatRequest'
-    UpdateNodeRequest:
-      $ref: 'nodes.yaml#/components/schemas/UpdateNodeRequest'
+    HeartbeatResponse:
+      $ref: 'nodes.yaml#/components/schemas/HeartbeatResponse'
 
     # Account
     AgentType:
-      $ref: 'accounts.yaml#/components/schemas/AgentType'
+      $ref: 'auth.yaml#/components/schemas/AgentType'
     Account:
-      $ref: 'accounts.yaml#/components/schemas/Account'
-    CreateAccountRequest:
-      $ref: 'accounts.yaml#/components/schemas/CreateAccountRequest'
-    AuthTask:
-      $ref: 'accounts.yaml#/components/schemas/AuthTask'
-    StartAuthRequest:
-      $ref: 'accounts.yaml#/components/schemas/StartAuthRequest'
-    UpdateAuthTaskRequest:
-      $ref: 'accounts.yaml#/components/schemas/UpdateAuthTaskRequest'
-    AuthStatusResponse:
-      $ref: 'accounts.yaml#/components/schemas/AuthStatusResponse'
+      $ref: 'auth.yaml#/components/schemas/Account'
+
+    # Operation
+    Operation:
+      $ref: 'operations.yaml#/components/schemas/Operation'
+    Action:
+      $ref: 'operations.yaml#/components/schemas/Action'
+
+    # Proxy
+    Proxy:
+      $ref: 'proxies.yaml#/components/schemas/Proxy'
+
+    # Agent
+    Agent:
+      $ref: 'agents.yaml#/components/schemas/Agent'
+    Runtime:
+      $ref: 'agents.yaml#/components/schemas/Runtime'
+
+    # Terminal
+    TerminalSession:
+      $ref: 'terminals.yaml#/components/schemas/TerminalSession'
+
+    # Templates
+    TaskTemplate:
+      $ref: 'templates.yaml#/components/schemas/TaskTemplate'
+    AgentTemplate:
+      $ref: 'templates.yaml#/components/schemas/AgentTemplate'
+
+    # Skills
+    Skill:
+      $ref: 'skills.yaml#/components/schemas/Skill'
+
+    # MCP Servers
+    MCPServer:
+      $ref: 'mcp-servers.yaml#/components/schemas/MCPServer'
+
+    # Security Policies
+    SecurityPolicy:
+      $ref: 'security-policies.yaml#/components/schemas/SecurityPolicy'

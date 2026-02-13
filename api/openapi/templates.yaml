@@ -1,0 +1,533 @@
+openapi: 3.0.3
+info:
+  title: Templates API
+  version: 1.0.0
+
+# Template 模板管理 API（仅 TaskTemplate + AgentTemplate）
+# Skills、MCP Servers、SecurityPolicies 已拆分为独立文件
+
+paths:
+  # ========== Task Templates ==========
+  /api/v1/task-templates:
+    get:
+      tags: [Templates]
+      operationId: listTaskTemplates
+      summary: 列出任务模板
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+          description: 按分类过滤
+      responses:
+        '200':
+          description: 任务模板列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TaskTemplate'
+    post:
+      tags: [Templates]
+      operationId: createTaskTemplate
+      summary: 创建任务模板
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaskTemplateRequest'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskTemplate'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+
+  /api/v1/task-templates/{id}:
+    get:
+      tags: [Templates]
+      operationId: getTaskTemplate
+      summary: 获取任务模板详情
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 任务模板详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskTemplate'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+    put:
+      tags: [Templates]
+      operationId: updateTaskTemplate
+      summary: 更新任务模板
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTaskTemplateRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskTemplate'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+    delete:
+      tags: [Templates]
+      operationId: deleteTaskTemplate
+      summary: 删除任务模板
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '204':
+          description: 删除成功
+
+  /api/v1/task-templates/{id}/instantiate:
+    post:
+      tags: [Templates]
+      operationId: instantiateTaskTemplate
+      summary: 基于任务模板创建任务
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: 任务名称（可选，默认使用模板名称）
+                config_overrides:
+                  type: object
+                  description: 覆盖模板默认配置
+      responses:
+        '201':
+          description: 任务创建成功
+          content:
+            application/json:
+              schema:
+                $ref: 'tasks.yaml#/components/schemas/Task'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+  # ========== Agent Templates ==========
+  /api/v1/agent-templates:
+    get:
+      tags: [Templates]
+      operationId: listAgentTemplates
+      summary: 列出 Agent 模板
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+          description: 按分类过滤
+        - name: type
+          in: query
+          schema:
+            type: string
+          description: 按模型类型过滤
+      responses:
+        '200':
+          description: Agent 模板列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AgentTemplate'
+    post:
+      tags: [Templates]
+      operationId: createAgentTemplate
+      summary: 创建 Agent 模板
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAgentTemplateRequest'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentTemplate'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+
+  /api/v1/agent-templates/{id}:
+    get:
+      tags: [Templates]
+      operationId: getAgentTemplate
+      summary: 获取 Agent 模板详情
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Agent 模板详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentTemplate'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+    put:
+      tags: [Templates]
+      operationId: updateAgentTemplate
+      summary: 更新 Agent 模板
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAgentTemplateRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentTemplate'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+    delete:
+      tags: [Templates]
+      operationId: deleteAgentTemplate
+      summary: 删除 Agent 模板
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '204':
+          description: 删除成功
+
+  /api/v1/agent-templates/{id}/create-agent:
+    post:
+      tags: [Templates]
+      operationId: createAgentFromTemplate
+      summary: 基于 Agent 模板创建智能体
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, account_id]
+              properties:
+                name:
+                  type: string
+                  description: Agent 名称
+                account_id:
+                  type: string
+                  description: 绑定的认证账号 ID
+                config_overrides:
+                  type: object
+                  description: 覆盖模板配置
+                security_policy_id:
+                  type: string
+                  description: 安全策略 ID（覆盖模板默认策略）
+      responses:
+        '201':
+          description: Agent 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: 'agents.yaml#/components/schemas/Agent'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+components:
+  schemas:
+    TaskTemplate:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        prompt_template:
+          type: string
+          description: 提示词模板
+        default_config:
+          type: object
+          description: 默认配置
+        variables:
+          type: array
+          items:
+            type: string
+          description: 模板变量列表
+        category:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        is_builtin:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    AgentTemplate:
+      type: object
+      required: [id, name, type]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum: [claude, gemini, qwen, codex, custom]
+          description: 模型类型
+        role:
+          type: string
+          description: 角色定位（如"代码助手"、"运维专家"）
+        description:
+          type: string
+        personality:
+          type: array
+          items:
+            type: string
+          description: 性格特征列表
+        system_prompt:
+          type: string
+          description: 系统提示词
+        skills:
+          type: array
+          items:
+            type: string
+          description: 技能 ID 列表（引用 skills.yaml）
+        tools:
+          type: object
+          description: 工具配置（允许/拒绝/需审批的工具列表）
+        mcp_servers:
+          type: array
+          items:
+            type: string
+          description: MCP Server ID 列表（引用 mcp-servers.yaml）
+        documents:
+          type: array
+          items:
+            type: object
+          description: 参考文档
+        gambits:
+          type: array
+          items:
+            type: object
+          description: IF-THEN 自动响应规则
+        hooks:
+          type: array
+          items:
+            type: object
+          description: 事件钩子
+        model:
+          type: string
+          description: 具体模型名称（如 "claude-3-opus"）
+        temperature:
+          type: number
+          format: double
+          description: 温度参数（0-1）
+        max_context:
+          type: integer
+          description: 最大上下文 Token 数
+        default_security_policy_id:
+          type: string
+          description: 默认安全策略 ID
+        is_builtin:
+          type: boolean
+        category:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateTaskTemplateRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        prompt_template:
+          type: string
+        default_config:
+          type: object
+        variables:
+          type: array
+          items:
+            type: string
+        category:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+
+    UpdateTaskTemplateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        prompt_template:
+          type: string
+        default_config:
+          type: object
+        variables:
+          type: array
+          items:
+            type: string
+        category:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+
+    CreateAgentTemplateRequest:
+      type: object
+      required: [name, type]
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [claude, gemini, qwen, codex, custom]
+        role:
+          type: string
+        description:
+          type: string
+        personality:
+          type: array
+          items:
+            type: string
+        system_prompt:
+          type: string
+        skills:
+          type: array
+          items:
+            type: string
+        tools:
+          type: object
+        mcp_servers:
+          type: array
+          items:
+            type: string
+        documents:
+          type: array
+          items:
+            type: object
+        gambits:
+          type: array
+          items:
+            type: object
+        hooks:
+          type: array
+          items:
+            type: object
+        model:
+          type: string
+        temperature:
+          type: number
+          format: double
+        max_context:
+          type: integer
+        default_security_policy_id:
+          type: string
+        category:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+
+    UpdateAgentTemplateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        role:
+          type: string
+        description:
+          type: string
+        personality:
+          type: array
+          items:
+            type: string
+        system_prompt:
+          type: string
+        skills:
+          type: array
+          items:
+            type: string
+        tools:
+          type: object
+        mcp_servers:
+          type: array
+          items:
+            type: string
+        documents:
+          type: array
+          items:
+            type: object
+        gambits:
+          type: array
+          items:
+            type: object
+        hooks:
+          type: array
+          items:
+            type: object
+        model:
+          type: string
+        temperature:
+          type: number
+          format: double
+        max_context:
+          type: integer
+        default_security_policy_id:
+          type: string
+        category:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string

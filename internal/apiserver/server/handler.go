@@ -10,8 +10,10 @@
 package server
 
 import (
+	"io/fs"
 	"net/http"
 
+	"agents-admin/api"
 	"agents-admin/internal/apiserver/auth"
 	"agents-admin/internal/apiserver/hitl"
 	"agents-admin/internal/apiserver/instance"
@@ -19,6 +21,7 @@ import (
 	"agents-admin/internal/apiserver/operation"
 	"agents-admin/internal/apiserver/proxy"
 	"agents-admin/internal/apiserver/run"
+	"agents-admin/internal/apiserver/sysconfig"
 	"agents-admin/internal/apiserver/task"
 	"agents-admin/internal/apiserver/template"
 	"agents-admin/internal/apiserver/terminal"
@@ -64,6 +67,9 @@ func (h *Handler) Router() http.Handler {
 	// 健康检查
 	mux.HandleFunc("GET /health", h.Health)
 
+	// Node Manager 引导配置（免认证，供 Node Manager 零配置安装）
+	mux.HandleFunc("GET /api/v1/node-bootstrap", h.NodeBootstrap)
+
 	// Prometheus 指标端点
 	mux.Handle("GET /metrics", MetricsHandler())
 
@@ -81,20 +87,23 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /api/v1/runs/{id}/events", h.PostEvents)
 
 	// Node 接口（已迁移到 node 包）
-	nodeHandler := node.NewHandler(h.store, h.nodeCache)
+	nodeHandler := node.NewHandler(h.store)
 	nodeHandler.RegisterRoutes(mux)
 
 	// ========== 新架构 API ==========
 
 	// 系统操作（Operation/Action 统一模型）
 	opHandler := operation.NewHandler(h.store)
+	if h.minioClient != nil {
+		opHandler.SetMinIOClient(h.minioClient)
+	}
 	opHandler.RegisterRoutes(mux)
 
 	// 代理管理接口（已迁移到 proxy 包）
 	proxyHandler := proxy.NewHandler(h.store)
 	proxyHandler.RegisterRoutes(mux)
 
-	// 实例管理接口（已迁移到 instance 包）
+	// Agent 实例管理接口（路由 /api/v1/agents）
 	instHandler := instance.NewHandler(h.store)
 	instHandler.RegisterRoutes(mux)
 	instHandler.RegisterNodeManagerRoutes(mux)
@@ -112,6 +121,10 @@ func (h *Handler) Router() http.Handler {
 	hitlHandler := hitl.NewHandler(h.store)
 	hitlHandler.RegisterRoutes(mux)
 
+	// 系统配置管理接口
+	sysconfigHandler := sysconfig.NewHandler()
+	sysconfigHandler.RegisterRoutes(mux)
+
 	// ========== 监控 API ==========
 	mux.HandleFunc("GET /api/v1/monitor/workflows", h.ListWorkflows)
 	mux.HandleFunc("GET /api/v1/monitor/workflows/{type}/{id}", h.GetWorkflow)
@@ -123,6 +136,7 @@ func (h *Handler) Router() http.Handler {
 		JWTSecret:       h.authConfig.JWTSecret,
 		AccessTokenTTL:  h.authConfig.AccessTokenTTL,
 		RefreshTokenTTL: h.authConfig.RefreshTokenTTL,
+		NodeToken:       h.authConfig.NodeToken,
 	}
 	authHandler := auth.NewHandler(h.store, authCfg)
 	authHandler.RegisterRoutes(mux)
@@ -141,6 +155,15 @@ func (h *Handler) Router() http.Handler {
 	monitorWS := NewMonitorWSHandler(h)
 	topMux.HandleFunc("GET /ws/monitor", monitorWS.HandleWebSocket)
 	topMux.HandleFunc("/ws/runs/{id}/events", h.eventGateway.HandleWebSocket)
+
+	// OpenAPI 规范静态文件（/spec/openapi.yaml 等）
+	specFS, _ := fs.Sub(api.OpenAPIFS, "openapi")
+	topMux.Handle("/spec/", http.StripPrefix("/spec/", http.FileServer(http.FS(specFS))))
+
+	// Swagger UI 文档页面（/docs/）
+	docsFS, _ := fs.Sub(api.DocsFS, "docs")
+	topMux.Handle("/docs/", http.StripPrefix("/docs/", http.FileServer(http.FS(docsFS))))
+
 	topMux.Handle("/", corsHandler)
 
 	return topMux

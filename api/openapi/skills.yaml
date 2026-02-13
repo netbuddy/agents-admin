@@ -1,0 +1,248 @@
+openapi: 3.0.3
+info:
+  title: Skills API
+  version: 1.0.0
+
+# Skill 技能管理 API
+# 独立的能力资源，有自己的生命周期、来源（builtin/user/community）和市场机制
+# AgentTemplate 通过 skills[] ID 列表引用技能
+
+paths:
+  /api/v1/skills:
+    get:
+      tags: [Skills]
+      operationId: listSkills
+      summary: 列出技能
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [coding, writing, research, analysis, design, data, devops, other]
+          description: 按分类过滤
+        - name: source
+          in: query
+          schema:
+            type: string
+            enum: [builtin, user, community]
+          description: 按来源过滤
+        - name: level
+          in: query
+          schema:
+            type: string
+            enum: [basic, advanced, expert]
+          description: 按等级过滤
+      responses:
+        '200':
+          description: 技能列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Skill'
+    post:
+      tags: [Skills]
+      operationId: createSkill
+      summary: 创建技能
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSkillRequest'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Skill'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+
+  /api/v1/skills/{id}:
+    get:
+      tags: [Skills]
+      operationId: getSkill
+      summary: 获取技能详情
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 技能详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Skill'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+    put:
+      tags: [Skills]
+      operationId: updateSkill
+      summary: 更新技能
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSkillRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Skill'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+    delete:
+      tags: [Skills]
+      operationId: deleteSkill
+      summary: 删除技能
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '204':
+          description: 删除成功
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+components:
+  schemas:
+    Skill:
+      type: object
+      required: [id, name, category, level, source]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+          enum: [coding, writing, research, analysis, design, data, devops, other]
+        level:
+          type: string
+          enum: [basic, advanced, expert]
+        description:
+          type: string
+        instructions:
+          type: string
+          description: 技能说明/提示词
+        tools:
+          type: array
+          items:
+            type: string
+          description: 依赖的工具列表
+        examples:
+          type: array
+          items:
+            type: object
+          description: 使用示例（输入输出）
+        parameters:
+          type: object
+          description: 技能参数定义（JSON Schema 格式）
+        source:
+          type: string
+          enum: [builtin, user, community]
+        author_id:
+          type: string
+        registry_id:
+          type: string
+          description: 所属技能市场 ID
+        version:
+          type: string
+          description: 语义化版本号
+        is_builtin:
+          type: boolean
+        tags:
+          type: array
+          items:
+            type: string
+        use_count:
+          type: integer
+          format: int64
+        rating:
+          type: number
+          format: double
+          description: 评分（0-5）
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateSkillRequest:
+      type: object
+      required: [name, category, level, description, instructions]
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+          enum: [coding, writing, research, analysis, design, data, devops, other]
+        level:
+          type: string
+          enum: [basic, advanced, expert]
+        description:
+          type: string
+        instructions:
+          type: string
+        tools:
+          type: array
+          items:
+            type: string
+        examples:
+          type: array
+          items:
+            type: object
+        parameters:
+          type: object
+        source:
+          type: string
+          enum: [builtin, user, community]
+          default: user
+        version:
+          type: string
+          default: "1.0.0"
+        tags:
+          type: array
+          items:
+            type: string
+
+    UpdateSkillRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+          enum: [coding, writing, research, analysis, design, data, devops, other]
+        level:
+          type: string
+          enum: [basic, advanced, expert]
+        description:
+          type: string
+        instructions:
+          type: string
+        tools:
+          type: array
+          items:
+            type: string
+        examples:
+          type: array
+          items:
+            type: object
+        parameters:
+          type: object
+        version:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string

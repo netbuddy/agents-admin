@@ -1,0 +1,106 @@
+openapi: 3.0.3
+info:
+  title: Monitor API
+  version: 1.0.0
+
+# Monitor 监控 API
+
+paths:
+  /api/v1/monitor/workflows:
+    get:
+      tags: [Monitor]
+      operationId: listWorkflows
+      summary: 列出工作流
+      responses:
+        '200':
+          description: 工作流列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Workflow'
+
+  /api/v1/monitor/workflows/{type}/{id}:
+    get:
+      tags: [Monitor]
+      operationId: getWorkflow
+      summary: 获取工作流详情
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 工作流详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Workflow'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+  /api/v1/monitor/workflows/{type}/{id}/events:
+    get:
+      tags: [Monitor]
+      operationId: getWorkflowEvents
+      summary: 获取工作流事件
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 事件列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+
+  /api/v1/monitor/stats:
+    get:
+      tags: [Monitor]
+      operationId: getMonitorStats
+      summary: 获取监控统计数据
+      responses:
+        '200':
+          description: 统计数据
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MonitorStats'
+
+components:
+  schemas:
+    Workflow:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+        status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    MonitorStats:
+      type: object
+      properties:
+        total_tasks:
+          type: integer
+        active_runs:
+          type: integer
+        online_nodes:
+          type: integer
+        total_events:
+          type: integer

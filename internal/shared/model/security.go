@@ -114,49 +114,49 @@ type SecurityPolicyEntity struct {
 	// === 基础字段 ===
 
 	// ID 唯一标识
-	ID string `json:"id" db:"id"`
+	ID string `json:"id" bson:"_id" db:"id"`
 
 	// Name 策略名称
-	Name string `json:"name" db:"name"`
+	Name string `json:"name" bson:"name" db:"name"`
 
 	// Description 策略描述
-	Description string `json:"description,omitempty" db:"description"`
+	Description string `json:"description,omitempty" bson:"description,omitempty" db:"description"`
 
 	// === 权限配置 ===
 
 	// ToolPermissions 工具权限列表
-	ToolPermissions []ToolPermission `json:"tool_permissions,omitempty" db:"tool_permissions"`
+	ToolPermissions []ToolPermission `json:"tool_permissions,omitempty" bson:"tool_permissions,omitempty" db:"tool_permissions"`
 
 	// === 资源限制 ===
 
 	// ResourceLimits 资源限制配置
-	ResourceLimits *ResourceLimits `json:"resource_limits,omitempty" db:"resource_limits"`
+	ResourceLimits *ResourceLimits `json:"resource_limits,omitempty" bson:"resource_limits,omitempty" db:"resource_limits"`
 
 	// === 网络策略 ===
 
 	// NetworkPolicy 网络访问策略
-	NetworkPolicy *NetworkPolicy `json:"network_policy,omitempty" db:"network_policy"`
+	NetworkPolicy *NetworkPolicy `json:"network_policy,omitempty" bson:"network_policy,omitempty" db:"network_policy"`
 
 	// === 沙箱策略 ===
 
 	// SandboxPolicy 沙箱策略
-	SandboxPolicy *SandboxPolicy `json:"sandbox_policy,omitempty" db:"sandbox_policy"`
+	SandboxPolicy *SandboxPolicy `json:"sandbox_policy,omitempty" bson:"sandbox_policy,omitempty" db:"sandbox_policy"`
 
 	// === 元数据 ===
 
 	// IsBuiltin 是否内置策略
-	IsBuiltin bool `json:"is_builtin" db:"is_builtin"`
+	IsBuiltin bool `json:"is_builtin" bson:"is_builtin" db:"is_builtin"`
 
 	// Category 分类（如 development, production, testing）
-	Category string `json:"category,omitempty" db:"category"`
+	Category string `json:"category,omitempty" bson:"category,omitempty" db:"category"`
 
 	// === 时间戳 ===
 
 	// CreatedAt 创建时间
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	CreatedAt time.Time `json:"created_at" bson:"created_at" db:"created_at"`
 
 	// UpdatedAt 更新时间
-	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+	UpdatedAt time.Time `json:"updated_at" bson:"updated_at" db:"updated_at"`
 }
 
 // ============================================================================
@@ -288,54 +288,54 @@ type Sandbox struct {
 	// === 基础字段 ===
 
 	// ID 唯一标识
-	ID string `json:"id" db:"id"`
+	ID string `json:"id" bson:"_id" db:"id"`
 
 	// AgentID 关联的 Agent ID
-	AgentID string `json:"agent_id" db:"agent_id"`
+	AgentID string `json:"agent_id" bson:"agent_id" db:"agent_id"`
 
 	// Type 沙箱类型
-	Type SandboxType `json:"type" db:"type"`
+	Type SandboxType `json:"type" bson:"type" db:"type"`
 
 	// Status 沙箱状态
-	Status SandboxStatus `json:"status" db:"status"`
+	Status SandboxStatus `json:"status" bson:"status" db:"status"`
 
 	// === 隔离配置 ===
 
 	// Isolation 隔离级别描述
-	Isolation string `json:"isolation,omitempty" db:"isolation"`
+	Isolation string `json:"isolation,omitempty" bson:"isolation,omitempty" db:"isolation"`
 
 	// FSRoot 文件系统根目录
-	FSRoot string `json:"fs_root,omitempty" db:"fs_root"`
+	FSRoot string `json:"fs_root,omitempty" bson:"fs_root,omitempty" db:"fs_root"`
 
 	// NetNamespace 网络命名空间
-	NetNamespace string `json:"net_ns,omitempty" db:"net_ns"`
+	NetNamespace string `json:"net_ns,omitempty" bson:"net_ns,omitempty" db:"net_ns"`
 
 	// === 资源配置 ===
 
 	// ResourceLimits 资源限制
-	ResourceLimits *ResourceLimits `json:"resource_limits,omitempty" db:"resource_limits"`
+	ResourceLimits *ResourceLimits `json:"resource_limits,omitempty" bson:"resource_limits,omitempty" db:"resource_limits"`
 
 	// === 关联 ===
 
 	// RuntimeID 关联的 Runtime ID（如果在容器中创建）
-	RuntimeID *string `json:"runtime_id,omitempty" db:"runtime_id"`
+	RuntimeID *string `json:"runtime_id,omitempty" bson:"runtime_id,omitempty" db:"runtime_id"`
 
 	// NodeID 所在节点 ID
-	NodeID string `json:"node_id" db:"node_id"`
+	NodeID string `json:"node_id" bson:"node_id" db:"node_id"`
 
 	// === 生命周期 ===
 
 	// CreatedAt 创建时间
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	CreatedAt time.Time `json:"created_at" bson:"created_at" db:"created_at"`
 
 	// StartedAt 启动时间
-	StartedAt *time.Time `json:"started_at,omitempty" db:"started_at"`
+	StartedAt *time.Time `json:"started_at,omitempty" bson:"started_at,omitempty" db:"started_at"`
 
 	// ExpiresAt 过期时间
-	ExpiresAt *time.Time `json:"expires_at,omitempty" db:"expires_at"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty" bson:"expires_at,omitempty" db:"expires_at"`
 
 	// DestroyedAt 销毁时间
-	DestroyedAt *time.Time `json:"destroyed_at,omitempty" db:"destroyed_at"`
+	DestroyedAt *time.Time `json:"destroyed_at,omitempty" bson:"destroyed_at,omitempty" db:"destroyed_at"`
 }
 
 // ============================================================================

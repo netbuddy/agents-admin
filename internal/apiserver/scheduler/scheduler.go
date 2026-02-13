@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"agents-admin/internal/apiserver/node"
-	"agents-admin/internal/shared/cache"
 	"agents-admin/internal/shared/model"
 	"agents-admin/internal/shared/queue"
 	"agents-admin/internal/shared/storage"
@@ -90,11 +89,6 @@ func NewSchedulerWithConfig(store storage.PersistentStore, schedulerQueue queue.
 		fallbackEvery:  config.Fallback.Interval,
 		staleThreshold: config.Fallback.StaleThreshold,
 	}
-}
-
-// SetNodeCache 设置节点心跳缓存（可选，用于更精确的在线节点判断）
-func (s *Scheduler) SetNodeCache(nodeCache cache.NodeHeartbeatCache) {
-	s.nodeManager.SetNodeCache(nodeCache)
 }
 
 func (s *Scheduler) SetFallbackConfig(every time.Duration, staleThreshold time.Duration) {

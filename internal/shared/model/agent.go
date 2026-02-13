@@ -98,84 +98,84 @@ type AgentTemplate struct {
 	// === 基础字段 ===
 
 	// ID 唯一标识
-	ID string `json:"id" db:"id"`
+	ID string `json:"id" bson:"_id" db:"id"`
 
 	// Name 模板名称
-	Name string `json:"name" db:"name"`
+	Name string `json:"name" bson:"name" db:"name"`
 
 	// Type 模型类型（claude/gemini/qwen/codex/custom）
-	Type AgentModelType `json:"type" db:"type"`
+	Type AgentModelType `json:"type" bson:"type" db:"type"`
 
 	// Role 角色定位（如"代码助手"、"运维专家"）
-	Role string `json:"role,omitempty" db:"role"`
+	Role string `json:"role,omitempty" bson:"role,omitempty" db:"role"`
 
 	// Description 模板描述
-	Description string `json:"description,omitempty" db:"description"`
+	Description string `json:"description,omitempty" bson:"description,omitempty" db:"description"`
 
 	// === 身份与性格 ===
 
 	// Personality 性格特征列表
-	Personality []string `json:"personality,omitempty" db:"personality"`
+	Personality []string `json:"personality,omitempty" bson:"personality,omitempty" db:"personality"`
 
 	// SystemPrompt 系统提示词
-	SystemPrompt string `json:"system_prompt,omitempty" db:"system_prompt"`
+	SystemPrompt string `json:"system_prompt,omitempty" bson:"system_prompt,omitempty" db:"system_prompt"`
 
 	// === 能力配置 ===
 
 	// Skills 技能 ID 列表
-	Skills []string `json:"skills,omitempty" db:"skills"`
+	Skills []string `json:"skills,omitempty" bson:"skills,omitempty" db:"skills"`
 
 	// Tools 工具配置（允许/拒绝/需审批的工具列表）
-	Tools json.RawMessage `json:"tools,omitempty" db:"tools"`
+	Tools json.RawMessage `json:"tools,omitempty" bson:"tools,omitempty" db:"tools"`
 
 	// MCPServers MCP 服务器配置
-	MCPServers json.RawMessage `json:"mcp_servers,omitempty" db:"mcp_servers"`
+	MCPServers json.RawMessage `json:"mcp_servers,omitempty" bson:"mcp_servers,omitempty" db:"mcp_servers"`
 
 	// Documents 参考文档
-	Documents json.RawMessage `json:"documents,omitempty" db:"documents"`
+	Documents json.RawMessage `json:"documents,omitempty" bson:"documents,omitempty" db:"documents"`
 
 	// === 自动化配置 ===
 
 	// Gambits IF-THEN 规则（自动响应规则）
-	Gambits json.RawMessage `json:"gambits,omitempty" db:"gambits"`
+	Gambits json.RawMessage `json:"gambits,omitempty" bson:"gambits,omitempty" db:"gambits"`
 
 	// Hooks 事件钩子
-	Hooks json.RawMessage `json:"hooks,omitempty" db:"hooks"`
+	Hooks json.RawMessage `json:"hooks,omitempty" bson:"hooks,omitempty" db:"hooks"`
 
 	// === 运行参数 ===
 
 	// Model 具体模型名称（如 "claude-3-opus", "gemini-pro"）
-	Model string `json:"model,omitempty" db:"model"`
+	Model string `json:"model,omitempty" bson:"model,omitempty" db:"model"`
 
 	// Temperature 温度参数（0-1）
-	Temperature float64 `json:"temperature,omitempty" db:"temperature"`
+	Temperature float64 `json:"temperature,omitempty" bson:"temperature,omitempty" db:"temperature"`
 
 	// MaxContext 最大上下文 Token 数
-	MaxContext int `json:"max_context,omitempty" db:"max_context"`
+	MaxContext int `json:"max_context,omitempty" bson:"max_context,omitempty" db:"max_context"`
 
 	// === 安全配置 ===
 
 	// DefaultSecurityPolicy 默认安全策略 ID
-	DefaultSecurityPolicyID *string `json:"default_security_policy_id,omitempty" db:"default_security_policy_id"`
+	DefaultSecurityPolicyID *string `json:"default_security_policy_id,omitempty" bson:"default_security_policy_id,omitempty" db:"default_security_policy_id"`
 
 	// === 元数据 ===
 
 	// IsBuiltin 是否内置模板
-	IsBuiltin bool `json:"is_builtin" db:"is_builtin"`
+	IsBuiltin bool `json:"is_builtin" bson:"is_builtin" db:"is_builtin"`
 
 	// Category 分类
-	Category string `json:"category,omitempty" db:"category"`
+	Category string `json:"category,omitempty" bson:"category,omitempty" db:"category"`
 
 	// Tags 标签
-	Tags []string `json:"tags,omitempty" db:"tags"`
+	Tags []string `json:"tags,omitempty" bson:"tags,omitempty" db:"tags"`
 
 	// === 时间戳 ===
 
 	// CreatedAt 创建时间
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	CreatedAt time.Time `json:"created_at" bson:"created_at" db:"created_at"`
 
 	// UpdatedAt 更新时间
-	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+	UpdatedAt time.Time `json:"updated_at" bson:"updated_at" db:"updated_at"`
 }
 
 // ============================================================================
@@ -228,59 +228,59 @@ type Agent struct {
 	// === 基础字段 ===
 
 	// ID 唯一标识
-	ID string `json:"id" db:"id"`
+	ID string `json:"id" bson:"_id" db:"id"`
 
 	// Name Agent 名称
-	Name string `json:"name" db:"name"`
+	Name string `json:"name" bson:"name" db:"name"`
 
 	// TemplateID 关联的模板 ID
-	TemplateID *string `json:"template_id,omitempty" db:"template_id"`
+	TemplateID *string `json:"template_id,omitempty" bson:"template_id,omitempty" db:"template_id"`
 
 	// Type 模型类型（从模板继承）
-	Type AgentModelType `json:"type" db:"type"`
+	Type AgentModelType `json:"type" bson:"type" db:"type"`
 
 	// === 绑定关系 ===
 
 	// AccountID 绑定的账号 ID
-	AccountID string `json:"account_id" db:"account_id"`
+	AccountID string `json:"account_id" bson:"account_id" db:"account_id"`
 
 	// RuntimeID 运行时 ID（运行中时填充）
-	RuntimeID *string `json:"runtime_id,omitempty" db:"runtime_id"`
+	RuntimeID *string `json:"runtime_id,omitempty" bson:"runtime_id,omitempty" db:"runtime_id"`
 
 	// NodeID 所在节点 ID
-	NodeID *string `json:"node_id,omitempty" db:"node_id"`
+	NodeID *string `json:"node_id,omitempty" bson:"node_id,omitempty" db:"node_id"`
 
 	// === 状态 ===
 
 	// Status 当前状态
-	Status AgentStatus `json:"status" db:"status"`
+	Status AgentStatus `json:"status" bson:"status" db:"status"`
 
 	// CurrentTaskID 当前执行的任务 ID
-	CurrentTaskID *string `json:"current_task_id,omitempty" db:"current_task_id"`
+	CurrentTaskID *string `json:"current_task_id,omitempty" bson:"current_task_id,omitempty" db:"current_task_id"`
 
 	// === 配置覆盖 ===
 
 	// ConfigOverrides 配置覆盖（覆盖模板中的配置）
-	ConfigOverrides json.RawMessage `json:"config_overrides,omitempty" db:"config_overrides"`
+	ConfigOverrides json.RawMessage `json:"config_overrides,omitempty" bson:"config_overrides,omitempty" db:"config_overrides"`
 
 	// SecurityPolicyID 安全策略 ID（覆盖模板的默认策略）
-	SecurityPolicyID *string `json:"security_policy_id,omitempty" db:"security_policy_id"`
+	SecurityPolicyID *string `json:"security_policy_id,omitempty" bson:"security_policy_id,omitempty" db:"security_policy_id"`
 
 	// === 记忆与能力 ===
 
 	// MemoryEnabled 是否启用记忆
-	MemoryEnabled bool `json:"memory_enabled" db:"memory_enabled"`
+	MemoryEnabled bool `json:"memory_enabled" bson:"memory_enabled" db:"memory_enabled"`
 
 	// === 时间戳 ===
 
 	// CreatedAt 创建时间
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	CreatedAt time.Time `json:"created_at" bson:"created_at" db:"created_at"`
 
 	// UpdatedAt 更新时间
-	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+	UpdatedAt time.Time `json:"updated_at" bson:"updated_at" db:"updated_at"`
 
 	// LastActiveAt 最后活跃时间
-	LastActiveAt *time.Time `json:"last_active_at,omitempty" db:"last_active_at"`
+	LastActiveAt *time.Time `json:"last_active_at,omitempty" bson:"last_active_at,omitempty" db:"last_active_at"`
 }
 
 // ============================================================================
@@ -380,64 +380,64 @@ type Runtime struct {
 	// === 基础字段 ===
 
 	// ID 唯一标识
-	ID string `json:"id" db:"id"`
+	ID string `json:"id" bson:"_id" db:"id"`
 
 	// Type 运行时类型
-	Type RuntimeType `json:"type" db:"type"`
+	Type RuntimeType `json:"type" bson:"type" db:"type"`
 
 	// Status 运行时状态
-	Status RuntimeStatus `json:"status" db:"status"`
+	Status RuntimeStatus `json:"status" bson:"status" db:"status"`
 
 	// === 关联 ===
 
 	// AgentID 关联的 Agent ID
-	AgentID string `json:"agent_id" db:"agent_id"`
+	AgentID string `json:"agent_id" bson:"agent_id" db:"agent_id"`
 
 	// NodeID 所在节点 ID
-	NodeID string `json:"node_id" db:"node_id"`
+	NodeID string `json:"node_id" bson:"node_id" db:"node_id"`
 
 	// === 容器特定字段 ===
 
 	// ContainerID Docker 容器 ID
-	ContainerID *string `json:"container_id,omitempty" db:"container_id"`
+	ContainerID *string `json:"container_id,omitempty" bson:"container_id,omitempty" db:"container_id"`
 
 	// ContainerName Docker 容器名称
-	ContainerName *string `json:"container_name,omitempty" db:"container_name"`
+	ContainerName *string `json:"container_name,omitempty" bson:"container_name,omitempty" db:"container_name"`
 
 	// Image 容器镜像
-	Image *string `json:"image,omitempty" db:"image"`
+	Image *string `json:"image,omitempty" bson:"image,omitempty" db:"image"`
 
 	// === 工作空间 ===
 
 	// WorkspacePath 工作空间路径
-	WorkspacePath string `json:"workspace_path,omitempty" db:"workspace_path"`
+	WorkspacePath string `json:"workspace_path,omitempty" bson:"workspace_path,omitempty" db:"workspace_path"`
 
 	// === 网络 ===
 
 	// IPAddress IP 地址
-	IPAddress *string `json:"ip_address,omitempty" db:"ip_address"`
+	IPAddress *string `json:"ip_address,omitempty" bson:"ip_address,omitempty" db:"ip_address"`
 
 	// Ports 端口映射
-	Ports json.RawMessage `json:"ports,omitempty" db:"ports"`
+	Ports json.RawMessage `json:"ports,omitempty" bson:"ports,omitempty" db:"ports"`
 
 	// === 资源 ===
 
 	// Resources 资源配置
-	Resources json.RawMessage `json:"resources,omitempty" db:"resources"`
+	Resources json.RawMessage `json:"resources,omitempty" bson:"resources,omitempty" db:"resources"`
 
 	// === 时间戳 ===
 
 	// CreatedAt 创建时间
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	CreatedAt time.Time `json:"created_at" bson:"created_at" db:"created_at"`
 
 	// UpdatedAt 更新时间
-	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+	UpdatedAt time.Time `json:"updated_at" bson:"updated_at" db:"updated_at"`
 
 	// StartedAt 启动时间
-	StartedAt *time.Time `json:"started_at,omitempty" db:"started_at"`
+	StartedAt *time.Time `json:"started_at,omitempty" bson:"started_at,omitempty" db:"started_at"`
 
 	// StoppedAt 停止时间
-	StoppedAt *time.Time `json:"stopped_at,omitempty" db:"stopped_at"`
+	StoppedAt *time.Time `json:"stopped_at,omitempty" bson:"stopped_at,omitempty" db:"stopped_at"`
 }
 
 // ============================================================================
@@ -588,15 +588,16 @@ const (
 //
 // Deprecated: 使用 Agent 替代。Instance 保留用于向后兼容。
 type Instance struct {
-	ID            string         `json:"id" db:"id"`
-	Name          string         `json:"name" db:"name"`                     // 显示名称
-	AccountID     string         `json:"account_id" db:"account_id"`         // 使用的账号 ID
-	AgentTypeID   string         `json:"agent_type_id" db:"agent_type_id"`   // Agent 类型 ID
-	ContainerName *string        `json:"container_name" db:"container_name"` // Docker 容器名（Executor 回填）
-	NodeID        *string        `json:"node_id" db:"node_id"`               // 所在节点 ID
-	Status        InstanceStatus `json:"status" db:"status"`                 // 实例状态
-	CreatedAt     time.Time      `json:"created_at" db:"created_at"`         // 创建时间
-	UpdatedAt     time.Time      `json:"updated_at" db:"updated_at"`         // 更新时间
+	ID            string         `json:"id" bson:"_id" db:"id"`
+	Name          string         `json:"name" bson:"name" db:"name"`                                          // 显示名称
+	AccountID     string         `json:"account_id" bson:"account_id" db:"account_id"`                        // 使用的账号 ID
+	AgentTypeID   string         `json:"agent_type_id" bson:"agent_type_id" db:"agent_type_id"`               // Agent 类型 ID
+	TemplateID    *string        `json:"template_id,omitempty" bson:"template_id,omitempty" db:"template_id"` // 关联的模板 ID（可选）
+	ContainerName *string        `json:"container_name" bson:"container_name" db:"container_name"`            // Docker 容器名（Executor 回填）
+	NodeID        *string        `json:"node_id" bson:"node_id" db:"node_id"`                                 // 所在节点 ID
+	Status        InstanceStatus `json:"status" bson:"status" db:"status"`                                    // 实例状态
+	CreatedAt     time.Time      `json:"created_at" bson:"created_at" db:"created_at"`                        // 创建时间
+	UpdatedAt     time.Time      `json:"updated_at" bson:"updated_at" db:"updated_at"`                        // 更新时间
 }
 
 // IsRunning 判断实例是否正在运行

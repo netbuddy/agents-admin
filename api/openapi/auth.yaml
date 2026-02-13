@@ -1,0 +1,387 @@
+openapi: 3.0.3
+info:
+  title: Auth API
+  version: 1.0.0
+
+# Auth 用户认证 + Agent 账号管理 API
+# 认证操作已迁移到 operations.yaml（Operation/Action 统一模型）
+
+paths:
+  /api/v1/auth/register:
+    post:
+      tags: [Auth]
+      operationId: register
+      summary: 用户注册
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: 注册成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      operationId: login
+      summary: 用户登录
+      description: 登录成功后同时设置 HttpOnly Cookie（access_token + refresh_token）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: 认证失败
+
+  /api/v1/auth/refresh:
+    post:
+      tags: [Auth]
+      operationId: refreshToken
+      summary: 刷新访问令牌
+      description: 支持 JSON body 或 refresh_token Cookie
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        '200':
+          description: 刷新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: 刷新令牌无效
+
+  /api/v1/auth/me:
+    get:
+      tags: [Auth]
+      operationId: getCurrentUser
+      summary: 获取当前用户信息
+      responses:
+        '200':
+          description: 当前用户
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: 未认证
+
+  /api/v1/auth/password:
+    put:
+      tags: [Auth]
+      operationId: changePassword
+      summary: 修改密码
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '200':
+          description: 修改成功
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/MessageResponse'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+
+  # ========== Agent Types ==========
+  /api/v1/agent-types:
+    get:
+      tags: [Auth]
+      operationId: listAgentTypes
+      summary: 获取支持的 Agent 类型列表
+      responses:
+        '200':
+          description: Agent 类型列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agent_types:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AgentType'
+
+  /api/v1/agent-types/{id}:
+    get:
+      tags: [Auth]
+      operationId: getAgentType
+      summary: 获取指定 Agent 类型详情
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Agent 类型详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentType'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+  # ========== Accounts ==========
+  /api/v1/accounts:
+    get:
+      tags: [Auth]
+      operationId: listAccounts
+      summary: 获取账号列表
+      parameters:
+        - name: agent_type
+          in: query
+          schema:
+            type: string
+          description: 按 Agent 类型过滤
+      responses:
+        '200':
+          description: 账号列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accounts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Account'
+    post:
+      tags: [Auth]
+      operationId: createAccount
+      summary: 创建新账号
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAccountRequest'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+
+  /api/v1/accounts/{id}:
+    get:
+      tags: [Auth]
+      operationId: getAccount
+      summary: 获取账号详情
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 账号详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+    delete:
+      tags: [Auth]
+      operationId: deleteAccount
+      summary: 删除账号
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '204':
+          description: 删除成功
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+  /api/v1/accounts/{id}/volume-archive:
+    put:
+      tags: [Auth]
+      operationId: uploadVolumeArchive
+      summary: 上传 Volume 归档到 MinIO
+      description: Node Manager 认证成功后上传 Docker volume 归档
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/gzip:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: 上传成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  archive_key:
+                    type: string
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+        '503':
+          description: 对象存储未配置
+    get:
+      tags: [Auth]
+      operationId: downloadVolumeArchive
+      summary: 下载 Volume 归档
+      description: 从 MinIO 下载 Docker volume 归档用于跨节点恢复
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Volume 归档文件流
+          content:
+            application/gzip:
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+        '503':
+          description: 对象存储未配置
+
+components:
+  schemas:
+    RegisterRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 6
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    AuthResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        token_type:
+          type: string
+          example: Bearer
+        expires_in:
+          type: integer
+          description: 访问令牌过期时间（秒）
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    ChangePasswordRequest:
+      type: object
+      required: [old_password, new_password]
+      properties:
+        old_password:
+          type: string
+        new_password:
+          type: string
+          minLength: 6
+
+    # ========== Agent 账号相关 Schema ==========
+    AgentType:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        auth_methods:
+          type: array
+          items:
+            type: string
+        icon:
+          type: string
+
+    Account:
+      type: object
+      required: [id, name, agent_type, status]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        agent_type:
+          type: string
+          description: Agent 类型 ID（如 claude、gemini）
+        volume_name:
+          type: string
+        volume_archive_key:
+          type: string
+          description: MinIO 中的 Volume 归档路径
+        status:
+          type: string
+          enum: [pending, authenticating, authenticated, expired]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        last_used_at:
+          type: string
+          format: date-time
+
+    CreateAccountRequest:
+      type: object
+      required: [name, agent_type]
+      properties:
+        name:
+          type: string
+          description: 账号名称
+        agent_type:
+          type: string
+          description: Agent 类型 ID

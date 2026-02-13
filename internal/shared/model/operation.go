@@ -82,21 +82,21 @@ const (
 // 数据库表：operations
 type Operation struct {
 	// 基本字段
-	ID     string          `json:"id" db:"id"`         // 唯一标识，格式：op-{random}
-	Type   OperationType   `json:"type" db:"type"`     // 操作类型
-	Config json.RawMessage `json:"config" db:"config"` // 操作配置（JSON）
-	Status OperationStatus `json:"status" db:"status"` // 操作状态
+	ID     string          `json:"id" bson:"_id" db:"id"`         // 唯一标识，格式：op-{random}
+	Type   OperationType   `json:"type" bson:"type" db:"type"`     // 操作类型
+	Config json.RawMessage `json:"config" bson:"config" db:"config"` // 操作配置（JSON）
+	Status OperationStatus `json:"status" bson:"status" db:"status"` // 操作状态
 
 	// 关联字段
-	NodeID string `json:"node_id,omitempty" db:"node_id"` // 目标节点 ID
+	NodeID string `json:"node_id,omitempty" bson:"node_id,omitempty" db:"node_id"` // 目标节点 ID
 
 	// 时间字段
-	CreatedAt  time.Time  `json:"created_at" db:"created_at"`
-	UpdatedAt  time.Time  `json:"updated_at" db:"updated_at"`
-	FinishedAt *time.Time `json:"finished_at,omitempty" db:"finished_at"`
+	CreatedAt  time.Time  `json:"created_at" bson:"created_at" db:"created_at"`
+	UpdatedAt  time.Time  `json:"updated_at" bson:"updated_at" db:"updated_at"`
+	FinishedAt *time.Time `json:"finished_at,omitempty" bson:"finished_at,omitempty" db:"finished_at"`
 
 	// 关联数据（非数据库字段）
-	Actions []*Action `json:"actions,omitempty" db:"-"` // 执行实例列表
+	Actions []*Action `json:"actions,omitempty" bson:"actions,omitempty" db:"-"` // 执行实例列表
 }
 
 // ============================================================================

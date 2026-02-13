@@ -106,13 +106,15 @@ func NewSQLiteStore(dsn string) (*RepositoryStore, error) {
 }
 
 // NewPersistentStoreFromDSN 根据驱动类型和 DSN 创建持久化存储
-// 支持的驱动类型：postgres, sqlite
+// 支持的驱动类型：postgres, sqlite, mongodb
 func NewPersistentStoreFromDSN(driver dbutil.DriverType, dsn string) (PersistentStore, error) {
 	switch driver {
 	case dbutil.DriverPostgres:
 		return NewPostgresStore(dsn)
 	case dbutil.DriverSQLite:
 		return NewSQLiteStore(dsn)
+	case dbutil.DriverMongoDB:
+		return nil, fmt.Errorf("mongodb driver requires NewMongoStore(uri, dbName); use NewPersistentStoreFromConfig instead")
 	default:
 		return nil, fmt.Errorf("unsupported database driver: %s", driver)
 	}

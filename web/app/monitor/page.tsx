@@ -7,6 +7,8 @@ import {
   TrendingUp, Timer, BarChart3
 } from 'lucide-react';
 import { AdminLayout } from '@/components/layout';
+import { useTranslation } from 'react-i18next';
+import { useFormatDate } from '@/i18n/useFormatDate';
 
 interface WorkflowSummary {
   id: string;
@@ -34,14 +36,6 @@ interface MonitorStats {
   workflows_by_state: Record<string, number>;
 }
 
-// 自动推断 API 地址：如果通过外网访问，使用相同主机的 8080 端口
-const getApiBase = () => {
-  if (typeof window === 'undefined') return 'http://localhost:8080';
-  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
-  const host = window.location.hostname;
-  return `http://${host}:8080`;
-};
-
 const getWsBase = () => {
   if (typeof window === 'undefined') return 'ws://localhost:8080';
   if (process.env.NEXT_PUBLIC_WS_URL) return process.env.NEXT_PUBLIC_WS_URL;
@@ -50,18 +44,18 @@ const getWsBase = () => {
   return `${protocol}//${host}:8080`;
 };
 
-const stateConfig: Record<string, { color: string; bgColor: string; icon: any; label: string }> = {
-  pending: { color: 'text-gray-500', bgColor: 'bg-gray-100', icon: Clock, label: '等待中' },
-  running: { color: 'text-blue-500', bgColor: 'bg-blue-100', icon: Activity, label: '运行中' },
-  waiting: { color: 'text-yellow-500', bgColor: 'bg-yellow-100', icon: AlertCircle, label: '等待用户' },
-  completed: { color: 'text-green-500', bgColor: 'bg-green-100', icon: CheckCircle2, label: '已完成' },
-  failed: { color: 'text-red-500', bgColor: 'bg-red-100', icon: XCircle, label: '失败' },
-  unknown: { color: 'text-gray-400', bgColor: 'bg-gray-50', icon: AlertCircle, label: '未知' },
+const stateConfig: Record<string, { color: string; bgColor: string; icon: any; labelKey: string }> = {
+  pending: { color: 'text-gray-500', bgColor: 'bg-gray-100', icon: Clock, labelKey: 'status.waiting' },
+  running: { color: 'text-blue-500', bgColor: 'bg-blue-100', icon: Activity, labelKey: 'status.running' },
+  waiting: { color: 'text-yellow-500', bgColor: 'bg-yellow-100', icon: AlertCircle, labelKey: 'monitor.waitingUser' },
+  completed: { color: 'text-green-500', bgColor: 'bg-green-100', icon: CheckCircle2, labelKey: 'status.completed' },
+  failed: { color: 'text-red-500', bgColor: 'bg-red-100', icon: XCircle, labelKey: 'status.failed' },
+  unknown: { color: 'text-gray-400', bgColor: 'bg-gray-50', icon: AlertCircle, labelKey: 'status.unknown' },
 };
 
-const typeLabels: Record<string, string> = {
-  auth: 'OAuth 认证',
-  run: '任务执行',
+const typeLabelKeys: Record<string, string> = {
+  auth: 'monitor.typeAuth',
+  run: 'monitor.typeRun',
 };
 
 function formatDuration(ms: number | null): string {
@@ -71,17 +65,7 @@ function formatDuration(ms: number | null): string {
   return `${(ms / 60000).toFixed(1)}m`;
 }
 
-function formatTime(time: string | null): string {
-  if (!time) return '-';
-  const date = new Date(time);
-  return date.toLocaleString('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
-}
+// formatTime is now handled by useFormatDate hook in components
 
 function StatCard({ title, value, icon: Icon, trend, color }: { 
   title: string; 
@@ -107,6 +91,8 @@ function StatCard({ title, value, icon: Icon, trend, color }: {
 }
 
 function WorkflowCard({ workflow, onClick }: { workflow: WorkflowSummary; onClick: () => void }) {
+  const { t } = useTranslation();
+  const { formatShortTime } = useFormatDate();
   const config = stateConfig[workflow.state] || stateConfig.unknown;
   const StateIcon = config.icon;
 
@@ -119,11 +105,11 @@ function WorkflowCard({ workflow, onClick }: { workflow: WorkflowSummary; onClic
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${config.bgColor} ${config.color}`}>
-              {typeLabels[workflow.type] || workflow.type}
+              {t(typeLabelKeys[workflow.type] || workflow.type, { ns: 'monitor', defaultValue: workflow.type })}
             </span>
             <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${config.bgColor} ${config.color}`}>
               <StateIcon className="w-3 h-3 inline mr-1" />
-              {config.label}
+              {t(config.labelKey)}
             </span>
           </div>
           <h3 className="font-semibold text-gray-900 mt-2 truncate">{workflow.name}</h3>
@@ -135,7 +121,7 @@ function WorkflowCard({ workflow, onClick }: { workflow: WorkflowSummary; onClic
       {/* Progress Bar */}
       <div className="mt-4">
         <div className="flex justify-between text-xs text-gray-500 mb-1">
-          <span>进度</span>
+          <span>{t('label.progress')}</span>
           <span>{workflow.progress}%</span>
         </div>
         <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -155,7 +141,7 @@ function WorkflowCard({ workflow, onClick }: { workflow: WorkflowSummary; onClic
       <div className="flex items-center gap-4 mt-4 text-xs text-gray-500">
         <div className="flex items-center gap-1">
           <Zap className="w-3 h-3" />
-          <span>{workflow.event_count} 事件</span>
+          <span>{workflow.event_count} {t('monitor.events', { ns: 'monitor' })}</span>
         </div>
         <div className="flex items-center gap-1">
           <Timer className="w-3 h-3" />
@@ -163,7 +149,7 @@ function WorkflowCard({ workflow, onClick }: { workflow: WorkflowSummary; onClic
         </div>
         <div className="flex items-center gap-1">
           <Clock className="w-3 h-3" />
-          <span>{formatTime(workflow.update_time)}</span>
+          <span>{workflow.update_time ? formatShortTime(workflow.update_time) : '-'}</span>
         </div>
       </div>
 
@@ -177,6 +163,7 @@ function WorkflowCard({ workflow, onClick }: { workflow: WorkflowSummary; onClic
 }
 
 export default function MonitorPage() {
+  const { t } = useTranslation('monitor');
   const [workflows, setWorkflows] = useState<WorkflowSummary[]>([]);
   const [stats, setStats] = useState<MonitorStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -195,8 +182,8 @@ export default function MonitorPage() {
       if (filterState) params.append('state', filterState);
 
       const [workflowsRes, statsRes] = await Promise.all([
-        fetch(`${getApiBase()}/api/v1/monitor/workflows?${params}`),
-        fetch(`${getApiBase()}/api/v1/monitor/stats`),
+        fetch(`/api/v1/monitor/workflows?${params}`),
+        fetch(`/api/v1/monitor/stats`),
       ]);
 
       if (workflowsRes.ok) {
@@ -293,7 +280,7 @@ export default function MonitorPage() {
     const workflow = workflows.find(w => w.id === selectedWorkflow);
     if (workflow) {
       return (
-        <AdminLayout title="工作流监控" onRefresh={fetchData} loading={loading}>
+        <AdminLayout title={t('title')} onRefresh={fetchData} loading={loading}>
           <WorkflowDetail 
             workflow={workflow} 
             onBack={() => setSelectedWorkflow(null)} 
@@ -311,7 +298,7 @@ export default function MonitorPage() {
           wsConnected ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
         }`}>
           <span className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
-          <span>{wsConnected ? '实时连接' : '离线'}</span>
+          <span>{wsConnected ? t('detail.liveConnection', { ns: 'tasks', defaultValue: 'Live' }) : t('status.offline')}</span>
         </div>
         <button
           onClick={() => setAutoRefresh(!autoRefresh)}
@@ -322,7 +309,7 @@ export default function MonitorPage() {
           }`}
         >
           <RefreshCw className={`w-3.5 h-3.5 ${autoRefresh && wsConnected ? 'animate-spin' : ''}`} />
-          {autoRefresh ? '自动刷新' : '已暂停'}
+          {autoRefresh ? t('action.refresh', { ns: 'common' }) : t('monitor.paused', { defaultValue: 'Paused' })}
         </button>
       </div>
 
@@ -330,26 +317,26 @@ export default function MonitorPage() {
       {stats && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
           <StatCard 
-            title="总工作流" 
+            title={t('monitor.totalWorkflows', { defaultValue: 'Total Workflows' })} 
             value={stats.total_workflows} 
             icon={BarChart3}
             color="bg-gradient-to-br from-blue-500 to-blue-600"
           />
           <StatCard 
-            title="活跃中" 
+            title={t('monitor.active', { defaultValue: 'Active' })} 
             value={stats.active_workflows} 
             icon={Activity}
-            trend="实时运行"
+            trend={t('monitor.liveRunning', { defaultValue: 'Running' })}
             color="bg-gradient-to-br from-green-500 to-green-600"
           />
           <StatCard 
-            title="今日完成" 
+            title={t('monitor.completedToday', { defaultValue: 'Completed Today' })} 
             value={stats.completed_today} 
             icon={CheckCircle2}
             color="bg-gradient-to-br from-emerald-500 to-emerald-600"
           />
           <StatCard 
-            title="今日失败" 
+            title={t('monitor.failedToday', { defaultValue: 'Failed Today' })} 
             value={stats.failed_today} 
             icon={XCircle}
             color="bg-gradient-to-br from-red-500 to-red-600"
@@ -365,7 +352,7 @@ export default function MonitorPage() {
               <Search className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="搜索工作流..."
+                placeholder={t('monitor.searchPlaceholder', { defaultValue: 'Search workflows...' })}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
@@ -379,21 +366,21 @@ export default function MonitorPage() {
               onChange={(e) => setFilterType(e.target.value)}
               className="flex-1 sm:flex-none px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
             >
-              <option value="">所有类型</option>
-              <option value="auth">OAuth 认证</option>
-              <option value="run">任务执行</option>
+              <option value="">{t('monitor.allTypes', { defaultValue: 'All Types' })}</option>
+              <option value="auth">{t('monitor.typeAuth', { defaultValue: 'OAuth Auth' })}</option>
+              <option value="run">{t('monitor.typeRun', { defaultValue: 'Task Execution' })}</option>
             </select>
             <select
               value={filterState}
               onChange={(e) => setFilterState(e.target.value)}
               className="flex-1 sm:flex-none px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
             >
-              <option value="">所有状态</option>
-              <option value="pending">等待中</option>
-              <option value="running">运行中</option>
-              <option value="waiting">等待用户</option>
-              <option value="completed">已完成</option>
-              <option value="failed">失败</option>
+              <option value="">{t('monitor.allStates', { defaultValue: 'All States' })}</option>
+              <option value="pending">{t('status.waiting')}</option>
+              <option value="running">{t('status.running')}</option>
+              <option value="waiting">{t('monitor.waitingUser', { defaultValue: 'Waiting User' })}</option>
+              <option value="completed">{t('status.completed')}</option>
+              <option value="failed">{t('status.failed')}</option>
             </select>
           </div>
         </div>
@@ -407,8 +394,8 @@ export default function MonitorPage() {
       ) : filteredWorkflows.length === 0 ? (
         <div className="text-center py-20">
           <Activity className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500">暂无工作流数据</p>
-          <p className="text-sm text-gray-400 mt-1">发起认证或任务后，数据将在此显示</p>
+          <p className="text-gray-500">{t('noWorkflows')}</p>
+          <p className="text-sm text-gray-400 mt-1">{t('noWorkflowsHint')}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
@@ -427,6 +414,8 @@ export default function MonitorPage() {
 
 // Workflow Detail Component
 function WorkflowDetail({ workflow, onBack }: { workflow: WorkflowSummary; onBack: () => void }) {
+  const { t } = useTranslation('monitor');
+  const { formatShortTime } = useFormatDate();
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -434,7 +423,7 @@ function WorkflowDetail({ workflow, onBack }: { workflow: WorkflowSummary; onBac
     async function fetchEvents() {
       try {
         const res = await fetch(
-          `${getApiBase()}/api/v1/monitor/workflows/${workflow.type}/${workflow.id}/events`
+          `/api/v1/monitor/workflows/${workflow.type}/${workflow.id}/events`
         );
         if (res.ok) {
           const data = await res.json();
@@ -468,7 +457,7 @@ function WorkflowDetail({ workflow, onBack }: { workflow: WorkflowSummary; onBac
           className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
         >
           <ChevronRight className="w-4 h-4 rotate-180" />
-          返回
+          {t('action.goBack', { ns: 'common' })}
         </button>
         <div className="flex-1 min-w-0">
           <h2 className="text-lg font-bold text-gray-900 truncate">{workflow.name}</h2>
@@ -476,7 +465,7 @@ function WorkflowDetail({ workflow, onBack }: { workflow: WorkflowSummary; onBac
         </div>
         <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full ${config.bgColor} ${config.color}`}>
           <StateIcon className="w-4 h-4" />
-          <span className="text-sm font-medium">{config.label}</span>
+          <span className="text-sm font-medium">{t(config.labelKey)}</span>
         </div>
       </div>
 
@@ -484,15 +473,15 @@ function WorkflowDetail({ workflow, onBack }: { workflow: WorkflowSummary; onBac
         {/* Info Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-6">
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-            <p className="text-sm text-gray-500">开始时间</p>
-            <p className="text-lg font-semibold mt-1">{formatTime(workflow.start_time)}</p>
+            <p className="text-sm text-gray-500">{t('startedAt')}</p>
+            <p className="text-lg font-semibold mt-1">{workflow.start_time ? formatShortTime(workflow.start_time) : '-'}</p>
           </div>
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-            <p className="text-sm text-gray-500">持续时间</p>
+            <p className="text-sm text-gray-500">{t('duration')}</p>
             <p className="text-lg font-semibold mt-1">{formatDuration(workflow.duration_ms)}</p>
           </div>
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-            <p className="text-sm text-gray-500">执行节点</p>
+            <p className="text-sm text-gray-500">{t('node')}</p>
             <p className="text-lg font-semibold mt-1 font-mono">{workflow.node_id || '-'}</p>
           </div>
         </div>
@@ -500,7 +489,7 @@ function WorkflowDetail({ workflow, onBack }: { workflow: WorkflowSummary; onBac
         {/* Progress */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
           <div className="flex justify-between text-sm mb-2">
-            <span className="font-medium">执行进度</span>
+            <span className="font-medium">{t('label.progress', { ns: 'common' })}</span>
             <span className="text-gray-500">{workflow.progress}%</span>
           </div>
           <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
@@ -519,7 +508,7 @@ function WorkflowDetail({ workflow, onBack }: { workflow: WorkflowSummary; onBac
         {/* Metadata */}
         {workflow.metadata && Object.keys(workflow.metadata).length > 0 && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
-            <h3 className="font-semibold text-gray-900 mb-3">元数据</h3>
+            <h3 className="font-semibold text-gray-900 mb-3">{t('label.metadata', { ns: 'common' })}</h3>
             <div className="grid grid-cols-2 gap-3">
               {Object.entries(workflow.metadata).map(([key, value]) => (
                 <div key={key} className="bg-gray-50 rounded-lg p-3">
@@ -536,7 +525,7 @@ function WorkflowDetail({ workflow, onBack }: { workflow: WorkflowSummary; onBac
         {/* Error */}
         {workflow.error && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
-            <h3 className="font-semibold text-red-800 mb-2">错误信息</h3>
+            <h3 className="font-semibold text-red-800 mb-2">{t('status.error', { ns: 'common' })}</h3>
             <p className="text-sm text-red-600 font-mono">{workflow.error}</p>
           </div>
         )}
@@ -545,8 +534,8 @@ function WorkflowDetail({ workflow, onBack }: { workflow: WorkflowSummary; onBac
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
           <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
             <Zap className="w-5 h-5 text-blue-500" />
-            事件时间线
-            <span className="text-sm font-normal text-gray-500">({events.length} 个事件)</span>
+            {t('monitor.eventTimeline', { defaultValue: 'Event Timeline' })}
+            <span className="text-sm font-normal text-gray-500">({events.length})</span>
           </h3>
 
           {loading ? (
@@ -555,7 +544,7 @@ function WorkflowDetail({ workflow, onBack }: { workflow: WorkflowSummary; onBac
             </div>
           ) : events.length === 0 ? (
             <div className="text-center py-10 text-gray-500">
-              暂无事件记录
+              {t('debugPanel.noEvents')}
             </div>
           ) : (
             <div className="relative">
@@ -572,7 +561,7 @@ function WorkflowDetail({ workflow, onBack }: { workflow: WorkflowSummary; onBac
                         <div className="flex items-center justify-between mb-2">
                           <span className={`text-sm font-medium ${lc.color}`}>{event.type}</span>
                           <span className="text-xs text-gray-400">
-                            {formatTime(event.timestamp)}
+                            {event.timestamp ? formatShortTime(event.timestamp) : '-'}
                           </span>
                         </div>
                         {event.data && Object.keys(event.data).length > 0 && (
@@ -582,7 +571,7 @@ function WorkflowDetail({ workflow, onBack }: { workflow: WorkflowSummary; onBac
                         )}
                         {event.producer_id && (
                           <p className="text-xs text-gray-400 mt-2">
-                            节点: {event.producer_id}
+                            {t('node')}: {event.producer_id}
                           </p>
                         )}
                       </div>

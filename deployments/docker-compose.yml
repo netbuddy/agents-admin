@@ -1,58 +1,38 @@
 version: "3.9"
 
+# ============================================================
+# 应用服务 + 可选数据库（PostgreSQL）
+#
+# 基础设施服务（MongoDB、Redis、MinIO）已移至 docker-compose.infra.yml，
+# 开发环境和生产环境共用同一份基础设施定义，避免重复。
+#
+# 使用方法：
+#   开发基础设施: docker compose -f docker-compose.infra.yml --env-file .env.dev up -d
+#   PostgreSQL:   docker compose -f docker-compose.yml --env-file .env.dev --profile postgres up -d
+#   全栈:         docker compose -f docker-compose.infra.yml -f docker-compose.yml --env-file .env.dev --profile full up -d
+# ============================================================
+
 services:
-  # PostgreSQL 数据库
+  # PostgreSQL 数据库 (可选，用于 driver: postgres)
   postgres:
     image: postgres:16-alpine
     container_name: agents-postgres
     environment:
-      POSTGRES_USER: agents
-      POSTGRES_PASSWORD: agents_dev_password
-      POSTGRES_DB: agents_admin
+      POSTGRES_USER: ${POSTGRES_USER:-agents}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agents_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-agents_admin}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U agents -d agents_admin"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-agents} -d ${POSTGRES_DB:-agents_admin}"]
       interval: 5s
       timeout: 5s
       retries: 5
-
-  # Redis (事件流 + 缓存)
-  redis:
-    image: redis:7-alpine
-    container_name: agents-redis
-    command: redis-server --appendonly yes
-    ports:
-      - "6380:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  # MinIO (对象存储)
-  minio:
-    image: minio/minio:latest
-    container_name: agents-minio
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin123
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    volumes:
-      - minio_data:/data
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+    profiles:
+      - postgres
 
   # API Server (Control Plane)
   api-server:
@@ -61,19 +41,21 @@ services:
       dockerfile: deployments/Dockerfile.api
     container_name: agents-api
     depends_on:
-      postgres:
+      mongodb:
         condition: service_healthy
       redis:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgres://agents:agents_dev_password@postgres:5432/agents_admin?sslmode=disable
-      REDIS_URL: redis://redis:6379/0
+      DATABASE_DRIVER: mongodb
+      DATABASE_URI: mongodb://${MONGO_ROOT_USERNAME:-agents_admin}:${MONGO_ROOT_PASSWORD:-agents_dev_password}@mongodb:27017
+      DATABASE_NAME: ${MONGO_DB_NAME:-agents_admin}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-agents_dev_password}@redis:6379/0
       MINIO_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin123
-      LOG_LEVEL: debug
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin_dev_123}
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
     ports:
-      - "8080:8080"
+      - "${API_SERVER_PORT:-8080}:8080"
     volumes:
       - ../:/app:ro
     profiles:
@@ -112,8 +94,6 @@ services:
 
 volumes:
   postgres_data:
-  redis_data:
-  minio_data:
   workspaces:
   qwencode_auth:
 

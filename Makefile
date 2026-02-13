@@ -1,9 +1,7 @@
-.PHONY: all build test lint clean dev-up dev-down run-api run-nodemanager run-web stop-api stop-nodemanager stop-web monitoring-up monitoring-down watch-api watch-nodemanager generate-api generate-api-force generate-api-models generate-api-server generate-api-spec bundle-openapi
+.PHONY: all build test lint clean dev-up dev-down run-api run-nodemanager run-web stop-api stop-nodemanager stop-web monitoring-up monitoring-down generate-api generate-api-force bundle-openapi
 
 # ========== OpenAPI 代码生成 ==========
-OAPI_CODEGEN := $(HOME)/go/bin/oapi-codegen
 OPENAPI_DIR := api/openapi
-CODEGEN_DIR := api/codegen
 GENERATED_DIR := api/generated/go
 
 # 源文件（拆分的 yaml 文件，不包括 bundled.yaml）
@@ -11,48 +9,21 @@ OPENAPI_SOURCES := $(filter-out $(OPENAPI_DIR)/bundled.yaml,$(shell find $(OPENA
 OPENAPI_MAIN := $(OPENAPI_DIR)/openapi.yaml
 OPENAPI_BUNDLED := $(OPENAPI_DIR)/bundled.yaml
 
-# 生成的文件
-GEN_MODELS := $(GENERATED_DIR)/models.gen.go
-GEN_SERVER := $(GENERATED_DIR)/server.gen.go
-GEN_SPEC := $(GENERATED_DIR)/spec.gen.go
-
-# 合并 OpenAPI 规范（将拆分的文件合并为单个文件）
-$(OPENAPI_BUNDLED): $(OPENAPI_SOURCES)
+# 合并 OpenAPI 规范（将拆分的文件合并为单个文件，用于文档和嵌入）
+bundle-openapi:
 	@echo "Bundling OpenAPI specs..."
 	npx @redocly/cli bundle $(OPENAPI_MAIN) -o $(OPENAPI_BUNDLED)
 
-bundle-openapi: $(OPENAPI_BUNDLED)
-
-# Models（所有模型定义）
-$(GEN_MODELS): $(OPENAPI_BUNDLED) $(CODEGEN_DIR)/models.yaml
-	@echo "Generating models..."
-	@mkdir -p $(GENERATED_DIR)
-	$(OAPI_CODEGEN) --config $(CODEGEN_DIR)/models.yaml $(OPENAPI_BUNDLED)
-
-# Server（服务接口）
-$(GEN_SERVER): $(OPENAPI_BUNDLED) $(CODEGEN_DIR)/server.yaml $(GEN_MODELS)
-	@echo "Generating server interface..."
-	$(OAPI_CODEGEN) --config $(CODEGEN_DIR)/server.yaml $(OPENAPI_BUNDLED)
-
-# Spec（嵌入规范）
-$(GEN_SPEC): $(OPENAPI_BUNDLED) $(CODEGEN_DIR)/spec.yaml
-	@echo "Generating embedded spec..."
-	$(OAPI_CODEGEN) --config $(CODEGEN_DIR)/spec.yaml $(OPENAPI_BUNDLED)
-
-# 快捷目标
-generate-api-models: $(GEN_MODELS)
-generate-api-server: $(GEN_SERVER)
-generate-api-spec: $(GEN_SPEC)
-
-# 生成所有（增量）
-generate-api: $(GEN_MODELS) $(GEN_SERVER) $(GEN_SPEC)
+# 按域生成 Go 代码（每个域 YAML 生成独立的 .gen.go 文件）
+generate-api: $(OPENAPI_SOURCES)
+	@echo "Generating per-domain Go code..."
+	bash scripts/generate-api.sh
 
 # 强制重新生成所有
 generate-api-force:
 	@echo "Force regenerating all OpenAPI code..."
-	@rm -f $(OPENAPI_BUNDLED)
-	@rm -rf $(GENERATED_DIR)
-	@$(MAKE) generate-api
+	@rm -f $(GENERATED_DIR)/*.gen.go
+	bash scripts/generate-api.sh
 
 # 默认目标
 all: lint test build
@@ -122,24 +93,22 @@ fmt:
 
 # 开发环境
 dev-up:
-	docker compose -f deployments/docker-compose.yml up -d postgres redis minio
+	docker compose -f deployments/docker-compose.infra.yml --env-file .env.dev up -d
 	@echo "Waiting for services..."
 	@sleep 5
 	@echo "Services started:"
-	@docker compose -f deployments/docker-compose.yml ps
+	@docker compose -f deployments/docker-compose.infra.yml --env-file .env.dev ps
 
 dev-down:
-	docker compose -f deployments/docker-compose.yml down
+	docker compose -f deployments/docker-compose.infra.yml --env-file .env.dev down
 
 dev-logs:
-	docker compose -f deployments/docker-compose.yml logs -f
+	docker compose -f deployments/docker-compose.infra.yml --env-file .env.dev logs -f
 
 # 运行（开发模式）
 run-api:
 	@echo "Starting API Server..."
-	DATABASE_URL="postgres://agents:agents_dev_password@localhost:5432/agents_admin?sslmode=disable" \
-	REDIS_URL="redis://localhost:6380/0" \
-	go run ./cmd/api-server
+	APP_ENV=dev go run ./cmd/api-server
 
 stop-api:
 	@echo "Stopping API Server on port 8080..."
@@ -151,11 +120,8 @@ stop-api:
 	fi
 
 run-nodemanager:
-	@echo "Starting NodeManager..."
-	API_SERVER_URL="http://localhost:8080" \
-	NODE_ID="dev-node-01" \
-	WORKSPACE_DIR="/tmp/agents-workspaces" \
-	go run ./cmd/nodemanager
+	@echo "Starting NodeManager (dev mode, config from configs/dev.yaml + .env.dev)..."
+	APP_ENV=dev go run ./cmd/nodemanager
 
 stop-nodemanager:
 	@echo "Stopping NodeManager on port 18000-18099 (ttyd)..."
@@ -176,11 +142,12 @@ run-web:
 	@echo "Starting Web UI on port 3002..."
 	cd web && npm run dev
 
-run-api-dev: ## 开发模式运行后端（不嵌入前端，需单独启动 Next.js dev server）
-	@echo "Starting API Server in dev mode (no embedded frontend)..."
-	DATABASE_URL="postgres://agents:agents_dev_password@localhost:5432/agents_admin?sslmode=disable" \
-	REDIS_URL="redis://localhost:6380/0" \
-	go run -tags dev ./cmd/api-server
+run-api-dev: ## 开发模式运行后端（HTTPS，自动代理前端到 Next.js :3002）
+	@echo "Starting API Server in dev mode (HTTPS + reverse proxy to Next.js)..."
+	@echo "  → 浏览器访问 https://localhost:8080（或 https://IP:8080）"
+	@echo "  → 需先运行 make run-web 启动 Next.js dev server"
+	@echo "  → 配置: configs/dev.yaml + .env.dev"
+	APP_ENV=dev go run -tags dev ./cmd/api-server
 
 stop-web:
 	@echo "Stopping Web UI on port 3002..."
@@ -190,17 +157,6 @@ stop-web:
 	else \
 		echo "No process listening on 3002"; \
 	fi
-
-# 热加载运行（修改代码后自动重启）
-watch-api:
-	@echo "Starting API Server with hot reload (air)..."
-	@echo "修改 Go 代码后会自动重新编译并重启"
-	air -c .air.api.toml
-
-watch-nodemanager:
-	@echo "Starting Executor with hot reload (air)..."
-	@echo "修改 Go 代码后会自动重新编译并重启"
-	air -c .air.nodemanager.toml
 
 # 监控栈
 monitoring-up:
@@ -233,14 +189,13 @@ deb: release-linux ## 构建 Linux 二进制并打包为 .deb
 # Docker 构建
 docker-build:
 	docker build -f deployments/Dockerfile.api -t agents-admin/api-server:dev .
-	docker build -f deployments/Dockerfile.agent -t agents-admin/executor:dev .
 
 # 清理
 clean:
 	rm -rf bin/
 	rm -rf web/out web/.next
 	rm -f coverage.out coverage.html
-	docker compose -f deployments/docker-compose.yml down -v
+	docker compose -f deployments/docker-compose.infra.yml --env-file .env.dev down -v 2>/dev/null || true
 
 # 帮助
 help:
@@ -278,8 +233,6 @@ help:
 	@echo "    run-nodemanager  - Run NodeManager locally"
 	@echo "    run-web          - Run Web UI locally"
 	@echo "    run-api-dev      - Run API Server in dev mode (no embedded frontend)"
-	@echo "    watch-api        - Run API Server with hot reload (air)"
-	@echo "    watch-nodemanager - Run NodeManager with hot reload (air)"
 	@echo ""
 	@echo "  Infrastructure:"
 	@echo "    monitoring-up    - Start monitoring stack"

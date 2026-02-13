@@ -12,7 +12,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -74,7 +76,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 
 	// 如果指定了实例 ID，获取容器名和节点信息
 	if req.InstanceID != "" {
-		instance, err := h.store.GetInstance(r.Context(), req.InstanceID)
+		instance, err := h.store.GetAgentInstance(r.Context(), req.InstanceID)
 		if err != nil {
 			log.Printf("[terminal] Failed to get instance %s: %v", req.InstanceID, err)
 			writeError(w, http.StatusInternalServerError, "failed to get instance")
@@ -200,7 +202,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Proxy 代理终端 WebSocket 连接
+// Proxy 代理终端连接（支持 HTTP + WebSocket）
 func (h *Handler) Proxy(w http.ResponseWriter, r *http.Request) {
 	sessionID := r.PathValue("id")
 
@@ -220,15 +222,80 @@ func (h *Handler) Proxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	target, _ := url.Parse(fmt.Sprintf("http://localhost:%d", *session.Port))
-	proxy := httputil.NewSingleHostReverseProxy(target)
+	backendAddr := fmt.Sprintf("localhost:%d", *session.Port)
 
+	// 剥离前缀
 	r.URL.Path = strings.TrimPrefix(r.URL.Path, fmt.Sprintf("/terminal/%s", sessionID))
 	if r.URL.Path == "" {
 		r.URL.Path = "/"
 	}
 
+	// WebSocket 请求：使用 TCP 双向转发
+	if isWebSocketUpgrade(r) {
+		h.proxyWebSocket(w, r, backendAddr)
+		return
+	}
+
+	// 普通 HTTP 请求：标准反向代理
+	target, _ := url.Parse(fmt.Sprintf("http://%s", backendAddr))
+	proxy := httputil.NewSingleHostReverseProxy(target)
 	proxy.ServeHTTP(w, r)
+}
+
+// isWebSocketUpgrade 检测是否为 WebSocket 升级请求
+func isWebSocketUpgrade(r *http.Request) bool {
+	return strings.EqualFold(r.Header.Get("Upgrade"), "websocket")
+}
+
+// proxyWebSocket 使用 TCP hijack 双向代理 WebSocket
+func (h *Handler) proxyWebSocket(w http.ResponseWriter, r *http.Request, backendAddr string) {
+	// 连接后端
+	backendConn, err := net.DialTimeout("tcp", backendAddr, 5*time.Second)
+	if err != nil {
+		log.Printf("[terminal] WebSocket backend dial failed: %v", err)
+		writeError(w, http.StatusBadGateway, "backend unavailable")
+		return
+	}
+	defer backendConn.Close()
+
+	// Hijack 客户端连接
+	hj, ok := w.(http.Hijacker)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, "hijack not supported")
+		return
+	}
+	clientConn, clientBuf, err := hj.Hijack()
+	if err != nil {
+		log.Printf("[terminal] Hijack failed: %v", err)
+		return
+	}
+	defer clientConn.Close()
+
+	// 将原始请求转发给后端
+	if err := r.Write(backendConn); err != nil {
+		log.Printf("[terminal] Failed to write request to backend: %v", err)
+		return
+	}
+
+	// 双向复制数据
+	done := make(chan struct{}, 2)
+
+	// 后端 → 客户端
+	go func() {
+		io.Copy(clientConn, backendConn)
+		done <- struct{}{}
+	}()
+
+	// 客户端 → 后端（先 flush buffered reader 中的残留数据）
+	go func() {
+		if clientBuf.Reader.Buffered() > 0 {
+			io.CopyN(backendConn, clientBuf, int64(clientBuf.Reader.Buffered()))
+		}
+		io.Copy(backendConn, clientConn)
+		done <- struct{}{}
+	}()
+
+	<-done
 }
 
 // ============================================================================

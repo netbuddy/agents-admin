@@ -1,34 +1,43 @@
-# 开发环境配置
-# 公共配置见 common.yaml
+# 开发环境统一配置（API Server + Node Manager）
+# 默认值硬编码在 config.go 中，此文件仅覆盖开发环境特有项
+#
+# 与 Docker Compose 共享的配置（port/name/password）统一从 .env.dev 读取，
+# 此文件只保留 .env.dev 中没有的结构性配置。
 
-server:
+# ---- API Server ----
+
+api_server:
   port: 8080
+  url: https://localhost:8080  # Node Manager 连接用
 
 database:
+  driver: mongodb
   host: localhost
-  port: 5432
-  user: agents
-  name: agents_admin
-  sslmode: disable
+  # port/name/user/password 从 .env.dev 读取（MONGO_PORT/MONGO_DB_NAME/MONGO_ROOT_USERNAME/MONGO_ROOT_PASSWORD）
 
 redis:
   host: localhost
-  port: 6380
   db: 0
+  # port/password 从 .env.dev 读取（REDIS_PORT/REDIS_PASSWORD）
 
-etcd:
-  endpoints:
-    - localhost:2379
-  prefix: /agents
+minio:
+  endpoint: localhost:9000
+  use_ssl: false
+  # access_key/secret_key 从 .env.dev 读取（MINIO_ROOT_USER/MINIO_ROOT_PASSWORD）
 
-# 调度器配置（覆盖 common.yaml 中的默认值）
 scheduler:
   node_id: api-server
 
-# 认证配置
+# ---- 共享 ----
+
+tls:
+  enabled: true
+  auto_generate: true
+  cert_dir: "./certs"
+  ca_file: ./certs/ca.pem
+  hosts: "host.docker.internal"
+
 auth:
-  jwt_secret: "dev-secret-key-at-least-32-characters-long"
   access_token_ttl: "15m"
   refresh_token_ttl: "168h"
-  admin_email: "admin@agents-admin.local"
-  admin_password: "admin123456"
+  # jwt_secret/admin_email/admin_password 从 .env.dev 读取

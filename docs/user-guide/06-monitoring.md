@@ -7,7 +7,7 @@
 ### API 端点
 
 ```bash
-curl http://localhost:8080/health
+curl -k https://localhost:8080/health
 # 响应: {"status": "ok"}
 ```
 
@@ -34,7 +34,7 @@ curl http://localhost:8080/health
 通过 API 获取系统整体统计：
 
 ```bash
-curl http://localhost:8080/api/v1/monitor/stats
+curl -k https://localhost:8080/api/v1/monitor/stats
 ```
 
 返回任务、Run、节点的数量统计。
@@ -44,7 +44,7 @@ curl http://localhost:8080/api/v1/monitor/stats
 ### 端点
 
 ```bash
-curl http://localhost:8080/metrics
+curl -k https://localhost:8080/metrics
 ```
 
 ### 可用指标
@@ -76,7 +76,7 @@ make monitoring-up
 连接到 Run 的实时事件 WebSocket：
 
 ```
-ws://localhost:8080/ws/runs/{runId}/events?from_seq=0
+wss://localhost:8080/ws/runs/{runId}/events?from_seq=0
 ```
 
 消息格式：
@@ -90,7 +90,7 @@ ws://localhost:8080/ws/runs/{runId}/events?from_seq=0
 连接到全局监控 WebSocket：
 
 ```
-ws://localhost:8080/ws/monitor
+wss://localhost:8080/ws/monitor
 ```
 
 接收系统级别的实时事件推送。
@@ -151,7 +151,7 @@ make watch-nodemanager
 
 ### 数据库迁移
 
-迁移文件位于 `deployments/migrations/` 目录，API Server 启动时自动执行。
+迁移文件位于 `deployments/migrations/` 目录，仅适用于 **PostgreSQL**。MongoDB 无需迁移（schema-less，索引在启动时自动创建）。
 
 ## API 参考
 

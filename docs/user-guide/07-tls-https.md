@@ -22,7 +22,7 @@ Agents Admin 支持在 API Server 与 Node Manager 之间启用 TLS 加密通信
 
 ## 快速启用（零配置，推荐内网环境）
 
-如果你只是需要在内网环境中加密通信，无需手动生成证书，只需在 `api-server.yaml` 中添加两行：
+如果你只是需要在内网环境中加密通信，无需手动生成证书，只需在 `agents-admin.yaml` 中添加两行：
 
 ```yaml
 tls:
@@ -31,17 +31,22 @@ tls:
 ```
 
 API Server 启动时会自动：
-1. 生成自签名 CA 和服务端证书（保存到 `/etc/agents-admin/certs/`）
+1. 生成自签名 CA 和服务端证书
 2. 证书 SANs 自动包含 `localhost`、`127.0.0.1`、本机 hostname 和所有网卡 IP
 3. 已有证书不会被覆盖（安全幂等）
 
-如需指定额外的域名或 IP：
+**证书保存位置**由 `cert_dir` 决定：
+- 未配置时默认：`/etc/agents-admin/certs/`（适合生产环境 deb 部署）
+- 开发环境 `dev.yaml` 配置：`cert_dir: "./certs"`（项目根目录下）
+
+如需指定额外的域名/IP 或自定义证书目录：
 
 ```yaml
 tls:
   enabled: true
   auto_generate: true
-  hosts: "api.example.internal,10.0.1.100"
+  cert_dir: "./certs"                          # 可选，证书输出目录
+  hosts: "api.example.internal,10.0.1.100"     # 可选，额外的 SAN
 ```
 
 Node Manager 配置：将自动生成的 `/etc/agents-admin/certs/ca.pem` 复制到节点机器，然后：
@@ -53,7 +58,84 @@ tls:
   ca_file: /etc/agents-admin/certs/ca.pem
 ```
 
-> 如需更细粒度的证书控制（自有 CA、Let's Encrypt 等），请参考下方手动配置章节。
+> 如需更细粒度的证书控制（自有 CA、Let's Encrypt 等），请参考下方章节。
+
+---
+
+## Let's Encrypt 自动证书（互联网域名）
+
+如果你的 API Server 部署在公网且有域名，可以使用 Let's Encrypt 自动获取受信任的 TLS 证书：
+
+```yaml
+tls:
+  enabled: true
+  acme:
+    enabled: true
+    domains: ["admin.example.com"]
+    email: "admin@example.com"
+```
+
+### 工作原理
+
+1. API Server 启动时自动向 Let's Encrypt 申请证书（ACME 协议）
+2. 自动监听 `:443`（HTTPS）和 `:80`（HTTP→HTTPS 重定向 + ACME challenge）
+3. 证书缓存在 `/etc/agents-admin/certs/acme/`（可通过 `acme.cache_dir` 自定义）
+4. 证书到期前自动续期，无需人工干预
+
+### 前置条件
+
+- 域名已解析到服务器 IP
+- 服务器 **80 端口**和 **443 端口**可从公网访问（Let's Encrypt 需要验证域名所有权）
+- `api-server.yaml` 中 `server.port` 的值在 ACME 模式下会被忽略，固定使用 443
+
+### 多域名支持
+
+```yaml
+tls:
+  enabled: true
+  acme:
+    enabled: true
+    domains:
+      - admin.example.com
+      - api.example.com
+    email: "admin@example.com"
+    cache_dir: /etc/agents-admin/certs/acme
+```
+
+### Node Manager 配置
+
+Let's Encrypt 签发的证书是公网受信的，Node Manager **无需配置 CA 文件**：
+
+```yaml
+node:
+  api_server_url: https://admin.example.com
+```
+
+### 验证
+
+```bash
+# 无需 --cacert，Let's Encrypt 证书受系统信任
+curl https://admin.example.com/health
+# {"status":"ok"}
+```
+
+### ACME 故障排查
+
+**端口被占用**：
+```
+HTTP redirect server error: listen tcp :80: bind: address already in use
+```
+→ 检查是否有 nginx/apache 占用 80/443 端口。如需共存，考虑使用反向代理模式。
+
+**域名验证失败**：
+```
+acme: error presenting token: [...] connection refused
+```
+→ 确保域名 DNS 已解析到本机 IP，且防火墙允许 80/443 入站。
+
+**速率限制**：
+Let's Encrypt 有[速率限制](https://letsencrypt.org/docs/rate-limits/)（每个域名每周 50 张证书）。
+测试时可使用 staging 环境（需额外配置，暂不支持）。
 
 ---
 
@@ -159,7 +241,7 @@ cfssl gencert -ca=ca.pem -ca-key=ca-key.pem \
 
 ## 2. 配置 API Server（HTTPS 服务端）
 
-编辑 `/etc/agents-admin/api-server.yaml`：
+编辑 `/etc/agents-admin/agents-admin.yaml`：
 
 ```yaml
 server:
@@ -192,7 +274,7 @@ curl -k https://localhost:8080/api/v1/nodes
 
 ## 3. 配置 Node Manager（TLS 客户端）
 
-编辑 `/etc/agents-admin/nodemanager.yaml`：
+编辑 `/etc/agents-admin/agents-admin.yaml`（Node Manager 章节）：
 
 ```yaml
 node:
@@ -225,7 +307,7 @@ tls:
 2. 部署流程会自动在目标节点上：
    - 创建 `/etc/agents-admin/certs/` 目录
    - 将 CA 证书上传到目标节点
-   - 在生成的 `nodemanager.yaml` 中启用 TLS 配置
+   - 在将自动生成的 `agents-admin.yaml` 中启用 TLS 配置
 
 ## 5. 证书文件位置约定
 
@@ -273,5 +355,6 @@ TLS 配置不影响 API 路径，仅将 `http://` 替换为 `https://`。
 
 | 组件 | 配置文件 | TLS 相关字段 |
 |------|---------|-------------|
-| API Server | `api-server.yaml` | `tls.enabled`, `tls.cert_file`, `tls.key_file`, `tls.ca_file` |
-| Node Manager | `nodemanager.yaml` | `tls.enabled`, `tls.ca_file` |
+| API Server | `agents-admin.yaml` | `tls.enabled`, `tls.auto_generate`, `tls.cert_dir`, `tls.hosts`, `tls.cert_file`, `tls.key_file`, `tls.ca_file` |
+| API Server (ACME) | `agents-admin.yaml` | `tls.acme.enabled`, `tls.acme.domains`, `tls.acme.email`, `tls.acme.cache_dir` |
+| Node Manager | `agents-admin.yaml` | `tls.enabled`, `tls.ca_file`（或环境变量 `TLS_CA_FILE`） |

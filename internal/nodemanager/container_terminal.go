@@ -37,11 +37,13 @@ type TerminalWorker struct {
 
 // NewTerminalWorker 创建 Terminal 工作线程
 func NewTerminalWorker(cfg Config) *TerminalWorker {
+	httpClient := cfg.HTTPClient
+	if httpClient == nil {
+		httpClient = &http.Client{Timeout: 30 * time.Second}
+	}
 	return &TerminalWorker{
-		config: cfg,
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
+		config:     cfg,
+		httpClient: httpClient,
 	}
 }
 
@@ -225,7 +227,7 @@ func buildTTYDDockerRunArgs(targetContainer, targetShell string) []string {
 	return []string{
 		"run", "-d",
 		"--name", ttydContainerName,
-		// tools/ttyd:latest 可能带 tini 入口（如 deployments/docker/Dockerfile.ttyd）
+		// tools/ttyd:latest 可能带 tini 入口（如 deployments/Dockerfile.ttyd）
 		// 为保证参数一致，强制使用 ttyd 作为入口
 		"--entrypoint", "ttyd",
 		"-p", fmt.Sprintf("%d:%d", ttydPort, ttydPort),

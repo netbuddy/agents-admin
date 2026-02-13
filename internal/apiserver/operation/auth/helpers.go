@@ -37,8 +37,9 @@ func generateID(prefix string) string {
 }
 
 // sanitizeName 将名称中的特殊字符替换为下划线
+// 注意：必须与 nodemanager/auth_controller.go 的 sanitizeForVolume 保持一致
 func sanitizeName(name string) string {
-	replacer := strings.NewReplacer("@", "_", ".", "_", " ", "_")
+	replacer := strings.NewReplacer("@", "_", ".", "_", " ", "_", "-", "_")
 	return replacer.Replace(name)
 }
 

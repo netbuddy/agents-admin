@@ -15,32 +15,31 @@
 
 节点无需手动创建，**NodeManager 启动后会自动注册**。
 
-### 启动 NodeManager
+### 生产环境
+
+首次运行时自动进入 Setup Wizard，只需输入 API Server 地址即可自动完成所有配置（Node ID 自动生成、CA 证书自动下载）。详见 [Node Manager 安装指南](./08-nodemanager-installation.md)。
+
+### 开发环境
 
 ```bash
-# 基本启动
-API_SERVER_URL="http://localhost:8080" \
-NODE_ID="node-01" \
-WORKSPACE_DIR="/tmp/agents-workspaces" \
-go run ./cmd/nodemanager
-
-# 或使用 Makefile
+# 使用 Makefile
 make run-nodemanager
 ```
 
-### 环境变量
+### 开发环境变量
 
 | 变量 | 必填 | 说明 | 默认值 |
 |------|------|------|--------|
-| `API_SERVER_URL` | 是 | API Server 地址 | `http://localhost:8080` |
-| `NODE_ID` | 是 | 节点唯一标识 | `dev-node-01` |
+| `API_SERVER_URL` | 否 | API Server 地址 | `https://localhost:8080` |
+| `NODE_ID` | 否 | 节点唯一标识（生产环境自动生成确定性 UUID） | `dev-node-01` |
 | `WORKSPACE_DIR` | 否 | 工作空间目录 | `/tmp/agents-workspaces` |
+| `TLS_CA_FILE` | 否 | CA 证书路径（HTTPS 模式） | `./certs/ca.pem` |
 
 ## 查看节点列表
 
 1. 点击左侧导航栏的 **「节点管理」**
 2. 页面显示所有注册过的节点
-3. 每个节点卡片显示：ID、状态、标签、容量、最近心跳时间
+3. 每个节点卡片显示：主机名、IP 地址、状态、标签、容量、最近心跳时间
 
 ## 节点状态
 
@@ -52,8 +51,8 @@ make run-nodemanager
 
 ### 状态判定规则
 
-- 心跳间隔：NodeManager 每 **30 秒** 发送一次心跳
-- 超时判定：超过 **90 秒** 无心跳则判定为离线
+- 心跳间隔：NodeManager 每 **10 秒** 发送一次心跳
+- 超时判定：超过 **45 秒** 无心跳则判定为离线
 
 ## 节点操作
 
@@ -61,7 +60,7 @@ make run-nodemanager
 
 1. 点击节点卡片查看详情
 2. 可以看到：
-   - 节点基本信息（ID、状态、创建时间）
+   - 节点基本信息（ID、主机名、IP 地址、状态、创建时间）
    - 标签（labels）：如 `os=linux`, `arch=amd64`
    - 容量（capacity）：`max_concurrent` 最大并发数
    - 当前执行的 Run 列表
@@ -98,13 +97,13 @@ make run-nodemanager
 
 ```
 1. 用户创建 Run
-2. Run 加入调度队列（Redis Streams）
+2. Run 加入调度队列（Redis）
 3. Scheduler 从队列中取出 Run
 4. Scheduler 根据标签匹配选择节点
 5. 选择负载最低的节点
 6. 检查节点容量是否允许
 7. 将 Run 分配到目标节点
-8. NodeManager 领取并执行
+8. NodeManager 通过 HTTP 轮询领取并执行（每 3 秒检查一次）
 ```
 
 ### 调度策略

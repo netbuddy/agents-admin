@@ -1,0 +1,29 @@
+{
+  "title": "Runner Management",
+  "subtitle": "Manage Qwen-Code Runner containers and login status",
+  "backToBoard": "Back to Board",
+  "addAccount": "Add Account",
+  "add": "Add",
+  "noRunners": "No Runners",
+  "noRunnersHint": "Add a Qwen-Code account to get started",
+  "statusRunning": "Running",
+  "statusStopped": "Stopped",
+  "loggedIn": "Logged In",
+  "notLoggedIn": "Not Logged In",
+  "openTerminal": "Open Terminal",
+  "loginTerminal": "Login Terminal",
+  "createdAt": "Created at",
+  "confirmDelete": "Delete Runner \"{{account}}\"?",
+  "confirmDeletePurge": "Delete Runner \"{{account}}\"? (including auth data)",
+  "terminalError": "Cannot open terminal. Make sure the backend is running.",
+  "terminalErrorShort": "Cannot open terminal",
+  "create": {
+    "title": "Add Runner Account",
+    "accountLabel": "Account / Email",
+    "accountHint": "Used to identify Runner container, recommend using Qwen account email"
+  },
+  "terminal": {
+    "title": "Terminal",
+    "loginHint": "Tip: Run <code>qwen login</code> to log in"
+  }
+}

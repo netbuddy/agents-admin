@@ -1,0 +1,40 @@
+{
+  "title": "Proxy Management",
+  "subtitle": "Manage network proxy configurations for Agent external access",
+  "addProxy": "Add Proxy",
+  "noProxies": "No proxy configurations",
+  "noProxiesHint": "Add proxy configuration for Agent network access",
+  "confirmDelete": "Delete this proxy configuration?",
+  "disabled": "Disabled",
+  "authUser": "Auth",
+  "testFailed": "Test request failed",
+  "form": {
+    "addTitle": "Add Proxy",
+    "editTitle": "Edit Proxy",
+    "name": "Name",
+    "namePlaceholder": "Company Proxy",
+    "type": "Type",
+    "host": "Host",
+    "port": "Port",
+    "username": "Username (optional)",
+    "password": "Password (optional)",
+    "passwordKeep": "Leave empty to keep unchanged",
+    "noProxyList": "No-proxy list (optional)",
+    "noProxyHint": "One address per line, supports wildcard patterns (e.g. 192.168.213.*)",
+    "enabled": "Enabled"
+  },
+  "test": {
+    "title": "Test Proxy Connection",
+    "desc": "Access target URL via proxy <strong>{{name}}</strong> ({{host}}:{{port}}) to verify availability.",
+    "targetUrl": "Target URL",
+    "quickTargets": "Quick Targets",
+    "proxyAvailable": "Proxy Available",
+    "testFailed": "Test Failed",
+    "evidence": "Verification evidence:",
+    "pageTitle": "Page Title",
+    "statusCode": "HTTP Status Code",
+    "responseHeaders": "Response Headers",
+    "testing": "Testing...",
+    "startTest": "Start Test"
+  }
+}

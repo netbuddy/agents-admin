@@ -1,7 +1,7 @@
 // Package handler Container Handler - 负责容器管理
 //
 // 包括：
-//   - Instance 生命周期管理（创建/启动/停止/销毁）
+//   - Agent 实例生命周期管理（创建/启动/停止/销毁）
 //   - Terminal 会话管理
 package handler
 
@@ -10,8 +10,8 @@ import (
 	"sync"
 )
 
-// InstanceWorker Instance 工作器接口
-type InstanceWorker interface {
+// AgentWorker Agent 实例工作器接口
+type AgentWorker interface {
 	Start(ctx context.Context)
 }
 
@@ -22,14 +22,14 @@ type TerminalWorker interface {
 
 // ContainerHandler 容器管理 Handler
 type ContainerHandler struct {
-	instanceWorker InstanceWorker
+	agentWorker    AgentWorker
 	terminalWorker TerminalWorker
 }
 
 // NewContainerHandler 创建容器 Handler
-func NewContainerHandler(instanceWorker InstanceWorker, terminalWorker TerminalWorker) *ContainerHandler {
+func NewContainerHandler(agentWorker AgentWorker, terminalWorker TerminalWorker) *ContainerHandler {
 	return &ContainerHandler{
-		instanceWorker: instanceWorker,
+		agentWorker:    agentWorker,
 		terminalWorker: terminalWorker,
 	}
 }
@@ -43,12 +43,12 @@ func (h *ContainerHandler) Name() string {
 func (h *ContainerHandler) Start(ctx context.Context) error {
 	var wg sync.WaitGroup
 
-	// 启动 Instance 工作器
-	if h.instanceWorker != nil {
+	// 启动 Agent 工作器
+	if h.agentWorker != nil {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			h.instanceWorker.Start(ctx)
+			h.agentWorker.Start(ctx)
 		}()
 	}
 

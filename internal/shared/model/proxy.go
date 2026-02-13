@@ -26,18 +26,18 @@ ProxyStatusInactive ProxyStatus = "inactive"
 
 // Proxy 代理配置
 type Proxy struct {
-ID        string      `json:"id" db:"id"`
-Name      string      `json:"name" db:"name"`
-Type      ProxyType   `json:"type" db:"type"`
-Host      string      `json:"host" db:"host"`
-Port      int         `json:"port" db:"port"`
-Username  *string     `json:"username,omitempty" db:"username"`
-Password  *string     `json:"-" db:"password"`
-NoProxy   *string     `json:"no_proxy,omitempty" db:"no_proxy"`
-IsDefault bool        `json:"is_default" db:"is_default"`
-Status    ProxyStatus `json:"status" db:"status"`
-CreatedAt time.Time   `json:"created_at" db:"created_at"`
-UpdatedAt time.Time   `json:"updated_at" db:"updated_at"`
+ID        string      `json:"id" bson:"_id" db:"id"`
+Name      string      `json:"name" bson:"name" db:"name"`
+Type      ProxyType   `json:"type" bson:"type" db:"type"`
+Host      string      `json:"host" bson:"host" db:"host"`
+Port      int         `json:"port" bson:"port" db:"port"`
+Username  *string     `json:"username,omitempty" bson:"username,omitempty" db:"username"`
+Password  *string     `json:"-" bson:"password" db:"password"`
+NoProxy   *string     `json:"no_proxy,omitempty" bson:"no_proxy,omitempty" db:"no_proxy"`
+IsDefault bool        `json:"is_default" bson:"is_default" db:"is_default"`
+Status    ProxyStatus `json:"status" bson:"status" db:"status"`
+CreatedAt time.Time   `json:"created_at" bson:"created_at" db:"created_at"`
+UpdatedAt time.Time   `json:"updated_at" bson:"updated_at" db:"updated_at"`
 }
 
 // GetURL 获取代理URL

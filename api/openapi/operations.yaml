@@ -1,0 +1,227 @@
+openapi: 3.0.3
+info:
+  title: Operations API
+  version: 1.0.0
+
+# Operation 系统操作 API（统一模型，替代旧的 auth-tasks）
+
+paths:
+  /api/v1/operations:
+    post:
+      tags: [Operations]
+      operationId: createOperation
+      summary: 创建系统操作
+      description: 统一入口，支持认证等操作类型
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOperationRequest'
+      responses:
+        '201':
+          description: 操作已创建
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+    get:
+      tags: [Operations]
+      operationId: listOperations
+      summary: 列出系统操作
+      responses:
+        '200':
+          description: 操作列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Operation'
+
+  /api/v1/operations/{id}:
+    get:
+      tags: [Operations]
+      operationId: getOperation
+      summary: 获取操作详情
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 操作详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+  /api/v1/actions/{id}:
+    get:
+      tags: [Operations]
+      operationId: getAction
+      summary: 获取执行实例详情
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Action 详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Action'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+    patch:
+      tags: [Operations]
+      operationId: updateAction
+      summary: 更新执行实例状态（Node Manager 调用）
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateActionRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Action'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+
+  /api/v1/nodes/{id}/actions:
+    get:
+      tags: [Operations]
+      operationId: getNodeActions
+      summary: 获取节点的待执行 Action（Node Manager 轮询）
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Action 列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  actions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Action'
+
+components:
+  schemas:
+    Operation:
+      type: object
+      required: [id, type, status]
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          description: 操作类型（如 auth、runtime_create、runtime_stop）
+        status:
+          type: string
+          enum: [pending, running, success, failed]
+        target_id:
+          type: string
+          description: 操作目标 ID（如账号 ID、Agent ID）
+        node_id:
+          type: string
+          description: 目标节点 ID
+        config:
+          type: object
+          description: 操作配置参数
+        params:
+          type: object
+          description: 操作参数（向后兼容）
+        actions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Action'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Action:
+      type: object
+      required: [id, operation_id, status]
+      properties:
+        id:
+          type: string
+        operation_id:
+          type: string
+        node_id:
+          type: string
+        status:
+          type: string
+          enum: [pending, assigned, running, waiting_user, success, failed, timeout]
+        phase:
+          type: string
+          description: 执行阶段（三层状态模型）
+        progress:
+          type: integer
+          description: 执行进度（0-100）
+        message:
+          type: string
+          description: 状态消息
+        terminal_session_id:
+          type: string
+        terminal_url:
+          type: string
+        error_message:
+          type: string
+        result:
+          type: object
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateOperationRequest:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+        target_id:
+          type: string
+        params:
+          type: object
+
+    UpdateActionRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [running, waiting_user, success, failed, timeout]
+        terminal_port:
+          type: integer
+        terminal_url:
+          type: string
+        terminal_session_id:
+          type: string
+        container_name:
+          type: string
+        oauth_url:
+          type: string
+        user_code:
+          type: string
+        volume_name:
+          type: string
+        error_message:
+          type: string
+        message:
+          type: string

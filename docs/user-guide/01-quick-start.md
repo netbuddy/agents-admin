@@ -14,51 +14,43 @@
 
 | 模式 | 命令 | 前端访问地址 | 适用场景 |
 |------|------|-------------|---------|
-| **开发模式** | `make run-api-dev` + `make run-web` | `http://localhost:3002` | 日常开发，前端支持热更新 |
-| **生产模式** | `make release-linux` 后运行二进制 | `http://localhost:8080` | 部署、演示，前端嵌入后端 |
+| **开发模式** | `make run-api-dev` + `make run-web` | `https://localhost:8080` | 日常开发，前端支持热更新 |
+| **生产模式** | `make release-linux` 后运行二进制 | `https://<IP>:8080` | 部署、演示，前端嵌入后端 |
 
 > **⚠️ 注意区别**：
-> - `make run-api-dev` 使用 `-tags dev` 编译，**不嵌入前端**，必须配合 `make run-web` 使用
+> - `make run-api-dev` 使用 `-tags dev` 编译，**不嵌入前端**，Go 反向代理 Next.js `:3002`
 > - `make run-api` 不带 dev tag，会尝试从 `web/out/` 加载嵌入的前端（需先执行 `make web-build`）
-> - **不要同时使用** `make run-api` + `make run-web`，两个地址都能访问前端会造成混淆
+> - 浏览器统一通过 Go HTTPS 入口访问（开发 `:8080`，生产 `:443` 或 `:8080`）
 
 ## 步骤 1：启动基础设施
 
 ```bash
-# 启动 PostgreSQL + Redis + MinIO
+# 启动 MongoDB + Redis + MinIO
 make dev-up
 ```
 
 等待服务就绪后，终端会显示服务状态。
 
-## 步骤 2：初始化数据库
+> **MongoDB 为默认数据库**，schema-less 设计，**无需手动初始化数据库**。程序启动时自动创建集合和索引。
+>
+> 如需使用 PostgreSQL，请参考 [配置指南](./10-configuration.md) 切换 `database.driver`，并手动执行 `deployments/init-db.sql`。
 
-首次部署需要导入数据库 schema：
-
-```bash
-psql "postgres://agents:agents_dev_password@localhost:5432/agents_admin" \
-  -f deployments/init-db.sql
-```
-
-> 如果数据库已初始化过，可跳过此步。重复执行不会报错（使用 `IF NOT EXISTS`）。
-
-## 步骤 3：启动服务
+## 步骤 2：启动服务
 
 ### 开发模式（推荐日常使用）
 
 ```bash
-# 终端 1：启动 API Server（开发模式，不嵌入前端）
-make run-api-dev
-
-# 终端 2：启动前端 Dev Server（支持热更新）
+# 终端 1：启动前端 Dev Server（支持热更新）
 make run-web
+
+# 终端 2：启动 API Server（HTTPS，自动代理前端到 Next.js :3002）
+make run-api-dev
 
 # 终端 3：启动 NodeManager
 make run-nodemanager
 ```
 
-- API Server：`http://localhost:8080`（仅 API）
-- 前端页面：`http://localhost:3002`（Next.js Dev Server，API 请求自动代理到 8080）
+浏览器访问：`https://localhost:8080`（Go 统一 HTTPS 入口，API + 前端代理）
 
 ### 生产模式
 
@@ -66,13 +58,39 @@ make run-nodemanager
 # 1. 构建生产版本（前端静态导出 + 嵌入 Go 二进制）
 make release-linux
 
-# 2. 运行（需要 PostgreSQL 和 Redis）
-DATABASE_URL="postgres://agents:agents_dev_password@localhost:5432/agents_admin?sslmode=disable" \
-REDIS_URL="redis://localhost:6380/0" \
-./bin/api-server-linux-amd64
+# 2. 首次运行 — 自动进入 Setup Wizard（默认端口 15800）
+sudo ./bin/api-server-linux-amd64
+
+# 3. 在浏览器中打开终端输出的 Setup URL，按向导完成配置
+#    向导支持一键部署基础设施（Docker Compose）或连接已有服务
 ```
 
-前端和 API 通过同一地址访问：`http://localhost:8080`。
+#### Setup Wizard 命令行参数
+
+| 参数 | 环境变量 | 默认值 | 说明 |
+|------|---------|--------|------|
+| `--setup-port` | `SETUP_PORT` | `15800` | Setup 向导监听端口 |
+| `--setup-listen` | `SETUP_LISTEN` | `0.0.0.0` | Setup 向导监听地址 |
+| `--reconfigure` | — | `false` | 强制重新进入配置向导 |
+| `--config` | — | 自动搜索 | 配置文件目录 |
+
+```bash
+# 示例：自定义端口（避免端口冲突）
+sudo ./bin/api-server-linux-amd64 --setup-port 9999
+
+# 示例：通过环境变量指定
+sudo SETUP_PORT=9999 ./bin/api-server-linux-amd64
+
+# 示例：强制重新配置
+sudo ./bin/api-server-linux-amd64 --reconfigure
+```
+
+> **Node Manager** 也支持相同的参数（默认端口 `15700`）：
+> ```bash
+> sudo ./bin/nodemanager-linux-amd64 --setup-port 15701
+> ```
+
+配置完成后，systemd 服务自动管理。详见 [API Server 安装指南](./09-apiserver-installation.md)。
 
 ## 第一次使用
 
@@ -80,7 +98,7 @@ REDIS_URL="redis://localhost:6380/0" \
 
 ### 步骤 1：确认节点在线
 
-1. 打开浏览器访问 `http://localhost:8080`（生产模式）或 `http://localhost:3002`（开发模式）
+1. 打开浏览器访问 `https://localhost:8080`（Go 统一 HTTPS 入口，开发和生产相同）
 2. 点击左侧导航栏的 **「节点管理」**
 3. 确认至少有一个节点显示为 **「在线」** 状态
 

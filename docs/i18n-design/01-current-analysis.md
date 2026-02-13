@@ -58,31 +58,37 @@ web/
 ### 按文件分布
 
 | 文件 | 中文匹配数 | 主要内容 |
-|------|-----------|---------|
+|------|-----------|--------|
+| **app/agents/page.tsx** | 99 | 智能体实例/模板库、创建向导、终端弹窗、状态文案 |
 | **components/kanban/TaskDetailPanel.tsx** | 71 | 运行记录、配置面板、状态文案、操作按钮 |
+| **app/instances/page.tsx** | 56 | 实例列表、创建向导、终端弹窗、状态文案 |
 | **app/accounts/page.tsx** | 54 | 账号列表、添加/编辑弹窗、状态文案、认证方式 |
+| **app/monitor/page.tsx** | 48 | 工作流列表、状态筛选、详情展示 |
 | **components/agent-output/DebugPanel.tsx** | 47 | 调试信息、时间戳、状态标签 |
-| **app/monitor/page.tsx** | 47 | 工作流列表、状态筛选、详情展示 |
-| **app/instances/page.tsx** | 41 | 实例列表、创建/配置弹窗 |
-| **app/proxies/page.tsx** | 29 | 代理列表、添加/测试弹窗 |
+| **components/AddNodeWizard.tsx** | 44 | 添加节点向导、部署步骤、表单标签 |
+| **app/proxies/page.tsx** | 39 | 代理列表、添加/测试弹窗 |
+| **app/nodes/page.tsx** | 32 | 节点列表、状态文案、详情面板 |
+| **lib/agent-models.ts** | 30 | 模型描述（平衡性能与速度、MoE 旗舰模型等） |
 | **app/runners/page.tsx** | 24 | Runner 列表、终端操作、确认对话框 |
-| **components/CreateTaskModal.tsx** | 24 | 表单标签、验证提示、按钮文案 |
+| **components/CreateTaskModal.tsx** | 23 | 表单标签、验证提示、按钮文案 |
+| **app/page.tsx** | 22 | 看板列头、任务统计、状态标签 |
+| **app/tasks/detail/TaskDetailClient.tsx** | 22 | 任务详情操作 |
 | **components/agent-output/AgentOutput.tsx** | 21 | 事件类型标签、Token 使用信息 |
-| **app/page.tsx** | 18 | 看板列头、任务统计、状态标签 |
 | **components/kanban/TaskCard.tsx** | 16 | 卡片状态、操作按钮 |
-| **components/layout/Sidebar.tsx** | 13 | 7 个导航标签 + 注释 |
-| **app/nodes/page.tsx** | 13 | 节点列表、状态文案 |
+| **components/layout/Sidebar.tsx** | 15 | 8 个导航标签 + 用户信息/退出 |
+| **app/register/page.tsx** | 14 | 注册表单、验证提示 |
 | **components/agent-output/MessageBlock.tsx** | 12 | 消息类型标签 |
+| **app/login/page.tsx** | 8 | 登录表单、错误提示 |
 | **components/agent-output/CommandBlock.tsx** | 8 | 命令执行状态 |
-| **components/layout/Header.tsx** | 6 | 刷新、通知 |
+| **app/settings/page.tsx** | 7 | 设置项标签 |
+| **components/layout/Header.tsx** | 6 | 刷新、通知、用户菜单 |
 | **components/agent-output/FileBlock.tsx** | 6 | 读取/修改文件标签 |
 | **components/agent-output/ToolBlock.tsx** | 5 | 工具调用标签 |
-| **app/settings/page.tsx** | 7 | 设置项标签 |
-| **app/tasks/detail/TaskDetailClient.tsx** | 22 | 任务详情操作 |
+| **lib/auth.tsx** | 3 | 登录/注册失败提示 |
 | **app/tasks/detail/page.tsx** | 2 | 缺少 ID 提示 |
 | **components/kanban/KanbanColumn.tsx** | 2 | 列标题 |
 | **app/layout.tsx** | 1 | metadata description |
-| **合计** | **~489** | — |
+| **合计** | **~635** | 不含代码注释 |
 
 ### 按字符串类别分类
 

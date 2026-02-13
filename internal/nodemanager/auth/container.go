@@ -284,6 +284,85 @@ func (c *Client) FileExistsInVolume(ctx context.Context, volumeName, mountPath, 
 	return exitCode == 0, nil
 }
 
+// ExportVolume 导出 Docker Volume 内容为 tar 流
+// 通过创建临时容器挂载 volume，使用 CopyFromContainer 获取 tar 流
+func (c *Client) ExportVolume(ctx context.Context, volumeName, mountPath string) (io.ReadCloser, error) {
+	containerName := fmt.Sprintf("export_%s_%d", volumeName, time.Now().UnixNano())
+
+	// 创建临时容器挂载 volume
+	containerID, err := c.CreateContainer(ctx, &ContainerConfig{
+		Name:    containerName,
+		Image:   "alpine:latest",
+		Cmd:     []string{"true"},
+		Volumes: map[string]string{volumeName: mountPath},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create export container: %w", err)
+	}
+
+	// CopyFromContainer 不需要容器运行
+	result, err := c.cli.CopyFromContainer(ctx, containerID, client.CopyFromContainerOptions{
+		SourcePath: mountPath,
+	})
+	if err != nil {
+		c.RemoveContainer(ctx, containerID, true)
+		return nil, fmt.Errorf("copy from container: %w", err)
+	}
+
+	// 返回包装的 reader，关闭时清理容器
+	return &exportReader{
+		ReadCloser: result.Content,
+		cleanup:    func() { c.RemoveContainer(context.Background(), containerID, true) },
+	}, nil
+}
+
+// ImportVolume 从 tar 流导入内容到 Docker Volume
+func (c *Client) ImportVolume(ctx context.Context, volumeName, mountPath string, reader io.Reader) error {
+	containerName := fmt.Sprintf("import_%s_%d", volumeName, time.Now().UnixNano())
+
+	// 确保 volume 存在
+	if err := c.CreateVolume(ctx, volumeName); err != nil {
+		return fmt.Errorf("create volume: %w", err)
+	}
+
+	// 创建临时容器
+	containerID, err := c.CreateContainer(ctx, &ContainerConfig{
+		Name:    containerName,
+		Image:   "alpine:latest",
+		Cmd:     []string{"true"},
+		Volumes: map[string]string{volumeName: mountPath},
+	})
+	if err != nil {
+		return fmt.Errorf("create import container: %w", err)
+	}
+	defer c.RemoveContainer(ctx, containerID, true)
+
+	// CopyToContainer
+	_, err = c.cli.CopyToContainer(ctx, containerID, client.CopyToContainerOptions{
+		DestinationPath: mountPath,
+		Content:         reader,
+	})
+	if err != nil {
+		return fmt.Errorf("copy to container: %w", err)
+	}
+
+	return nil
+}
+
+// exportReader 包装 ReadCloser，关闭时执行清理
+type exportReader struct {
+	io.ReadCloser
+	cleanup func()
+}
+
+func (r *exportReader) Close() error {
+	err := r.ReadCloser.Close()
+	if r.cleanup != nil {
+		r.cleanup()
+	}
+	return err
+}
+
 // ContainerLogs 获取容器日志
 func (c *Client) ContainerLogs(ctx context.Context, containerID string, tail string) (io.ReadCloser, error) {
 	result, err := c.cli.ContainerLogs(ctx, containerID, client.ContainerLogsOptions{

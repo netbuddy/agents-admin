@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Node Manager Setup</title>
+<style>
+:root {
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --success: #16a34a;
+  --error: #dc2626;
+  --warning: #d97706;
+  --bg: #f8fafc;
+  --card: #ffffff;
+  --border: #e2e8f0;
+  --text: #1e293b;
+  --text-secondary: #64748b;
+  --radius: 8px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.container {
+  background: var(--card);
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+  max-width: 640px;
+  width: 100%;
+  padding: 32px;
+}
+h1 { font-size: 24px; margin-bottom: 4px; }
+.subtitle { color: var(--text-secondary); font-size: 14px; margin-bottom: 24px; }
+.steps { display: flex; gap: 8px; margin-bottom: 28px; }
+.step-indicator {
+  flex: 1; height: 4px; border-radius: 2px;
+  background: var(--border); transition: background 0.3s;
+}
+.step-indicator.active { background: var(--primary); }
+.step-indicator.done { background: var(--success); }
+.step-title { font-size: 18px; font-weight: 600; margin-bottom: 16px; }
+.form-group { margin-bottom: 16px; }
+label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 4px; color: var(--text-secondary); }
+input {
+  width: 100%; padding: 10px 12px; border: 1px solid var(--border);
+  border-radius: var(--radius); font-size: 14px; outline: none; transition: border-color 0.2s;
+}
+input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+.hint { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+.btn-row { display: flex; gap: 12px; margin-top: 24px; }
+button {
+  padding: 10px 20px; border-radius: var(--radius); font-size: 14px; font-weight: 500;
+  cursor: pointer; border: 1px solid var(--border); background: var(--card); color: var(--text); transition: all 0.2s;
+}
+button:hover { background: var(--bg); }
+button.primary { background: var(--primary); color: white; border-color: var(--primary); }
+button.primary:hover { background: var(--primary-hover); }
+button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
+button.success { background: var(--success); color: white; border-color: var(--success); }
+button.success:disabled { opacity: 0.5; cursor: not-allowed; }
+.check-result {
+  margin-top: 12px; padding: 10px 14px; border-radius: var(--radius);
+  font-size: 13px; display: none; white-space: pre-line;
+}
+.check-result.ok { background: #f0fdf4; border: 1px solid #bbf7d0; color: var(--success); display: block; }
+.check-result.fail { background: #fef2f2; border: 1px solid #fecaca; color: var(--error); display: block; }
+.check-result.loading { background: #eff6ff; border: 1px solid #bfdbfe; color: var(--primary); display: block; }
+.summary-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.summary-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.summary-table td:first-child { font-weight: 500; color: var(--text-secondary); width: 140px; }
+.hidden { display: none !important; }
+.lang-switch {
+  position: absolute; top: 16px; right: 16px; font-size: 13px;
+  cursor: pointer; color: var(--primary); background: none; border: none; padding: 4px 8px;
+}
+.wrapper { position: relative; }
+</style>
+</head>
+<body>
+<div class="wrapper">
+<button class="lang-switch" onclick="toggleLang()" id="langBtn">中文</button>
+<div class="container">
+  <h1 id="mainTitle">Node Manager Setup</h1>
+  <p class="subtitle" id="mainSubtitle">Enter the API Server URL to automatically configure this node</p>
+
+  <div class="steps">
+    <div class="step-indicator" id="si0"></div>
+    <div class="step-indicator" id="si1"></div>
+  </div>
+
+  <!-- Step 0: Connect to API Server -->
+  <div id="step0">
+    <div class="step-title" data-i18n="step0_title">Step 1: Connect to API Server</div>
+    <div class="form-group">
+      <label data-i18n="api_server_url">API Server URL</label>
+      <input type="text" id="apiServerUrl" placeholder="https://192.168.1.100:8080" autofocus>
+      <div class="hint" data-i18n="api_hint">All configuration will be automatically downloaded from the API Server</div>
+    </div>
+    <div id="step0Check" class="check-result"></div>
+    <div class="btn-row">
+      <div style="flex:1"></div>
+      <button class="primary" onclick="doBootstrap()" id="btnConnect" data-i18n="connect">Connect & Configure</button>
+    </div>
+  </div>
+
+  <!-- Step 1: Confirm & Apply -->
+  <div id="step1" class="hidden">
+    <div class="step-title" data-i18n="step1_title">Step 2: Confirm & Apply</div>
+    <table class="summary-table" id="summaryTable"></table>
+    <div id="step1Check" class="check-result"></div>
+    <div class="btn-row">
+      <button onclick="goStep(0)" data-i18n="back">Back</button>
+      <div style="flex:1"></div>
+      <button class="success" onclick="applyConfig()" id="btnApply" data-i18n="save_start">Save & Start</button>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+// ======== State ========
+let _bs = {}; // bootstrap result
+let _workspaceDir = '';
+
+// ======== i18n ========
+const i18n = {
+  en: {
+    mainTitle: 'Node Manager Setup',
+    mainSubtitle: 'Enter the API Server URL to automatically configure this node',
+    step0_title: 'Step 1: Connect to API Server',
+    step1_title: 'Step 2: Confirm & Apply',
+    api_server_url: 'API Server URL',
+    api_hint: 'All configuration will be automatically downloaded from the API Server',
+    connect: 'Connect & Configure',
+    back: 'Back',
+    save_start: 'Save & Start',
+    connecting: 'Connecting to API Server...\nDownloading configuration...',
+    saving: 'Saving configuration...',
+    summary_node_id: 'Node ID',
+    summary_api_url: 'API Server',
+    summary_workspace: 'Workspace',
+    summary_redis: 'Redis',
+    summary_tls: 'TLS',
+    summary_hostname: 'Hostname',
+    not_configured: 'Not configured (HTTP polling mode)',
+    auto_detected: 'auto-detected',
+    auto_generated: 'auto-generated',
+    enabled_with_ca: 'Enabled (CA downloaded)',
+    disabled: 'Disabled (HTTP)',
+    skip_verify: 'HTTPS (skip verification)',
+    langBtn: '中文',
+  },
+  zh: {
+    mainTitle: 'Node Manager 配置向导',
+    mainSubtitle: '输入 API Server 地址，自动完成所有配置',
+    step0_title: '第一步：连接 API Server',
+    step1_title: '第二步：确认并应用',
+    api_server_url: 'API Server 地址',
+    api_hint: '所有配置将自动从 API Server 下载',
+    connect: '连接并配置',
+    back: '上一步',
+    save_start: '保存并启动',
+    connecting: '正在连接 API Server...\n正在下载配置...',
+    saving: '正在保存配置...',
+    summary_node_id: '节点 ID',
+    summary_api_url: 'API Server',
+    summary_workspace: '工作空间',
+    summary_redis: 'Redis',
+    summary_tls: 'TLS',
+    summary_hostname: '主机名',
+    not_configured: '未配置（HTTP 轮询模式）',
+    auto_detected: '自动检测',
+    auto_generated: '自动生成',
+    enabled_with_ca: '已启用（CA 已下载）',
+    disabled: '未启用（HTTP）',
+    skip_verify: 'HTTPS（跳过验证）',
+    langBtn: 'English',
+  }
+};
+
+let lang = (navigator.language || 'en').startsWith('zh') ? 'zh' : 'en';
+
+function t(key) { return i18n[lang][key] || key; }
+
+function applyI18n() {
+  document.getElementById('mainTitle').textContent = t('mainTitle');
+  document.getElementById('mainSubtitle').textContent = t('mainSubtitle');
+  document.getElementById('langBtn').textContent = t('langBtn');
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    if (el.tagName !== 'INPUT') el.textContent = t(key);
+  });
+}
+
+function toggleLang() {
+  lang = lang === 'en' ? 'zh' : 'en';
+  applyI18n();
+  if (document.getElementById('step1').classList.contains('hidden') === false) buildSummary();
+}
+
+// ======== Navigation ========
+function goStep(n) {
+  for (let i = 0; i < 2; i++) {
+    document.getElementById('step' + i).classList.toggle('hidden', i !== n);
+    const si = document.getElementById('si' + i);
+    si.className = 'step-indicator';
+    if (i < n) si.classList.add('done');
+    if (i === n) si.classList.add('active');
+  }
+  if (n === 1) buildSummary();
+}
+
+function showCheck(stepId, status, msg) {
+  const el = document.getElementById(stepId + 'Check');
+  el.className = 'check-result ' + status;
+  el.textContent = msg;
+}
+
+// ======== API ========
+function getToken() {
+  return new URLSearchParams(window.location.search).get('token') || '';
+}
+
+async function api(method, path, body) {
+  const opts = {
+    method,
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'token ' + getToken() },
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const resp = await fetch(path, opts);
+  return resp.json();
+}
+
+// ======== Bootstrap ========
+async function doBootstrap() {
+  const apiUrl = document.getElementById('apiServerUrl').value.trim();
+  if (!apiUrl) { showCheck('step0', 'fail', 'API Server URL is required'); return; }
+
+  showCheck('step0', 'loading', t('connecting'));
+  document.getElementById('btnConnect').disabled = true;
+
+  try {
+    const result = await api('POST', '/setup/api/bootstrap', { api_server_url: apiUrl });
+
+    if (result.ok) {
+      _bs = result;
+      showCheck('step0', 'ok',
+        '✓ API Server connected\n' +
+        (result.ca_path ? '✓ CA certificate downloaded\n' : '') +
+        (result.redis_url ? '✓ Redis URL: ' + result.redis_url + '\n' : '') +
+        '✓ Node ID: ' + result.node_id
+      );
+      setTimeout(() => goStep(1), 800);
+    } else {
+      showCheck('step0', 'fail', result.message || 'Bootstrap failed');
+    }
+  } catch (e) {
+    showCheck('step0', 'fail', 'Error: ' + e.message);
+  } finally {
+    document.getElementById('btnConnect').disabled = false;
+  }
+}
+
+// ======== Summary ========
+function buildSummary() {
+  const table = document.getElementById('summaryTable');
+  const apiUrl = document.getElementById('apiServerUrl').value;
+  const isHttps = apiUrl.startsWith('https://');
+
+  let tlsText = t('disabled');
+  if (isHttps && _bs.ca_path) {
+    tlsText = t('enabled_with_ca');
+  } else if (isHttps) {
+    tlsText = t('skip_verify');
+  }
+
+  table.innerHTML = `
+    <tr><td>${t('summary_node_id')}</td><td>${_bs.node_id || ''} <span style="color:var(--text-secondary);font-size:11px">(${t('auto_generated')})</span></td></tr>
+    <tr><td>${t('summary_api_url')}</td><td>${apiUrl}</td></tr>
+    <tr><td>${t('summary_workspace')}</td><td>${_workspaceDir} <span style="color:var(--text-secondary);font-size:11px">(${t('auto_detected')})</span></td></tr>
+    <tr><td>${t('summary_redis')}</td><td>${_bs.redis_url || t('not_configured')}</td></tr>
+    <tr><td>${t('summary_tls')}</td><td>${tlsText}</td></tr>
+  `;
+}
+
+// ======== Apply ========
+async function applyConfig() {
+  showCheck('step1', 'loading', t('saving'));
+  document.getElementById('btnApply').disabled = true;
+
+  const apiUrl = document.getElementById('apiServerUrl').value;
+  const isHttps = apiUrl.startsWith('https://');
+
+  const payload = {
+    api_server: {
+      url: apiUrl,
+    },
+    node: {
+      id: _bs.node_id || '',
+      labels: { os: 'linux' },
+    },
+    redis: { url: _bs.redis_url || '' },
+    tls: {
+      enabled: isHttps && !!_bs.ca_path,
+      ca_file: _bs.ca_path || '',
+      ca_source: _bs.ca_path ? 'download' : 'skip',
+    },
+  };
+
+  try {
+    const result = await api('POST', '/setup/api/apply', payload);
+    if (result.success) {
+      showCheck('step1', 'ok', result.message);
+    } else {
+      showCheck('step1', 'fail', result.error || 'Unknown error');
+      document.getElementById('btnApply').disabled = false;
+    }
+  } catch (e) {
+    showCheck('step1', 'fail', 'Error: ' + e.message);
+    document.getElementById('btnApply').disabled = false;
+  }
+}
+
+// ======== Init ========
+async function init() {
+  applyI18n();
+  goStep(0);
+  try {
+    const info = await api('GET', '/setup/api/info');
+    _workspaceDir = info.default_workspace_dir || '/tmp/agents-workspaces';
+  } catch (e) {
+    console.error('Failed to load info:', e);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

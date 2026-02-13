@@ -107,75 +107,75 @@ type Skill struct {
 	// === 基础字段 ===
 
 	// ID 唯一标识
-	ID string `json:"id" db:"id"`
+	ID string `json:"id" bson:"_id" db:"id"`
 
 	// Name 技能名称
-	Name string `json:"name" db:"name"`
+	Name string `json:"name" bson:"name" db:"name"`
 
 	// Category 技能分类
-	Category SkillCategory `json:"category" db:"category"`
+	Category SkillCategory `json:"category" bson:"category" db:"category"`
 
 	// Level 技能等级
-	Level SkillLevel `json:"level" db:"level"`
+	Level SkillLevel `json:"level" bson:"level" db:"level"`
 
 	// Description 技能描述
-	Description string `json:"description" db:"description"`
+	Description string `json:"description" bson:"description" db:"description"`
 
 	// === 技能定义 ===
 
 	// Instructions 技能说明/提示词
 	// 详细描述如何使用这个技能
-	Instructions string `json:"instructions" db:"instructions"`
+	Instructions string `json:"instructions" bson:"instructions" db:"instructions"`
 
 	// Tools 依赖的工具列表
 	// JSON 数组，如 ["file_read", "file_write", "command_execute"]
-	Tools json.RawMessage `json:"tools,omitempty" db:"tools"`
+	Tools json.RawMessage `json:"tools,omitempty" bson:"tools,omitempty" db:"tools"`
 
 	// Examples 使用示例
 	// JSON 数组，包含输入输出示例
-	Examples json.RawMessage `json:"examples,omitempty" db:"examples"`
+	Examples json.RawMessage `json:"examples,omitempty" bson:"examples,omitempty" db:"examples"`
 
 	// Parameters 技能参数定义
 	// JSON Schema 格式，定义技能需要的配置参数
-	Parameters json.RawMessage `json:"parameters,omitempty" db:"parameters"`
+	Parameters json.RawMessage `json:"parameters,omitempty" bson:"parameters,omitempty" db:"parameters"`
 
 	// === 来源 ===
 
 	// Source 技能来源
-	Source SkillSource `json:"source" db:"source"`
+	Source SkillSource `json:"source" bson:"source" db:"source"`
 
 	// AuthorID 作者 ID（用户自定义或社区贡献）
-	AuthorID *string `json:"author_id,omitempty" db:"author_id"`
+	AuthorID *string `json:"author_id,omitempty" bson:"author_id,omitempty" db:"author_id"`
 
 	// RegistryID 所属技能市场 ID
-	RegistryID *string `json:"registry_id,omitempty" db:"registry_id"`
+	RegistryID *string `json:"registry_id,omitempty" bson:"registry_id,omitempty" db:"registry_id"`
 
 	// === 元数据 ===
 
 	// Version 版本号（语义化版本）
-	Version string `json:"version" db:"version"`
+	Version string `json:"version" bson:"version" db:"version"`
 
 	// IsBuiltin 是否内置技能
-	IsBuiltin bool `json:"is_builtin" db:"is_builtin"`
+	IsBuiltin bool `json:"is_builtin" bson:"is_builtin" db:"is_builtin"`
 
 	// Tags 标签
-	Tags []string `json:"tags,omitempty" db:"tags"`
+	Tags []string `json:"tags,omitempty" bson:"tags,omitempty" db:"tags"`
 
 	// === 统计 ===
 
 	// UseCount 使用次数
-	UseCount int64 `json:"use_count" db:"use_count"`
+	UseCount int64 `json:"use_count" bson:"use_count" db:"use_count"`
 
 	// Rating 评分（0-5）
-	Rating float64 `json:"rating" db:"rating"`
+	Rating float64 `json:"rating" bson:"rating" db:"rating"`
 
 	// === 时间戳 ===
 
 	// CreatedAt 创建时间
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	CreatedAt time.Time `json:"created_at" bson:"created_at" db:"created_at"`
 
 	// UpdatedAt 更新时间
-	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+	UpdatedAt time.Time `json:"updated_at" bson:"updated_at" db:"updated_at"`
 }
 
 // ============================================================================
@@ -209,31 +209,31 @@ func (s *Skill) GetTools() []string {
 //   - community：社区共享技能市场
 type SkillRegistry struct {
 	// ID 唯一标识
-	ID string `json:"id" db:"id"`
+	ID string `json:"id" bson:"_id" db:"id"`
 
 	// Name 名称
-	Name string `json:"name" db:"name"`
+	Name string `json:"name" bson:"name" db:"name"`
 
 	// Description 描述
-	Description string `json:"description" db:"description"`
+	Description string `json:"description" bson:"description" db:"description"`
 
 	// Type 类型
-	Type SkillSource `json:"type" db:"type"`
+	Type SkillSource `json:"type" bson:"type" db:"type"`
 
 	// OwnerID 所有者（用户或组织）
-	OwnerID *string `json:"owner_id,omitempty" db:"owner_id"`
+	OwnerID *string `json:"owner_id,omitempty" bson:"owner_id,omitempty" db:"owner_id"`
 
 	// IsPublic 是否公开
-	IsPublic bool `json:"is_public" db:"is_public"`
+	IsPublic bool `json:"is_public" bson:"is_public" db:"is_public"`
 
 	// SkillCount 技能数量
-	SkillCount int `json:"skill_count" db:"skill_count"`
+	SkillCount int `json:"skill_count" bson:"skill_count" db:"skill_count"`
 
 	// CreatedAt 创建时间
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	CreatedAt time.Time `json:"created_at" bson:"created_at" db:"created_at"`
 
 	// UpdatedAt 更新时间
-	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+	UpdatedAt time.Time `json:"updated_at" bson:"updated_at" db:"updated_at"`
 }
 
 // ============================================================================
@@ -245,23 +245,23 @@ type SkillRegistry struct {
 // 记录 Agent 拥有的技能以及相关配置。
 type AgentSkill struct {
 	// AgentID Agent ID
-	AgentID string `json:"agent_id" db:"agent_id"`
+	AgentID string `json:"agent_id" bson:"agent_id" db:"agent_id"`
 
 	// SkillID Skill ID
-	SkillID string `json:"skill_id" db:"skill_id"`
+	SkillID string `json:"skill_id" bson:"skill_id" db:"skill_id"`
 
 	// Enabled 是否启用
-	Enabled bool `json:"enabled" db:"enabled"`
+	Enabled bool `json:"enabled" bson:"enabled" db:"enabled"`
 
 	// Config 技能配置覆盖
 	// 覆盖 Skill 默认参数
-	Config json.RawMessage `json:"config,omitempty" db:"config"`
+	Config json.RawMessage `json:"config,omitempty" bson:"config,omitempty" db:"config"`
 
 	// Priority 优先级（数值越小优先级越高）
-	Priority int `json:"priority" db:"priority"`
+	Priority int `json:"priority" bson:"priority" db:"priority"`
 
 	// CreatedAt 创建时间
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	CreatedAt time.Time `json:"created_at" bson:"created_at" db:"created_at"`
 }
 
 // ============================================================================

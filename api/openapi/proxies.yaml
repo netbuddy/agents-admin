@@ -1,0 +1,147 @@
+openapi: 3.0.3
+info:
+  title: Proxies API
+  version: 1.0.0
+
+# Proxy 代理管理 API
+
+paths:
+  /api/v1/proxies:
+    get:
+      tags: [Proxies]
+      operationId: listProxies
+      summary: 列出代理
+      responses:
+        '200':
+          description: 代理列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Proxy'
+    post:
+      tags: [Proxies]
+      operationId: createProxy
+      summary: 创建代理
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProxyRequest'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Proxy'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+
+  /api/v1/proxies/{id}:
+    get:
+      tags: [Proxies]
+      operationId: getProxy
+      summary: 获取代理详情
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 代理详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Proxy'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+    put:
+      tags: [Proxies]
+      operationId: updateProxy
+      summary: 更新代理
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProxyRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Proxy'
+    delete:
+      tags: [Proxies]
+      operationId: deleteProxy
+      summary: 删除代理
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '204':
+          description: 删除成功
+
+  /api/v1/proxies/{id}/test:
+    post:
+      tags: [Proxies]
+      operationId: testProxy
+      summary: 测试代理连接
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 测试结果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  latency_ms:
+                    type: integer
+
+components:
+  schemas:
+    Proxy:
+      type: object
+      required: [id, name, url]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        url:
+          type: string
+          description: 代理 URL（如 socks5://host:port）
+        username:
+          type: string
+        password:
+          type: string
+        enabled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateProxyRequest:
+      type: object
+      required: [name, url]
+      properties:
+        name:
+          type: string
+        url:
+          type: string
+        username:
+          type: string
+        password:
+          type: string

@@ -1,0 +1,295 @@
+openapi: 3.0.3
+info:
+  title: MCP Servers API
+  version: 1.0.0
+
+# MCP Server 管理 API
+# Model Context Protocol Server — 独立管理的外部能力实体
+# 支持 stdio/SSE/HTTP 多种传输协议，有能力声明（Resources/Tools/Prompts）
+# AgentTemplate 通过 mcp_servers[] ID 列表引用
+
+paths:
+  /api/v1/mcp-servers:
+    get:
+      tags: [MCPServers]
+      operationId: listMCPServers
+      summary: 列出 MCP Servers
+      parameters:
+        - name: source
+          in: query
+          schema:
+            type: string
+            enum: [builtin, official, custom]
+          description: 按来源过滤
+        - name: transport
+          in: query
+          schema:
+            type: string
+            enum: [stdio, sse, http]
+          description: 按传输协议过滤
+      responses:
+        '200':
+          description: MCP Server 列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MCPServer'
+    post:
+      tags: [MCPServers]
+      operationId: createMCPServer
+      summary: 创建 MCP Server
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMCPServerRequest'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MCPServer'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+
+  /api/v1/mcp-servers/{id}:
+    get:
+      tags: [MCPServers]
+      operationId: getMCPServer
+      summary: 获取 MCP Server 详情
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: MCP Server 详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MCPServer'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+    put:
+      tags: [MCPServers]
+      operationId: updateMCPServer
+      summary: 更新 MCP Server
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMCPServerRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MCPServer'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+    delete:
+      tags: [MCPServers]
+      operationId: deleteMCPServer
+      summary: 删除 MCP Server
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '204':
+          description: 删除成功
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+components:
+  schemas:
+    MCPServer:
+      type: object
+      required: [id, name, source, transport]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        source:
+          type: string
+          enum: [builtin, official, custom]
+        transport:
+          type: string
+          enum: [stdio, sse, http]
+          description: 传输协议
+        command:
+          type: string
+          description: stdio 模式的启动命令
+        args:
+          type: array
+          items:
+            type: string
+          description: 命令参数（stdio 模式）
+        url:
+          type: string
+          description: SSE/HTTP 模式的 URL
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+          description: HTTP 头
+        capabilities:
+          $ref: '#/components/schemas/MCPCapabilities'
+        version:
+          type: string
+        author:
+          type: string
+        repository:
+          type: string
+          description: 仓库地址
+        is_builtin:
+          type: boolean
+        tags:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    MCPCapabilities:
+      type: object
+      description: MCP Server 能力声明
+      properties:
+        resources:
+          type: array
+          items:
+            $ref: '#/components/schemas/MCPResource'
+        tools:
+          type: array
+          items:
+            $ref: '#/components/schemas/MCPTool'
+        prompts:
+          type: array
+          items:
+            $ref: '#/components/schemas/MCPPrompt'
+
+    MCPResource:
+      type: object
+      properties:
+        uri:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        mime_type:
+          type: string
+
+    MCPTool:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        input_schema:
+          type: object
+          description: JSON Schema 格式的输入参数定义
+
+    MCPPrompt:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        arguments:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              description:
+                type: string
+              required:
+                type: boolean
+
+    CreateMCPServerRequest:
+      type: object
+      required: [name, transport]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        source:
+          type: string
+          enum: [builtin, official, custom]
+          default: custom
+        transport:
+          type: string
+          enum: [stdio, sse, http]
+        command:
+          type: string
+        args:
+          type: array
+          items:
+            type: string
+        url:
+          type: string
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+        capabilities:
+          $ref: '#/components/schemas/MCPCapabilities'
+        version:
+          type: string
+        author:
+          type: string
+        repository:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+
+    UpdateMCPServerRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        transport:
+          type: string
+          enum: [stdio, sse, http]
+        command:
+          type: string
+        args:
+          type: array
+          items:
+            type: string
+        url:
+          type: string
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+        capabilities:
+          $ref: '#/components/schemas/MCPCapabilities'
+        version:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string

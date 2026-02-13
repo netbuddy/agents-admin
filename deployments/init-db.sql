@@ -1,11 +1,17 @@
 -- ==========================================================================
--- Agent Admin 数据库初始化脚本（最终状态）
--- 版本: 3.0 — 合并 init-db.sql + migrations 002-016
--- 生成日期: 2026-02-06
+-- Agent Admin 数据库初始化脚本（全量）
+-- Schema Version: 1.0.0 (migration_id = 019)
+-- 合并范围: migrations 002-019
+-- 生成日期: 2025-07-14
 --
--- 使用方法:
+-- 使用方法（新安装）:
 --   psql "postgres://agents:agents_dev_password@localhost:5432/agents_admin" \
 --     -f deployments/init-db.sql
+--
+-- 升级方法（已有数据）:
+--   请按顺序执行 deployments/migrations/ 中尚未应用的增量脚本。
+--   当前版本可通过 SELECT * FROM schema_version; 查询。
+--   详见 deployments/UPGRADE.md
 --
 -- 说明: 本脚本为幂等设计，可重复执行。所有 CREATE 使用 IF NOT EXISTS。
 -- ==========================================================================
@@ -124,6 +130,8 @@ CREATE INDEX IF NOT EXISTS idx_events_type ON events(type);
 CREATE TABLE IF NOT EXISTS nodes (
     id VARCHAR(50) PRIMARY KEY,
     status VARCHAR(20) NOT NULL DEFAULT 'offline',
+    hostname VARCHAR(255) DEFAULT '',
+    ips TEXT DEFAULT '',
     labels JSONB DEFAULT '{}',
     capacity JSONB DEFAULT '{}',
     last_heartbeat TIMESTAMPTZ,
@@ -656,13 +664,86 @@ CREATE INDEX IF NOT EXISTS idx_memories_agent_id ON memories(agent_id);
 CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(type);
 
 -- ==========================================================================
+-- 24. node_provisions — 节点部署记录
+-- ==========================================================================
+CREATE TABLE IF NOT EXISTS node_provisions (
+    id              TEXT PRIMARY KEY,
+    node_id         TEXT NOT NULL,
+    host            TEXT NOT NULL,
+    port            INTEGER NOT NULL DEFAULT 22,
+    ssh_user        TEXT NOT NULL,
+    auth_method     TEXT NOT NULL DEFAULT 'password',
+    status          TEXT NOT NULL DEFAULT 'pending',
+    error_message   TEXT,
+    version         TEXT NOT NULL,
+    github_repo     TEXT NOT NULL DEFAULT 'org/agents-admin',
+    api_server_url  TEXT NOT NULL,
+    tenant_id       VARCHAR(36) DEFAULT 'system',
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_node_provisions_status ON node_provisions(status);
+CREATE INDEX IF NOT EXISTS idx_node_provisions_node_id ON node_provisions(node_id);
+CREATE INDEX IF NOT EXISTS idx_node_provisions_tenant ON node_provisions(tenant_id);
+
+-- ==========================================================================
+-- 25. users — 用户认证
+-- ==========================================================================
+CREATE TABLE IF NOT EXISTS users (
+    id            VARCHAR(36) PRIMARY KEY,
+    email         VARCHAR(255) NOT NULL UNIQUE,
+    username      VARCHAR(100) NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    role          VARCHAR(20)  NOT NULL DEFAULT 'user',
+    status        VARCHAR(20)  NOT NULL DEFAULT 'active',
+    created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+-- 多租户: 给现有表添加 tenant_id 列
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(36) DEFAULT 'system';
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(36) DEFAULT 'system';
+ALTER TABLE instances ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(36) DEFAULT 'system';
+ALTER TABLE proxies ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(36) DEFAULT 'system';
+ALTER TABLE operations ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(36) DEFAULT 'system';
+
+CREATE INDEX IF NOT EXISTS idx_tasks_tenant ON tasks(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_accounts_tenant ON accounts(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_instances_tenant ON instances(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_proxies_tenant ON proxies(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_operations_tenant ON operations(tenant_id);
+
+-- ==========================================================================
+-- 26. schema_version — 数据库版本追踪
+-- ==========================================================================
+CREATE TABLE IF NOT EXISTS schema_version (
+    id              INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+    migration_id    INTEGER NOT NULL,
+    version         VARCHAR(32) NOT NULL,
+    description     TEXT,
+    applied_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    applied_by      VARCHAR(128) DEFAULT current_user
+);
+
+INSERT INTO schema_version (migration_id, version, description)
+VALUES (19, '1.0.0', '全量安装：合并 migrations 002-019')
+ON CONFLICT (id) DO UPDATE SET
+    migration_id = EXCLUDED.migration_id,
+    version = EXCLUDED.version,
+    description = EXCLUDED.description,
+    applied_at = NOW();
+
+-- ==========================================================================
 -- 完成
 -- ==========================================================================
--- 本脚本包含 23 张表，覆盖：
+-- 本脚本包含 26 张表，覆盖：
 --   核心: tasks, runs, events, nodes, artifacts
 --   账号: accounts, auth_tasks, instances, terminal_sessions
---   基础设施: proxies, operations, actions
+--   基础设施: proxies, operations, actions, node_provisions
 --   智能体: agent_templates, agents, runtimes
 --   安全: security_policies, sandboxes
 --   HITL: approval_requests, approval_decisions, human_feedbacks, interventions, confirmations
 --   扩展: skills, mcp_servers, task_templates, prompt_templates, memories
+--   系统: users, schema_version

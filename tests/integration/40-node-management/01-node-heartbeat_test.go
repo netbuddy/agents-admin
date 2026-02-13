@@ -1,12 +1,12 @@
 // Package integration 节点心跳集成测试
 //
-// 测试范围：节点注册、心跳更新、在线/离线状态判断（通过 Redis 缓存）
+// 测试范围：节点注册、心跳更新、在线/离线状态判断（基于 MongoDB last_heartbeat 时间戳）
 //
-// 测试用例（对应文档 TC-NODE-HEARTBEAT-001 ~ TC-NODE-HEARTBEAT-006）：
+// 测试用例：
 //   - TC-NODE-HEARTBEAT-001: 首次心跳（节点注册）
 //   - TC-NODE-HEARTBEAT-002: 心跳续期
 //   - TC-NODE-HEARTBEAT-003: 更新节点信息
-//   - TC-NODE-HEARTBEAT-004: 心跳超时（节点离线）— 仅验证缓存过期逻辑
+//   - TC-NODE-HEARTBEAT-004: 心跳超时（节点离线）— 通过设置旧 last_heartbeat 模拟
 //   - TC-NODE-HEARTBEAT-005: 缺少 node_id
 //   - TC-NODE-HEARTBEAT-006: 带容量信息心跳
 package integration
@@ -26,7 +26,6 @@ import (
 	"agents-admin/internal/apiserver/node"
 	"agents-admin/internal/apiserver/server"
 	"agents-admin/internal/config"
-	"agents-admin/internal/shared/cache"
 	"agents-admin/internal/shared/infra"
 	"agents-admin/internal/shared/model"
 	"agents-admin/internal/shared/storage"
@@ -113,11 +112,6 @@ func cleanupNode(t *testing.T, nodeID string) {
 	t.Helper()
 	ctx := context.Background()
 	testStore.DeleteNode(ctx, nodeID)
-	// 清理 Redis 缓存
-	if testRedis != nil {
-		testRedis.Client().Del(ctx, cache.KeyNodeHeartbeat+nodeID).Err()
-		testRedis.Client().SRem(ctx, cache.KeyOnlineNodes, nodeID).Err()
-	}
 }
 
 // getNode 获取单个节点详情
@@ -158,10 +152,6 @@ func findNodeInList(t *testing.T, nodeID string) map[string]interface{} {
 
 // TC-NODE-HEARTBEAT-001: 首次心跳（节点注册）
 func TestNodeHeartbeat_FirstHeartbeat(t *testing.T) {
-	if testRedis == nil {
-		t.Skip("Redis not available")
-	}
-
 	nodeID := uniqueID("hb-first")
 	defer cleanupNode(t, nodeID)
 
@@ -187,32 +177,17 @@ func TestNodeHeartbeat_FirstHeartbeat(t *testing.T) {
 		t.Errorf("expected status=ok, got %v", body["status"])
 	}
 
-	// 验证 Redis 缓存
+	// 验证 DB
 	ctx := context.Background()
-	hb, err := testRedis.GetNodeHeartbeat(ctx, nodeID)
-	if err != nil {
-		t.Fatalf("GetNodeHeartbeat failed: %v", err)
-	}
-	if hb == nil {
-		t.Fatal("expected heartbeat in Redis, got nil")
-	}
-	if hb.Status != "online" {
-		t.Errorf("expected status=online in cache, got %s", hb.Status)
-	}
-
-	// 验证 Redis TTL
-	ttl := testRedis.Client().TTL(ctx, cache.KeyNodeHeartbeat+nodeID).Val()
-	if ttl <= 0 || ttl > cache.TTLNodeHeartbeat {
-		t.Errorf("expected TTL in (0, %v], got %v", cache.TTLNodeHeartbeat, ttl)
-	}
-
-	// 验证 PostgreSQL
 	dbNode, err := testStore.GetNode(ctx, nodeID)
 	if err != nil || dbNode == nil {
-		t.Fatalf("node not found in PostgreSQL: %v", err)
+		t.Fatalf("node not found in DB: %v", err)
 	}
 	if string(dbNode.Status) != "online" {
 		t.Errorf("expected DB status=online, got %s", dbNode.Status)
+	}
+	if dbNode.LastHeartbeat == nil {
+		t.Fatal("expected last_heartbeat to be set")
 	}
 
 	// 验证 List 接口中状态为 online
@@ -227,10 +202,6 @@ func TestNodeHeartbeat_FirstHeartbeat(t *testing.T) {
 
 // TC-NODE-HEARTBEAT-002: 心跳续期
 func TestNodeHeartbeat_Renewal(t *testing.T) {
-	if testRedis == nil {
-		t.Skip("Redis not available")
-	}
-
 	nodeID := uniqueID("hb-renew")
 	defer cleanupNode(t, nodeID)
 
@@ -242,13 +213,6 @@ func TestNodeHeartbeat_Renewal(t *testing.T) {
 		"status":  "online",
 	})
 	resp.Body.Close()
-
-	// 记录首次心跳时间
-	hb1, _ := testRedis.GetNodeHeartbeat(ctx, nodeID)
-	if hb1 == nil {
-		t.Fatal("first heartbeat not found")
-	}
-	firstUpdatedAt := hb1.UpdatedAt
 
 	// 记录首次 DB 心跳时间
 	dbNode1, _ := testStore.GetNode(ctx, nodeID)
@@ -271,22 +235,7 @@ func TestNodeHeartbeat_Renewal(t *testing.T) {
 		t.Fatalf("expected 200 for renewal, got %d", resp.StatusCode)
 	}
 
-	// 验证 TTL 已重置
-	ttl := testRedis.Client().TTL(ctx, cache.KeyNodeHeartbeat+nodeID).Val()
-	if ttl <= 25*time.Second {
-		t.Errorf("expected TTL > 25s after renewal, got %v", ttl)
-	}
-
-	// 验证 updated_at 已更新
-	hb2, _ := testRedis.GetNodeHeartbeat(ctx, nodeID)
-	if hb2 == nil {
-		t.Fatal("renewed heartbeat not found")
-	}
-	if !hb2.UpdatedAt.After(firstUpdatedAt) {
-		t.Errorf("expected updated_at to advance, first=%v renewed=%v", firstUpdatedAt, hb2.UpdatedAt)
-	}
-
-	// 验证 DB last_heartbeat 实际更新了（而不仅仅是非 nil）
+	// 验证 DB last_heartbeat 实际更新了
 	dbNode2, _ := testStore.GetNode(ctx, nodeID)
 	if dbNode2 == nil || dbNode2.LastHeartbeat == nil {
 		t.Fatal("DB node or last_heartbeat is nil after renewal")
@@ -298,10 +247,6 @@ func TestNodeHeartbeat_Renewal(t *testing.T) {
 
 // TC-NODE-HEARTBEAT-003: 更新节点信息
 func TestNodeHeartbeat_UpdateLabels(t *testing.T) {
-	if testRedis == nil {
-		t.Skip("Redis not available")
-	}
-
 	nodeID := uniqueID("hb-label")
 	defer cleanupNode(t, nodeID)
 
@@ -343,12 +288,8 @@ func TestNodeHeartbeat_UpdateLabels(t *testing.T) {
 }
 
 // TC-NODE-HEARTBEAT-004: 心跳超时（节点离线）
-// 通过删除 Redis key 模拟 TTL 过期，验证 List 和 Get API 都返回 offline
+// 通过设置旧的 last_heartbeat 时间戳模拟超时，验证 List 和 Get API 都返回 offline
 func TestNodeHeartbeat_OfflineDetection(t *testing.T) {
-	if testRedis == nil {
-		t.Skip("Redis not available")
-	}
-
 	nodeID := uniqueID("hb-offline")
 	defer cleanupNode(t, nodeID)
 
@@ -373,8 +314,17 @@ func TestNodeHeartbeat_OfflineDetection(t *testing.T) {
 		t.Fatalf("expected node to be online via Get API, got %v", getResp)
 	}
 
-	// 手动删除 Redis 缓存 key（模拟 TTL 过期）
-	testRedis.Client().Del(ctx, cache.KeyNodeHeartbeat+nodeID)
+	// 将 last_heartbeat 设置为 2 分钟前（模拟心跳超时）
+	oldTime := time.Now().Add(-2 * time.Minute)
+	testStore.UpsertNode(ctx, &model.Node{
+		ID:            nodeID,
+		Status:        model.NodeStatusOnline,
+		Labels:        json.RawMessage(`{}`),
+		Capacity:      json.RawMessage(`{}`),
+		LastHeartbeat: &oldTime,
+		CreatedAt:     oldTime,
+		UpdatedAt:     oldTime,
+	})
 
 	// 验证 List API 返回 offline
 	found = findNodeInList(t, nodeID)
@@ -382,7 +332,7 @@ func TestNodeHeartbeat_OfflineDetection(t *testing.T) {
 		t.Fatal("node not found in list")
 	}
 	if found["status"] != "offline" {
-		t.Errorf("expected offline in List after cache expiry, got %v", found["status"])
+		t.Errorf("expected offline in List after heartbeat timeout, got %v", found["status"])
 	}
 
 	// 验证 Get API 也返回 offline
@@ -391,16 +341,7 @@ func TestNodeHeartbeat_OfflineDetection(t *testing.T) {
 		t.Fatal("node not found via Get API")
 	}
 	if getResp["status"] != "offline" {
-		t.Errorf("expected offline in Get API after cache expiry, got %v", getResp["status"])
-	}
-
-	// 验证 DB 记录仍存在，且 status 仍为 "online"（设计如此：DB 不自动同步缓存过期）
-	dbNode, _ := testStore.GetNode(ctx, nodeID)
-	if dbNode == nil {
-		t.Fatal("expected DB record to persist after going offline")
-	}
-	if string(dbNode.Status) != "online" {
-		t.Errorf("DB status should remain 'online' (not auto-synced), got %s", dbNode.Status)
+		t.Errorf("expected offline in Get API after heartbeat timeout, got %v", getResp["status"])
 	}
 }
 
@@ -424,10 +365,6 @@ func TestNodeHeartbeat_MissingNodeID(t *testing.T) {
 
 // TC-NODE-HEARTBEAT-006: 带容量信息心跳
 func TestNodeHeartbeat_WithCapacity(t *testing.T) {
-	if testRedis == nil {
-		t.Skip("Redis not available")
-	}
-
 	nodeID := uniqueID("hb-cap")
 	defer cleanupNode(t, nodeID)
 
@@ -457,78 +394,46 @@ func TestNodeHeartbeat_WithCapacity(t *testing.T) {
 	if dbCap["max_concurrent"] != float64(8) || dbCap["available"] != float64(6) {
 		t.Errorf("expected DB capacity={max_concurrent:8,available:6}, got %v", dbCap)
 	}
-
-	// 验证 Redis 缓存 capacity
-	hb, _ := testRedis.GetNodeHeartbeat(ctx, nodeID)
-	if hb == nil {
-		t.Fatal("heartbeat not found in cache")
-	}
-	if hb.Capacity["max_concurrent"] != 8 || hb.Capacity["available"] != 6 {
-		t.Errorf("expected cache capacity={max_concurrent:8,available:6}, got %v", hb.Capacity)
-	}
 }
 
-// TC-NODE-HEARTBEAT-007: Manager.ListOnlineNodes 使用 Redis 缓存
+// TC-NODE-HEARTBEAT-007: Manager.ListOnlineNodes 基于 MongoDB last_heartbeat 时间戳
 func TestNodeManager_ListOnlineNodes(t *testing.T) {
-	if testRedis == nil {
-		t.Skip("Redis not available")
-	}
-
 	nodeOnline := uniqueID("mgr-on")
-	nodeOffline := uniqueID("mgr-off")
 	defer cleanupNode(t, nodeOnline)
-	defer cleanupNode(t, nodeOffline)
 
 	ctx := context.Background()
 
-	// 创建两个节点
-	for _, nid := range []string{nodeOnline, nodeOffline} {
-		resp := sendHeartbeat(t, map[string]interface{}{
-			"node_id": nid,
-			"status":  "online",
-		})
-		resp.Body.Close()
-	}
-
-	// 模拟 nodeOffline 离线（删除缓存）
-	testRedis.Client().Del(ctx, cache.KeyNodeHeartbeat+nodeOffline)
+	// 发送心跳创建在线节点
+	resp := sendHeartbeat(t, map[string]interface{}{
+		"node_id": nodeOnline,
+		"status":  "online",
+	})
+	resp.Body.Close()
 
 	// 使用 Manager 获取在线节点
 	mgr := node.NewManager(testStore)
-	mgr.SetNodeCache(testRedis)
 
 	onlineNodes, err := mgr.ListOnlineNodes(ctx)
 	if err != nil {
 		t.Fatalf("ListOnlineNodes failed: %v", err)
 	}
 
-	// 验证 nodeOnline 在线
+	// 验证 nodeOnline 在线（last_heartbeat 在 45s 内）
 	foundOnline := false
-	foundOffline := false
 	for _, n := range onlineNodes {
 		if n.ID == nodeOnline {
 			foundOnline = true
-		}
-		if n.ID == nodeOffline {
-			foundOffline = true
 		}
 	}
 
 	if !foundOnline {
 		t.Errorf("expected %s to be in online list", nodeOnline)
 	}
-	if foundOffline {
-		t.Errorf("expected %s to NOT be in online list", nodeOffline)
-	}
 }
 
-// TC-NODE-HEARTBEAT-009: 删除节点时清理缓存
-func TestNodeHeartbeat_DeleteClearsCache(t *testing.T) {
-	if testRedis == nil {
-		t.Skip("Redis not available")
-	}
-
-	nodeID := uniqueID("hb-delcache")
+// TC-NODE-HEARTBEAT-009: 删除节点后 DB 中无记录
+func TestNodeHeartbeat_DeleteRemovesFromDB(t *testing.T) {
+	nodeID := uniqueID("hb-del")
 	defer cleanupNode(t, nodeID)
 
 	ctx := context.Background()
@@ -540,10 +445,10 @@ func TestNodeHeartbeat_DeleteClearsCache(t *testing.T) {
 	})
 	resp.Body.Close()
 
-	// 验证缓存存在
-	hb, _ := testRedis.GetNodeHeartbeat(ctx, nodeID)
-	if hb == nil {
-		t.Fatal("expected cache entry before delete")
+	// 验证 DB 中存在
+	dbNode, _ := testStore.GetNode(ctx, nodeID)
+	if dbNode == nil {
+		t.Fatal("expected node in DB before delete")
 	}
 
 	// 删除节点
@@ -557,19 +462,15 @@ func TestNodeHeartbeat_DeleteClearsCache(t *testing.T) {
 		t.Fatalf("expected 204, got %d", delResp.StatusCode)
 	}
 
-	// 验证缓存已被清理
-	hb, _ = testRedis.GetNodeHeartbeat(ctx, nodeID)
-	if hb != nil {
-		t.Error("expected cache entry to be cleared after node deletion")
+	// 验证 DB 中已删除
+	dbNode, _ = testStore.GetNode(ctx, nodeID)
+	if dbNode != nil {
+		t.Error("expected node to be removed from DB after deletion")
 	}
 }
 
 // TC-NODE-HEARTBEAT-010: 心跳不覆盖管理员设置的行政状态
 func TestNodeHeartbeat_PreservesAdminStatus(t *testing.T) {
-	if testRedis == nil {
-		t.Skip("Redis not available")
-	}
-
 	nodeID := uniqueID("hb-admstat")
 	defer cleanupNode(t, nodeID)
 
@@ -627,16 +528,10 @@ func TestNodeHeartbeat_PreservesAdminStatus(t *testing.T) {
 	}
 }
 
-// TC-NODE-HEARTBEAT-011: 行政状态变更清理缓存
-func TestNodeHeartbeat_AdminStatusClearsCache(t *testing.T) {
-	if testRedis == nil {
-		t.Skip("Redis not available")
-	}
-
-	nodeID := uniqueID("hb-admclr")
+// TC-NODE-HEARTBEAT-011: 行政状态变更后 API 返回正确状态
+func TestNodeHeartbeat_AdminStatusInAPI(t *testing.T) {
+	nodeID := uniqueID("hb-admapi")
 	defer cleanupNode(t, nodeID)
-
-	ctx := context.Background()
 
 	// 发送心跳
 	resp := sendHeartbeat(t, map[string]interface{}{
@@ -644,12 +539,6 @@ func TestNodeHeartbeat_AdminStatusClearsCache(t *testing.T) {
 		"status":  "online",
 	})
 	resp.Body.Close()
-
-	// 验证缓存存在
-	hb, _ := testRedis.GetNodeHeartbeat(ctx, nodeID)
-	if hb == nil {
-		t.Fatal("expected cache entry before admin status change")
-	}
 
 	// 设置为 maintenance
 	patchBody, _ := json.Marshal(map[string]interface{}{"status": "maintenance"})
@@ -661,12 +550,6 @@ func TestNodeHeartbeat_AdminStatusClearsCache(t *testing.T) {
 	}
 	patchResp.Body.Close()
 
-	// 验证缓存已被清理
-	hb, _ = testRedis.GetNodeHeartbeat(ctx, nodeID)
-	if hb != nil {
-		t.Error("expected cache to be cleared after admin status change to maintenance")
-	}
-
 	// 验证 API 返回 maintenance
 	getResp := getNode(t, nodeID)
 	if getResp == nil || getResp["status"] != "maintenance" {
@@ -674,15 +557,15 @@ func TestNodeHeartbeat_AdminStatusClearsCache(t *testing.T) {
 	}
 }
 
-// TC-NODE-HEARTBEAT-008: Manager 缓存不可用时回退到 PostgreSQL
-func TestNodeManager_FallbackToPostgres(t *testing.T) {
-	nodeID := uniqueID("mgr-fb")
+// TC-NODE-HEARTBEAT-008: Manager 基于 last_heartbeat 时间戳判断在线
+func TestNodeManager_TimestampBasedOnline(t *testing.T) {
+	nodeID := uniqueID("mgr-ts")
 	defer cleanupNode(t, nodeID)
 
 	ctx := context.Background()
 	now := time.Now()
 
-	// 直接在 DB 中创建节点（模拟无缓存场景）
+	// 直接在 DB 中创建节点（新鲜的 last_heartbeat）
 	testStore.UpsertNode(ctx, &model.Node{
 		ID:            nodeID,
 		Status:        model.NodeStatusOnline,
@@ -693,16 +576,14 @@ func TestNodeManager_FallbackToPostgres(t *testing.T) {
 		UpdatedAt:     now,
 	})
 
-	// 创建无缓存的 Manager
 	mgr := node.NewManager(testStore)
-	// 不设置 nodeCache -> 回退到 PostgreSQL
 
 	onlineNodes, err := mgr.ListOnlineNodes(ctx)
 	if err != nil {
 		t.Fatalf("ListOnlineNodes failed: %v", err)
 	}
 
-	// 应该能从 PostgreSQL 回退获取到节点
+	// 应该能通过 last_heartbeat 时间戳获取到节点
 	found := false
 	for _, n := range onlineNodes {
 		if n.ID == nodeID {
@@ -711,6 +592,6 @@ func TestNodeManager_FallbackToPostgres(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Errorf("expected %s in fallback online list", nodeID)
+		t.Errorf("expected %s in online list (fresh heartbeat)", nodeID)
 	}
 }

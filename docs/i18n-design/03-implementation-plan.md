@@ -62,23 +62,27 @@ web/
 │       ├── zh/
 │       │   ├── common.json     ← 通用：导航、按钮、状态
 │       │   ├── tasks.json      ← 任务看板 + 任务详情
+│       │   ├── agents.json     ← 智能体实例 + 模板库
 │       │   ├── accounts.json   ← 账号管理
 │       │   ├── instances.json  ← 实例管理
 │       │   ├── monitor.json    ← 工作流监控
 │       │   ├── runners.json    ← Runner 管理
 │       │   ├── nodes.json      ← 节点管理
 │       │   ├── proxies.json    ← 代理管理
-│       │   └── settings.json   ← 系统设置
+│       │   ├── settings.json   ← 系统设置
+│       │   └── auth.json       ← 登录/注册
 │       └── en/
 │           ├── common.json
 │           ├── tasks.json
+│           ├── agents.json
 │           ├── accounts.json
 │           ├── instances.json
 │           ├── monitor.json
 │           ├── runners.json
 │           ├── nodes.json
 │           ├── proxies.json
-│           └── settings.json
+│           ├── settings.json
+│           └── auth.json
 ├── components/
 │   └── LanguageSwitcher.tsx    ← 语言切换下拉菜单
 └── app/
@@ -91,13 +95,15 @@ web/
 |-----------|------|---------|
 | `common` | 导航标签、通用按钮（取消/保存/删除）、状态文案、错误提示 | 所有页面 |
 | `tasks` | 看板、任务卡片、任务详情、创建任务弹窗 | page.tsx, TaskCard, TaskDetailPanel, CreateTaskModal |
+| `agents` | 智能体实例、模板库、创建向导、终端弹窗 | agents/page.tsx |
 | `accounts` | 账号列表、添加/编辑弹窗、认证方式 | accounts/page.tsx |
-| `instances` | 实例列表、创建弹窗、配置项 | instances/page.tsx |
+| `instances` | 实例列表、创建向导、终端弹窗 | instances/page.tsx |
 | `monitor` | 工作流列表、状态筛选、Agent 输出组件 | monitor/page.tsx, agent-output/* |
 | `runners` | Runner 列表、终端操作 | runners/page.tsx |
-| `nodes` | 节点列表 | nodes/page.tsx |
+| `nodes` | 节点列表、添加节点向导 | nodes/page.tsx, AddNodeWizard.tsx |
 | `proxies` | 代理列表、测试弹窗 | proxies/page.tsx |
 | `settings` | 系统设置项 | settings/page.tsx |
+| `auth` | 登录/注册表单、验证提示 | login/page.tsx, register/page.tsx |
 
 ---
 

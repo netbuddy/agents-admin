@@ -37,18 +37,17 @@ const (
 
 // Account 表示 Agent 的认证账号
 //
-// 当前阶段：账号绑定到特定节点（Volume 存储在节点本地）
-// 未来演进：账号存储到共享存储（NFS/S3），无需绑定节点
+// 账号与节点无关，Volume 归档存储在 MinIO 共享存储中，任意节点均可恢复
 type Account struct {
-	ID          string        `json:"id" db:"id"`
-	Name        string        `json:"name" db:"name"`                           // 显示名称（如邮箱）
-	AgentTypeID string        `json:"agent_type" db:"agent_type_id"`            // 关联的 Agent 类型
-	NodeID      string        `json:"node_id" db:"node_id"`                     // 账号所属节点（当前阶段必填，未来可选）
-	VolumeName  *string       `json:"volume_name,omitempty" db:"volume_name"`   // Docker Volume 名称（由 Node Agent 创建后回填）
-	Status      AccountStatus `json:"status" db:"status"`                       // 账号状态
-	CreatedAt   time.Time     `json:"created_at" db:"created_at"`               // 创建时间
-	UpdatedAt   time.Time     `json:"updated_at" db:"updated_at"`               // 更新时间
-	LastUsedAt  *time.Time    `json:"last_used_at,omitempty" db:"last_used_at"` // 最后使用时间
+	ID               string        `json:"id" bson:"_id" db:"id"`
+	Name             string        `json:"name" bson:"name" db:"name"`                                                               // 显示名称（如邮箱）
+	AgentTypeID      string        `json:"agent_type" bson:"agent_type" db:"agent_type_id"`                                          // 关联的 Agent 类型
+	VolumeName       *string       `json:"volume_name,omitempty" bson:"volume_name,omitempty" db:"volume_name"`                      // Docker Volume 名称（由 Node Agent 创建后回填）
+	VolumeArchiveKey *string       `json:"volume_archive_key,omitempty" bson:"volume_archive_key,omitempty" db:"volume_archive_key"` // MinIO 中的 Volume 归档 key
+	Status           AccountStatus `json:"status" bson:"status" db:"status"`                                                         // 账号状态
+	CreatedAt        time.Time     `json:"created_at" bson:"created_at" db:"created_at"`                                             // 创建时间
+	UpdatedAt        time.Time     `json:"updated_at" bson:"updated_at" db:"updated_at"`                                             // 更新时间
+	LastUsedAt       *time.Time    `json:"last_used_at,omitempty" bson:"last_used_at,omitempty" db:"last_used_at"`                   // 最后使用时间
 }
 
 // ============================================================================
@@ -89,28 +88,28 @@ const (
 //
 // API Server 只创建任务记录，Node Agent 执行实际操作并上报状态
 type AuthTask struct {
-	ID        string `json:"id" db:"id"`
-	AccountID string `json:"account_id" db:"account_id"`
+	ID        string `json:"id" bson:"_id" db:"id"`
+	AccountID string `json:"account_id" bson:"account_id" db:"account_id"`
 
 	// 期望状态（由 API Server 设置）
-	Method  string  `json:"method" db:"method"`     // oauth, api_key
-	ProxyID *string `json:"proxy_id" db:"proxy_id"` // 代理ID（可选）
+	Method  string  `json:"method" bson:"method" db:"method"`       // oauth, api_key
+	ProxyID *string `json:"proxy_id" bson:"proxy_id" db:"proxy_id"` // 代理ID（可选）
 
 	// 节点信息（由用户指定，不走 Scheduler）
-	NodeID string `json:"node_id" db:"node_id"`
+	NodeID string `json:"node_id" bson:"node_id" db:"node_id"`
 
 	// 当前状态（由 Node Agent 上报）
-	Status        AuthTaskStatus `json:"status" db:"status"`
-	TerminalPort  *int           `json:"terminal_port,omitempty" db:"terminal_port"`
-	TerminalURL   *string        `json:"terminal_url,omitempty" db:"terminal_url"`
-	ContainerName *string        `json:"container_name,omitempty" db:"container_name"`
-	OAuthURL      *string        `json:"oauth_url,omitempty" db:"oauth_url"` // OAuth 验证 URL
-	UserCode      *string        `json:"user_code,omitempty" db:"user_code"` // 用户验证码
-	Message       *string        `json:"message,omitempty" db:"message"`
+	Status        AuthTaskStatus `json:"status" bson:"status" db:"status"`
+	TerminalPort  *int           `json:"terminal_port,omitempty" bson:"terminal_port,omitempty" db:"terminal_port"`
+	TerminalURL   *string        `json:"terminal_url,omitempty" bson:"terminal_url,omitempty" db:"terminal_url"`
+	ContainerName *string        `json:"container_name,omitempty" bson:"container_name,omitempty" db:"container_name"`
+	OAuthURL      *string        `json:"oauth_url,omitempty" bson:"oauth_url,omitempty" db:"oauth_url"` // OAuth 验证 URL
+	UserCode      *string        `json:"user_code,omitempty" bson:"user_code,omitempty" db:"user_code"` // 用户验证码
+	Message       *string        `json:"message,omitempty" bson:"message,omitempty" db:"message"`
 
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
-	ExpiresAt time.Time `json:"expires_at" db:"expires_at"`
+	CreatedAt time.Time `json:"created_at" bson:"created_at" db:"created_at"`
+	UpdatedAt time.Time `json:"updated_at" bson:"updated_at" db:"updated_at"`
+	ExpiresAt time.Time `json:"expires_at" bson:"expires_at" db:"expires_at"`
 }
 
 // ============================================================================

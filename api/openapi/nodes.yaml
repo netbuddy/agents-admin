@@ -1,3 +1,8 @@
+openapi: 3.0.3
+info:
+  title: Nodes API
+  version: 1.0.0
+
 # Node 节点管理 API
 
 paths:
@@ -18,7 +23,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: 'common.yaml#/components/schemas/MessageResponse'
+                $ref: '#/components/schemas/HeartbeatResponse'
 
   /api/v1/nodes:
     get:
@@ -84,6 +89,24 @@ paths:
               schema:
                 $ref: 'common.yaml#/components/schemas/MessageResponse'
 
+  /api/v1/nodes/{id}/drain:
+    post:
+      tags: [Nodes]
+      operationId: drainNode
+      summary: 排空节点
+      description: 将节点标记为 draining 状态，不再接收新任务，等待现有任务完成后节点变为 offline
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 排空请求已接受
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Node'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
   /api/v1/nodes/{id}/runs:
     get:
       tags: [Nodes]
@@ -101,6 +124,126 @@ paths:
                 items:
                   $ref: 'runs.yaml#/components/schemas/Run'
 
+  /api/v1/nodes/{id}/env-config:
+    get:
+      tags: [Nodes]
+      operationId: getNodeEnvConfig
+      summary: 获取节点环境配置
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 环境配置
+          content:
+            application/json:
+              schema:
+                type: object
+    put:
+      tags: [Nodes]
+      operationId: updateNodeEnvConfig
+      summary: 更新节点环境配置
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/MessageResponse'
+
+  /api/v1/nodes/{id}/env-config/test-proxy:
+    post:
+      tags: [Nodes]
+      operationId: testNodeProxy
+      summary: 测试节点代理连接
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                proxy_url:
+                  type: string
+      responses:
+        '200':
+          description: 测试结果
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/v1/node-provisions:
+    post:
+      tags: [Nodes]
+      operationId: createNodeProvision
+      summary: 创建远程节点部署任务
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: 部署任务已创建
+          content:
+            application/json:
+              schema:
+                type: object
+    get:
+      tags: [Nodes]
+      operationId: listNodeProvisions
+      summary: 列出远程节点部署任务
+      responses:
+        '200':
+          description: 部署任务列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+
+  /api/v1/node-provisions/{id}:
+    get:
+      tags: [Nodes]
+      operationId: getNodeProvision
+      summary: 获取远程节点部署任务详情
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 部署任务详情
+          content:
+            application/json:
+              schema:
+                type: object
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+  /api/v1/node-bootstrap:
+    get:
+      tags: [Nodes]
+      operationId: nodeBootstrap
+      summary: 节点引导配置（免认证，供 Node Manager 零配置安装）
+      responses:
+        '200':
+          description: 引导配置
+          content:
+            application/json:
+              schema:
+                type: object
+
 components:
   schemas:
     Node:
@@ -109,6 +252,12 @@ components:
       properties:
         id:
           type: string
+        hostname:
+          type: string
+          description: 节点主机名
+        ips:
+          type: string
+          description: 节点 IP 地址列表（逗号分隔）
         status:
           type: string
           enum: [online, offline, draining]
@@ -134,6 +283,12 @@ components:
       properties:
         node_id:
           type: string
+        hostname:
+          type: string
+          description: 节点主机名
+        ips:
+          type: string
+          description: 节点 IP 地址列表（逗号分隔）
         status:
           type: string
         labels:
@@ -142,6 +297,25 @@ components:
             type: string
         capacity:
           type: object
+        running_runs:
+          type: array
+          description: 当前正在运行的 Run ID 列表
+          items:
+            type: string
+
+    HeartbeatResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        directives:
+          type: object
+          properties:
+            cancel_runs:
+              type: array
+              description: 需要取消的 Run ID 列表（声明式状态协调）
+              items:
+                type: string
 
     UpdateNodeRequest:
       type: object

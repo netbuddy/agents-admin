@@ -135,7 +135,21 @@ func TestGetNodeActions(t *testing.T) {
 	json.Unmarshal(w.Body.Bytes(), &resp)
 	actions := resp["actions"].([]interface{})
 	if len(actions) != 1 {
-		t.Errorf("expected 1 action for node-001, got %d", len(actions))
+		t.Fatalf("expected 1 action for node-001, got %d", len(actions))
+	}
+
+	// 关键：每个 Action 必须包含 Operation 数据（Node Manager 依赖此字段分发任务）
+	act := actions[0].(map[string]interface{})
+	op, ok := act["operation"]
+	if !ok || op == nil {
+		t.Fatal("action must include 'operation' data for node-manager dispatch")
+	}
+	opMap := op.(map[string]interface{})
+	if opMap["type"] != "oauth" {
+		t.Errorf("expected operation type=oauth, got %v", opMap["type"])
+	}
+	if opMap["config"] == nil {
+		t.Error("expected operation config to be present")
 	}
 }
 

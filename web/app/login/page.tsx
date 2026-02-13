@@ -4,9 +4,11 @@ import { useState } from 'react'
 import { useAuth } from '@/lib/auth'
 import { LogIn, UserPlus, Mail, Lock, User, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
+import { useTranslation } from 'react-i18next'
 
 export default function LoginPage() {
   const { login } = useAuth()
+  const { t } = useTranslation('auth')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -33,11 +35,11 @@ export default function LoginPage() {
             <LogIn className="w-7 h-7 text-white" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Agents Admin</h1>
-          <p className="text-sm text-gray-500 mt-1">AI Agent 任务编排平台</p>
+          <p className="text-sm text-gray-500 mt-1">{t('login.subtitle')}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-sm border p-6 space-y-4">
-          <h2 className="text-lg font-semibold text-gray-900 text-center">登录</h2>
+          <h2 className="text-lg font-semibold text-gray-900 text-center">{t('login.title')}</h2>
 
           {error && (
             <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
@@ -47,7 +49,7 @@ export default function LoginPage() {
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">邮箱</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('login.email')}</label>
             <div className="relative">
               <Mail className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
               <input
@@ -62,14 +64,14 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">密码</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('login.password')}</label>
             <div className="relative">
               <Lock className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
               <input
                 type="password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                placeholder="输入密码"
+                placeholder={t('login.passwordPlaceholder')}
                 required
                 className="w-full pl-9 pr-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
@@ -86,13 +88,13 @@ export default function LoginPage() {
             ) : (
               <LogIn className="w-4 h-4" />
             )}
-            登录
+            {t('login.submit')}
           </button>
 
           <p className="text-center text-sm text-gray-500">
-            没有账号？{' '}
+            {t('login.noAccount')}{' '}
             <Link href="/register" className="text-blue-600 hover:text-blue-700 font-medium">
-              注册
+              {t('login.register')}
             </Link>
           </p>
         </form>

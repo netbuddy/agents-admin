@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { useEffect } from 'react'
 import { useAuth } from '@/lib/auth'
+import { useTranslation } from 'react-i18next'
 
 interface NavItem {
   name: string
@@ -26,14 +27,14 @@ interface NavItem {
   badge?: number
 }
 
-const navigation: NavItem[] = [
-  { name: '任务看板', href: '/', icon: LayoutDashboard },
-  { name: '工作流监控', href: '/monitor', icon: Activity },
-  { name: '智能体', href: '/agents', icon: Bot },
-  { name: '账号管理', href: '/accounts', icon: Users },
-  { name: '节点管理', href: '/nodes', icon: Network },
-  { name: '代理管理', href: '/proxies', icon: Globe },
-  { name: '系统设置', href: '/settings', icon: Settings },
+const navigationItems = [
+  { key: 'nav.taskBoard', href: '/', icon: LayoutDashboard },
+  { key: 'nav.monitor', href: '/monitor', icon: Activity },
+  { key: 'nav.agents', href: '/agents', icon: Bot },
+  { key: 'nav.accounts', href: '/accounts', icon: Users },
+  { key: 'nav.nodes', href: '/nodes', icon: Network },
+  { key: 'nav.proxies', href: '/proxies', icon: Globe },
+  { key: 'nav.settings', href: '/settings', icon: Settings },
 ]
 
 interface SidebarProps {
@@ -51,6 +52,13 @@ export default function Sidebar({
 }: SidebarProps) {
   const pathname = usePathname()
   const { user, logout } = useAuth()
+  const { t } = useTranslation()
+
+  const navigation: NavItem[] = navigationItems.map(item => ({
+    name: t(item.key),
+    href: item.href,
+    icon: item.icon,
+  }))
 
   // 路由变化时关闭移动端侧边栏
   useEffect(() => {
@@ -136,7 +144,7 @@ export default function Sidebar({
             <button
               onClick={logout}
               className="p-2 text-gray-400 hover:text-red-400 hover:bg-gray-800 rounded-lg transition-colors flex-shrink-0"
-              title="退出登录"
+              title={t('header.logout')}
             >
               <LogOut className="w-4 h-4" />
             </button>
@@ -146,7 +154,7 @@ export default function Sidebar({
           <button
             onClick={logout}
             className="w-full flex items-center justify-center p-2 text-gray-400 hover:text-red-400 hover:bg-gray-800 rounded-lg"
-            title="退出登录"
+            title={t('header.logout')}
           >
             <LogOut className="w-4 h-4" />
           </button>

@@ -10,7 +10,7 @@ User=agents-admin
 Group=agents-admin
 EnvironmentFile=-/etc/agents-admin/node-manager.env
 ExecStart=/usr/bin/agents-admin-node-manager --config /etc/agents-admin
-Restart=on-failure
+Restart=always
 RestartSec=5
 StartLimitBurst=5
 StartLimitIntervalSec=60
@@ -22,7 +22,7 @@ WorkingDirectory=/var/lib/agents-admin
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/lib/agents-admin /var/log/agents-admin /tmp
+ReadWritePaths=/var/lib/agents-admin /var/log/agents-admin /etc/agents-admin /tmp
 PrivateTmp=true
 
 # 日志

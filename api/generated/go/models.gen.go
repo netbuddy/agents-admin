@@ -5,6 +5,8 @@ package api
 
 import (
 	"time"
+
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // Defines values for AccountStatus.
@@ -15,21 +17,129 @@ const (
 	AccountStatusPending        AccountStatus = "pending"
 )
 
-// Defines values for AuthTaskMethod.
+// Defines values for ActionStatus.
 const (
-	AuthTaskMethodApiKey AuthTaskMethod = "api_key"
-	AuthTaskMethodOauth  AuthTaskMethod = "oauth"
+	ActionStatusAssigned    ActionStatus = "assigned"
+	ActionStatusFailed      ActionStatus = "failed"
+	ActionStatusPending     ActionStatus = "pending"
+	ActionStatusRunning     ActionStatus = "running"
+	ActionStatusSuccess     ActionStatus = "success"
+	ActionStatusTimeout     ActionStatus = "timeout"
+	ActionStatusWaitingUser ActionStatus = "waiting_user"
 )
 
-// Defines values for AuthTaskStatus.
+// Defines values for AgentStatus.
 const (
-	AuthTaskStatusAssigned    AuthTaskStatus = "assigned"
-	AuthTaskStatusFailed      AuthTaskStatus = "failed"
-	AuthTaskStatusPending     AuthTaskStatus = "pending"
-	AuthTaskStatusRunning     AuthTaskStatus = "running"
-	AuthTaskStatusSuccess     AuthTaskStatus = "success"
-	AuthTaskStatusTimeout     AuthTaskStatus = "timeout"
-	AuthTaskStatusWaitingUser AuthTaskStatus = "waiting_user"
+	AgentStatusBusy     AgentStatus = "busy"
+	AgentStatusError    AgentStatus = "error"
+	AgentStatusIdle     AgentStatus = "idle"
+	AgentStatusPending  AgentStatus = "pending"
+	AgentStatusRunning  AgentStatus = "running"
+	AgentStatusStarting AgentStatus = "starting"
+	AgentStatusStopped  AgentStatus = "stopped"
+	AgentStatusStopping AgentStatus = "stopping"
+)
+
+// Defines values for AgentModelType.
+const (
+	AgentModelTypeClaude AgentModelType = "claude"
+	AgentModelTypeCodex  AgentModelType = "codex"
+	AgentModelTypeCustom AgentModelType = "custom"
+	AgentModelTypeGemini AgentModelType = "gemini"
+	AgentModelTypeQwen   AgentModelType = "qwen"
+)
+
+// Defines values for AgentTemplateType.
+const (
+	AgentTemplateTypeClaude AgentTemplateType = "claude"
+	AgentTemplateTypeCodex  AgentTemplateType = "codex"
+	AgentTemplateTypeCustom AgentTemplateType = "custom"
+	AgentTemplateTypeGemini AgentTemplateType = "gemini"
+	AgentTemplateTypeQwen   AgentTemplateType = "qwen"
+)
+
+// Defines values for ApprovalRequestStatus.
+const (
+	ApprovalRequestStatusApproved ApprovalRequestStatus = "approved"
+	ApprovalRequestStatusPending  ApprovalRequestStatus = "pending"
+	ApprovalRequestStatusRejected ApprovalRequestStatus = "rejected"
+)
+
+// Defines values for ConfirmationStatus.
+const (
+	ConfirmationStatusApproved ConfirmationStatus = "approved"
+	ConfirmationStatusPending  ConfirmationStatus = "pending"
+	ConfirmationStatusRejected ConfirmationStatus = "rejected"
+)
+
+// Defines values for CreateAgentTemplateRequestType.
+const (
+	CreateAgentTemplateRequestTypeClaude CreateAgentTemplateRequestType = "claude"
+	CreateAgentTemplateRequestTypeCodex  CreateAgentTemplateRequestType = "codex"
+	CreateAgentTemplateRequestTypeCustom CreateAgentTemplateRequestType = "custom"
+	CreateAgentTemplateRequestTypeGemini CreateAgentTemplateRequestType = "gemini"
+	CreateAgentTemplateRequestTypeQwen   CreateAgentTemplateRequestType = "qwen"
+)
+
+// Defines values for CreateMCPServerRequestSource.
+const (
+	CreateMCPServerRequestSourceBuiltin  CreateMCPServerRequestSource = "builtin"
+	CreateMCPServerRequestSourceCustom   CreateMCPServerRequestSource = "custom"
+	CreateMCPServerRequestSourceOfficial CreateMCPServerRequestSource = "official"
+)
+
+// Defines values for CreateMCPServerRequestTransport.
+const (
+	CreateMCPServerRequestTransportHttp  CreateMCPServerRequestTransport = "http"
+	CreateMCPServerRequestTransportSse   CreateMCPServerRequestTransport = "sse"
+	CreateMCPServerRequestTransportStdio CreateMCPServerRequestTransport = "stdio"
+)
+
+// Defines values for CreateSecurityPolicyRequestLevel.
+const (
+	CreateSecurityPolicyRequestLevelPermissive CreateSecurityPolicyRequestLevel = "permissive"
+	CreateSecurityPolicyRequestLevelStandard   CreateSecurityPolicyRequestLevel = "standard"
+	CreateSecurityPolicyRequestLevelStrict     CreateSecurityPolicyRequestLevel = "strict"
+)
+
+// Defines values for CreateSkillRequestCategory.
+const (
+	CreateSkillRequestCategoryAnalysis CreateSkillRequestCategory = "analysis"
+	CreateSkillRequestCategoryCoding   CreateSkillRequestCategory = "coding"
+	CreateSkillRequestCategoryData     CreateSkillRequestCategory = "data"
+	CreateSkillRequestCategoryDesign   CreateSkillRequestCategory = "design"
+	CreateSkillRequestCategoryDevops   CreateSkillRequestCategory = "devops"
+	CreateSkillRequestCategoryOther    CreateSkillRequestCategory = "other"
+	CreateSkillRequestCategoryResearch CreateSkillRequestCategory = "research"
+	CreateSkillRequestCategoryWriting  CreateSkillRequestCategory = "writing"
+)
+
+// Defines values for CreateSkillRequestLevel.
+const (
+	CreateSkillRequestLevelAdvanced CreateSkillRequestLevel = "advanced"
+	CreateSkillRequestLevelBasic    CreateSkillRequestLevel = "basic"
+	CreateSkillRequestLevelExpert   CreateSkillRequestLevel = "expert"
+)
+
+// Defines values for CreateSkillRequestSource.
+const (
+	CreateSkillRequestSourceBuiltin   CreateSkillRequestSource = "builtin"
+	CreateSkillRequestSourceCommunity CreateSkillRequestSource = "community"
+	CreateSkillRequestSourceUser      CreateSkillRequestSource = "user"
+)
+
+// Defines values for MCPServerSource.
+const (
+	MCPServerSourceBuiltin  MCPServerSource = "builtin"
+	MCPServerSourceCustom   MCPServerSource = "custom"
+	MCPServerSourceOfficial MCPServerSource = "official"
+)
+
+// Defines values for MCPServerTransport.
+const (
+	MCPServerTransportHttp  MCPServerTransport = "http"
+	MCPServerTransportSse   MCPServerTransport = "sse"
+	MCPServerTransportStdio MCPServerTransport = "stdio"
 )
 
 // Defines values for NodeStatus.
@@ -39,26 +149,83 @@ const (
 	Online   NodeStatus = "online"
 )
 
+// Defines values for OperationStatus.
+const (
+	OperationStatusFailed  OperationStatus = "failed"
+	OperationStatusPending OperationStatus = "pending"
+	OperationStatusRunning OperationStatus = "running"
+	OperationStatusSuccess OperationStatus = "success"
+)
+
 // Defines values for RunStatus.
 const (
+	RunStatusAssigned  RunStatus = "assigned"
 	RunStatusCancelled RunStatus = "cancelled"
 	RunStatusDone      RunStatus = "done"
 	RunStatusFailed    RunStatus = "failed"
+	RunStatusPending   RunStatus = "pending"
 	RunStatusQueued    RunStatus = "queued"
 	RunStatusRunning   RunStatus = "running"
+	RunStatusTimeout   RunStatus = "timeout"
+)
+
+// Defines values for RuntimeStatus.
+const (
+	RuntimeStatusCreating  RuntimeStatus = "creating"
+	RuntimeStatusDestroyed RuntimeStatus = "destroyed"
+	RuntimeStatusError     RuntimeStatus = "error"
+	RuntimeStatusReady     RuntimeStatus = "ready"
+	RuntimeStatusRunning   RuntimeStatus = "running"
+	RuntimeStatusStopped   RuntimeStatus = "stopped"
+	RuntimeStatusStopping  RuntimeStatus = "stopping"
+)
+
+// Defines values for RuntimeType.
+const (
+	Container RuntimeType = "container"
+	Host      RuntimeType = "host"
+	Microvm   RuntimeType = "microvm"
+	Vm        RuntimeType = "vm"
 )
 
 // Defines values for SecurityConfigPolicy.
 const (
-	Permissive SecurityConfigPolicy = "permissive"
-	Standard   SecurityConfigPolicy = "standard"
-	Strict     SecurityConfigPolicy = "strict"
+	SecurityConfigPolicyPermissive SecurityConfigPolicy = "permissive"
+	SecurityConfigPolicyStandard   SecurityConfigPolicy = "standard"
+	SecurityConfigPolicyStrict     SecurityConfigPolicy = "strict"
 )
 
-// Defines values for StartAuthRequestMethod.
+// Defines values for SecurityPolicyLevel.
 const (
-	StartAuthRequestMethodApiKey StartAuthRequestMethod = "api_key"
-	StartAuthRequestMethodOauth  StartAuthRequestMethod = "oauth"
+	SecurityPolicyLevelPermissive SecurityPolicyLevel = "permissive"
+	SecurityPolicyLevelStandard   SecurityPolicyLevel = "standard"
+	SecurityPolicyLevelStrict     SecurityPolicyLevel = "strict"
+)
+
+// Defines values for SkillCategory.
+const (
+	SkillCategoryAnalysis SkillCategory = "analysis"
+	SkillCategoryCoding   SkillCategory = "coding"
+	SkillCategoryData     SkillCategory = "data"
+	SkillCategoryDesign   SkillCategory = "design"
+	SkillCategoryDevops   SkillCategory = "devops"
+	SkillCategoryOther    SkillCategory = "other"
+	SkillCategoryResearch SkillCategory = "research"
+	SkillCategoryWriting  SkillCategory = "writing"
+)
+
+// Defines values for SkillLevel.
+const (
+	SkillLevelAdvanced SkillLevel = "advanced"
+	SkillLevelBasic    SkillLevel = "basic"
+	SkillLevelExpert   SkillLevel = "expert"
+)
+
+// Defines values for SkillSource.
+const (
+	SkillSourceBuiltin   SkillSource = "builtin"
+	SkillSourceCommunity SkillSource = "community"
+	SkillSourceUser      SkillSource = "user"
 )
 
 // Defines values for TaskStatus.
@@ -70,13 +237,27 @@ const (
 	TaskStatusPending    TaskStatus = "pending"
 )
 
-// Defines values for UpdateAuthTaskRequestStatus.
+// Defines values for TerminalSessionStatus.
 const (
-	UpdateAuthTaskRequestStatusFailed      UpdateAuthTaskRequestStatus = "failed"
-	UpdateAuthTaskRequestStatusRunning     UpdateAuthTaskRequestStatus = "running"
-	UpdateAuthTaskRequestStatusSuccess     UpdateAuthTaskRequestStatus = "success"
-	UpdateAuthTaskRequestStatusTimeout     UpdateAuthTaskRequestStatus = "timeout"
-	UpdateAuthTaskRequestStatusWaitingUser UpdateAuthTaskRequestStatus = "waiting_user"
+	TerminalSessionStatusActive  TerminalSessionStatus = "active"
+	TerminalSessionStatusClosed  TerminalSessionStatus = "closed"
+	TerminalSessionStatusPending TerminalSessionStatus = "pending"
+)
+
+// Defines values for UpdateActionRequestStatus.
+const (
+	UpdateActionRequestStatusFailed      UpdateActionRequestStatus = "failed"
+	UpdateActionRequestStatusRunning     UpdateActionRequestStatus = "running"
+	UpdateActionRequestStatusSuccess     UpdateActionRequestStatus = "success"
+	UpdateActionRequestStatusTimeout     UpdateActionRequestStatus = "timeout"
+	UpdateActionRequestStatusWaitingUser UpdateActionRequestStatus = "waiting_user"
+)
+
+// Defines values for UpdateMCPServerRequestTransport.
+const (
+	UpdateMCPServerRequestTransportHttp  UpdateMCPServerRequestTransport = "http"
+	UpdateMCPServerRequestTransportSse   UpdateMCPServerRequestTransport = "sse"
+	UpdateMCPServerRequestTransportStdio UpdateMCPServerRequestTransport = "stdio"
 )
 
 // Defines values for UpdateRunRequestStatus.
@@ -87,6 +268,41 @@ const (
 	UpdateRunRequestStatusRunning   UpdateRunRequestStatus = "running"
 )
 
+// Defines values for UpdateSecurityPolicyRequestLevel.
+const (
+	UpdateSecurityPolicyRequestLevelPermissive UpdateSecurityPolicyRequestLevel = "permissive"
+	UpdateSecurityPolicyRequestLevelStandard   UpdateSecurityPolicyRequestLevel = "standard"
+	UpdateSecurityPolicyRequestLevelStrict     UpdateSecurityPolicyRequestLevel = "strict"
+)
+
+// Defines values for UpdateSkillRequestCategory.
+const (
+	UpdateSkillRequestCategoryAnalysis UpdateSkillRequestCategory = "analysis"
+	UpdateSkillRequestCategoryCoding   UpdateSkillRequestCategory = "coding"
+	UpdateSkillRequestCategoryData     UpdateSkillRequestCategory = "data"
+	UpdateSkillRequestCategoryDesign   UpdateSkillRequestCategory = "design"
+	UpdateSkillRequestCategoryDevops   UpdateSkillRequestCategory = "devops"
+	UpdateSkillRequestCategoryOther    UpdateSkillRequestCategory = "other"
+	UpdateSkillRequestCategoryResearch UpdateSkillRequestCategory = "research"
+	UpdateSkillRequestCategoryWriting  UpdateSkillRequestCategory = "writing"
+)
+
+// Defines values for UpdateSkillRequestLevel.
+const (
+	UpdateSkillRequestLevelAdvanced UpdateSkillRequestLevel = "advanced"
+	UpdateSkillRequestLevelBasic    UpdateSkillRequestLevel = "basic"
+	UpdateSkillRequestLevelExpert   UpdateSkillRequestLevel = "expert"
+)
+
+// Defines values for UpdateTaskRequestStatus.
+const (
+	UpdateTaskRequestStatusCancelled  UpdateTaskRequestStatus = "cancelled"
+	UpdateTaskRequestStatusCompleted  UpdateTaskRequestStatus = "completed"
+	UpdateTaskRequestStatusFailed     UpdateTaskRequestStatus = "failed"
+	UpdateTaskRequestStatusInProgress UpdateTaskRequestStatus = "in_progress"
+	UpdateTaskRequestStatusPending    UpdateTaskRequestStatus = "pending"
+)
+
 // Defines values for WorkspaceConfigType.
 const (
 	Git    WorkspaceConfigType = "git"
@@ -95,21 +311,201 @@ const (
 	Volume WorkspaceConfigType = "volume"
 )
 
+// Defines values for ListAgentsParamsStatus.
+const (
+	ListAgentsParamsStatusBusy     ListAgentsParamsStatus = "busy"
+	ListAgentsParamsStatusError    ListAgentsParamsStatus = "error"
+	ListAgentsParamsStatusIdle     ListAgentsParamsStatus = "idle"
+	ListAgentsParamsStatusPending  ListAgentsParamsStatus = "pending"
+	ListAgentsParamsStatusRunning  ListAgentsParamsStatus = "running"
+	ListAgentsParamsStatusStarting ListAgentsParamsStatus = "starting"
+	ListAgentsParamsStatusStopped  ListAgentsParamsStatus = "stopped"
+	ListAgentsParamsStatusStopping ListAgentsParamsStatus = "stopping"
+)
+
+// Defines values for ListMCPServersParamsSource.
+const (
+	ListMCPServersParamsSourceBuiltin  ListMCPServersParamsSource = "builtin"
+	ListMCPServersParamsSourceCustom   ListMCPServersParamsSource = "custom"
+	ListMCPServersParamsSourceOfficial ListMCPServersParamsSource = "official"
+)
+
+// Defines values for ListMCPServersParamsTransport.
+const (
+	ListMCPServersParamsTransportHttp  ListMCPServersParamsTransport = "http"
+	ListMCPServersParamsTransportSse   ListMCPServersParamsTransport = "sse"
+	ListMCPServersParamsTransportStdio ListMCPServersParamsTransport = "stdio"
+)
+
+// Defines values for ListSkillsParamsCategory.
+const (
+	ListSkillsParamsCategoryAnalysis ListSkillsParamsCategory = "analysis"
+	ListSkillsParamsCategoryCoding   ListSkillsParamsCategory = "coding"
+	ListSkillsParamsCategoryData     ListSkillsParamsCategory = "data"
+	ListSkillsParamsCategoryDesign   ListSkillsParamsCategory = "design"
+	ListSkillsParamsCategoryDevops   ListSkillsParamsCategory = "devops"
+	ListSkillsParamsCategoryOther    ListSkillsParamsCategory = "other"
+	ListSkillsParamsCategoryResearch ListSkillsParamsCategory = "research"
+	ListSkillsParamsCategoryWriting  ListSkillsParamsCategory = "writing"
+)
+
+// Defines values for ListSkillsParamsSource.
+const (
+	ListSkillsParamsSourceBuiltin   ListSkillsParamsSource = "builtin"
+	ListSkillsParamsSourceCommunity ListSkillsParamsSource = "community"
+	ListSkillsParamsSourceUser      ListSkillsParamsSource = "user"
+)
+
+// Defines values for ListSkillsParamsLevel.
+const (
+	ListSkillsParamsLevelAdvanced ListSkillsParamsLevel = "advanced"
+	ListSkillsParamsLevelBasic    ListSkillsParamsLevel = "basic"
+	ListSkillsParamsLevelExpert   ListSkillsParamsLevel = "expert"
+)
+
 // Account defines model for Account.
 type Account struct {
+	// AgentType Agent 类型 ID（如 claude、gemini）
 	AgentType  string        `json:"agent_type"`
 	CreatedAt  *time.Time    `json:"created_at,omitempty"`
 	Id         string        `json:"id"`
 	LastUsedAt *time.Time    `json:"last_used_at,omitempty"`
 	Name       string        `json:"name"`
-	NodeId     string        `json:"node_id"`
 	Status     AccountStatus `json:"status"`
 	UpdatedAt  *time.Time    `json:"updated_at,omitempty"`
-	VolumeName *string       `json:"volume_name,omitempty"`
+
+	// VolumeArchiveKey MinIO 中的 Volume 归档路径
+	VolumeArchiveKey *string `json:"volume_archive_key,omitempty"`
+	VolumeName       *string `json:"volume_name,omitempty"`
 }
 
 // AccountStatus defines model for Account.Status.
 type AccountStatus string
+
+// Action defines model for Action.
+type Action struct {
+	CreatedAt    *time.Time `json:"created_at,omitempty"`
+	ErrorMessage *string    `json:"error_message,omitempty"`
+	Id           string     `json:"id"`
+
+	// Message 状态消息
+	Message     *string `json:"message,omitempty"`
+	NodeId      *string `json:"node_id,omitempty"`
+	OperationId string  `json:"operation_id"`
+
+	// Phase 执行阶段（三层状态模型）
+	Phase *string `json:"phase,omitempty"`
+
+	// Progress 执行进度（0-100）
+	Progress          *int                    `json:"progress,omitempty"`
+	Result            *map[string]interface{} `json:"result,omitempty"`
+	Status            ActionStatus            `json:"status"`
+	TerminalSessionId *string                 `json:"terminal_session_id,omitempty"`
+	TerminalUrl       *string                 `json:"terminal_url,omitempty"`
+	UpdatedAt         *time.Time              `json:"updated_at,omitempty"`
+}
+
+// ActionStatus defines model for Action.Status.
+type ActionStatus string
+
+// Agent defines model for Agent.
+type Agent struct {
+	// AccountId 绑定的认证账号 ID
+	AccountId *string `json:"account_id,omitempty"`
+
+	// ConfigOverrides 配置覆盖（覆盖模板中的配置）
+	ConfigOverrides *map[string]interface{} `json:"config_overrides,omitempty"`
+	CreatedAt       *time.Time              `json:"created_at,omitempty"`
+
+	// CurrentTaskId 当前执行的任务 ID
+	CurrentTaskId *string    `json:"current_task_id,omitempty"`
+	Id            string     `json:"id"`
+	LastActiveAt  *time.Time `json:"last_active_at,omitempty"`
+
+	// MemoryEnabled 是否启用记忆
+	MemoryEnabled *bool  `json:"memory_enabled,omitempty"`
+	Name          string `json:"name"`
+
+	// NodeId 所在节点 ID
+	NodeId *string `json:"node_id,omitempty"`
+
+	// RuntimeId 关联的 Runtime ID（运行中时填充）
+	RuntimeId *string `json:"runtime_id,omitempty"`
+
+	// SecurityPolicyId 安全策略 ID
+	SecurityPolicyId *string     `json:"security_policy_id,omitempty"`
+	Status           AgentStatus `json:"status"`
+
+	// TemplateId 关联的 AgentTemplate ID
+	TemplateId *string `json:"template_id,omitempty"`
+
+	// Type 模型类型
+	Type      AgentModelType `json:"type"`
+	UpdatedAt *time.Time     `json:"updated_at,omitempty"`
+}
+
+// AgentStatus defines model for Agent.Status.
+type AgentStatus string
+
+// AgentModelType 模型类型
+type AgentModelType string
+
+// AgentTemplate defines model for AgentTemplate.
+type AgentTemplate struct {
+	Category  *string    `json:"category,omitempty"`
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+
+	// DefaultSecurityPolicyId 默认安全策略 ID
+	DefaultSecurityPolicyId *string `json:"default_security_policy_id,omitempty"`
+	Description             *string `json:"description,omitempty"`
+
+	// Documents 参考文档
+	Documents *[]map[string]interface{} `json:"documents,omitempty"`
+
+	// Gambits IF-THEN 自动响应规则
+	Gambits *[]map[string]interface{} `json:"gambits,omitempty"`
+
+	// Hooks 事件钩子
+	Hooks     *[]map[string]interface{} `json:"hooks,omitempty"`
+	Id        string                    `json:"id"`
+	IsBuiltin *bool                     `json:"is_builtin,omitempty"`
+
+	// MaxContext 最大上下文 Token 数
+	MaxContext *int `json:"max_context,omitempty"`
+
+	// McpServers MCP Server ID 列表（引用 mcp-servers.yaml）
+	McpServers *[]string `json:"mcp_servers,omitempty"`
+
+	// Model 具体模型名称（如 "claude-3-opus"）
+	Model *string `json:"model,omitempty"`
+	Name  string  `json:"name"`
+
+	// Personality 性格特征列表
+	Personality *[]string `json:"personality,omitempty"`
+
+	// Role 角色定位（如"代码助手"、"运维专家"）
+	Role *string `json:"role,omitempty"`
+
+	// Skills 技能 ID 列表（引用 skills.yaml）
+	Skills *[]string `json:"skills,omitempty"`
+
+	// SystemPrompt 系统提示词
+	SystemPrompt *string   `json:"system_prompt,omitempty"`
+	Tags         *[]string `json:"tags,omitempty"`
+
+	// Temperature 温度参数（0-1）
+	Temperature *float64 `json:"temperature,omitempty"`
+
+	// Tools 工具配置（允许/拒绝/需审批的工具列表）
+	Tools *map[string]interface{} `json:"tools,omitempty"`
+
+	// Type 模型类型
+	Type      AgentTemplateType `json:"type"`
+	UpdatedAt *time.Time        `json:"updated_at,omitempty"`
+}
+
+// AgentTemplateType 模型类型
+type AgentTemplateType string
 
 // AgentType defines model for AgentType.
 type AgentType struct {
@@ -120,32 +516,52 @@ type AgentType struct {
 	Name        string    `json:"name"`
 }
 
-// AuthStatusResponse defines model for AuthStatusResponse.
-type AuthStatusResponse struct {
-	Account  *Account  `json:"account,omitempty"`
-	AuthTask *AuthTask `json:"auth_task,omitempty"`
+// ApprovalDecision defines model for ApprovalDecision.
+type ApprovalDecision struct {
+	Approved bool    `json:"approved"`
+	Reason   *string `json:"reason,omitempty"`
 }
 
-// AuthTask defines model for AuthTask.
-type AuthTask struct {
-	AccountId         string          `json:"account_id"`
-	CreatedAt         *time.Time      `json:"created_at,omitempty"`
-	ErrorMessage      *string         `json:"error_message,omitempty"`
-	Id                string          `json:"id"`
-	Method            *AuthTaskMethod `json:"method,omitempty"`
-	NodeId            *string         `json:"node_id,omitempty"`
-	ProxyId           *string         `json:"proxy_id,omitempty"`
-	Status            AuthTaskStatus  `json:"status"`
-	TerminalSessionId *string         `json:"terminal_session_id,omitempty"`
-	TerminalUrl       *string         `json:"terminal_url,omitempty"`
-	UpdatedAt         *time.Time      `json:"updated_at,omitempty"`
+// ApprovalRequest defines model for ApprovalRequest.
+type ApprovalRequest struct {
+	CreatedAt   *time.Time             `json:"created_at,omitempty"`
+	Description *string                `json:"description,omitempty"`
+	Id          *string                `json:"id,omitempty"`
+	RunId       *string                `json:"run_id,omitempty"`
+	Status      *ApprovalRequestStatus `json:"status,omitempty"`
+	Type        *string                `json:"type,omitempty"`
 }
 
-// AuthTaskMethod defines model for AuthTask.Method.
-type AuthTaskMethod string
+// ApprovalRequestStatus defines model for ApprovalRequest.Status.
+type ApprovalRequestStatus string
 
-// AuthTaskStatus defines model for AuthTask.Status.
-type AuthTaskStatus string
+// AuthResponse defines model for AuthResponse.
+type AuthResponse struct {
+	AccessToken *string `json:"access_token,omitempty"`
+
+	// ExpiresIn 访问令牌过期时间（秒）
+	ExpiresIn    *int    `json:"expires_in,omitempty"`
+	RefreshToken *string `json:"refresh_token,omitempty"`
+	TokenType    *string `json:"token_type,omitempty"`
+}
+
+// ChangePasswordRequest defines model for ChangePasswordRequest.
+type ChangePasswordRequest struct {
+	NewPassword string `json:"new_password"`
+	OldPassword string `json:"old_password"`
+}
+
+// Confirmation defines model for Confirmation.
+type Confirmation struct {
+	CreatedAt   *time.Time          `json:"created_at,omitempty"`
+	Description *string             `json:"description,omitempty"`
+	Id          *string             `json:"id,omitempty"`
+	RunId       *string             `json:"run_id,omitempty"`
+	Status      *ConfirmationStatus `json:"status,omitempty"`
+}
+
+// ConfirmationStatus defines model for Confirmation.Status.
+type ConfirmationStatus string
 
 // ContextItem 上下文项
 type ContextItem struct {
@@ -169,9 +585,107 @@ type CreateAccountRequest struct {
 
 	// Name 账号名称
 	Name string `json:"name"`
+}
 
-	// NodeId 绑定的节点 ID
-	NodeId string `json:"node_id"`
+// CreateAgentRequest defines model for CreateAgentRequest.
+type CreateAgentRequest struct {
+	// AccountId 绑定的认证账号 ID
+	AccountId string `json:"account_id"`
+
+	// ConfigOverrides 配置覆盖
+	ConfigOverrides *map[string]interface{} `json:"config_overrides,omitempty"`
+
+	// MemoryEnabled 是否启用记忆（默认 false）
+	MemoryEnabled *bool `json:"memory_enabled,omitempty"`
+
+	// Name Agent 名称
+	Name string `json:"name"`
+
+	// SecurityPolicyId 安全策略 ID
+	SecurityPolicyId *string `json:"security_policy_id,omitempty"`
+
+	// TemplateId 基于哪个 AgentTemplate 创建（可选）
+	TemplateId *string `json:"template_id,omitempty"`
+
+	// Type 模型类型
+	Type AgentModelType `json:"type"`
+}
+
+// CreateAgentTemplateRequest defines model for CreateAgentTemplateRequest.
+type CreateAgentTemplateRequest struct {
+	Category                *string                        `json:"category,omitempty"`
+	DefaultSecurityPolicyId *string                        `json:"default_security_policy_id,omitempty"`
+	Description             *string                        `json:"description,omitempty"`
+	Documents               *[]map[string]interface{}      `json:"documents,omitempty"`
+	Gambits                 *[]map[string]interface{}      `json:"gambits,omitempty"`
+	Hooks                   *[]map[string]interface{}      `json:"hooks,omitempty"`
+	MaxContext              *int                           `json:"max_context,omitempty"`
+	McpServers              *[]string                      `json:"mcp_servers,omitempty"`
+	Model                   *string                        `json:"model,omitempty"`
+	Name                    string                         `json:"name"`
+	Personality             *[]string                      `json:"personality,omitempty"`
+	Role                    *string                        `json:"role,omitempty"`
+	Skills                  *[]string                      `json:"skills,omitempty"`
+	SystemPrompt            *string                        `json:"system_prompt,omitempty"`
+	Tags                    *[]string                      `json:"tags,omitempty"`
+	Temperature             *float64                       `json:"temperature,omitempty"`
+	Tools                   *map[string]interface{}        `json:"tools,omitempty"`
+	Type                    CreateAgentTemplateRequestType `json:"type"`
+}
+
+// CreateAgentTemplateRequestType defines model for CreateAgentTemplateRequest.Type.
+type CreateAgentTemplateRequestType string
+
+// CreateFeedbackRequest defines model for CreateFeedbackRequest.
+type CreateFeedbackRequest struct {
+	Content string  `json:"content"`
+	Type    *string `json:"type,omitempty"`
+}
+
+// CreateInterventionRequest defines model for CreateInterventionRequest.
+type CreateInterventionRequest struct {
+	Content *string `json:"content,omitempty"`
+	Type    string  `json:"type"`
+}
+
+// CreateMCPServerRequest defines model for CreateMCPServerRequest.
+type CreateMCPServerRequest struct {
+	Args   *[]string `json:"args,omitempty"`
+	Author *string   `json:"author,omitempty"`
+
+	// Capabilities MCP Server 能力声明
+	Capabilities *MCPCapabilities                `json:"capabilities,omitempty"`
+	Command      *string                         `json:"command,omitempty"`
+	Description  *string                         `json:"description,omitempty"`
+	Headers      *map[string]string              `json:"headers,omitempty"`
+	Name         string                          `json:"name"`
+	Repository   *string                         `json:"repository,omitempty"`
+	Source       *CreateMCPServerRequestSource   `json:"source,omitempty"`
+	Tags         *[]string                       `json:"tags,omitempty"`
+	Transport    CreateMCPServerRequestTransport `json:"transport"`
+	Url          *string                         `json:"url,omitempty"`
+	Version      *string                         `json:"version,omitempty"`
+}
+
+// CreateMCPServerRequestSource defines model for CreateMCPServerRequest.Source.
+type CreateMCPServerRequestSource string
+
+// CreateMCPServerRequestTransport defines model for CreateMCPServerRequest.Transport.
+type CreateMCPServerRequestTransport string
+
+// CreateOperationRequest defines model for CreateOperationRequest.
+type CreateOperationRequest struct {
+	Params   *map[string]interface{} `json:"params,omitempty"`
+	TargetId *string                 `json:"target_id,omitempty"`
+	Type     string                  `json:"type"`
+}
+
+// CreateProxyRequest defines model for CreateProxyRequest.
+type CreateProxyRequest struct {
+	Name     string  `json:"name"`
+	Password *string `json:"password,omitempty"`
+	Url      string  `json:"url"`
+	Username *string `json:"username,omitempty"`
 }
 
 // CreateRunRequest defines model for CreateRunRequest.
@@ -179,6 +693,52 @@ type CreateRunRequest struct {
 	AgentId  *string `json:"agent_id,omitempty"`
 	Priority *int    `json:"priority,omitempty"`
 }
+
+// CreateSecurityPolicyRequest defines model for CreateSecurityPolicyRequest.
+type CreateSecurityPolicyRequest struct {
+	Category    *string                          `json:"category,omitempty"`
+	Description *string                          `json:"description,omitempty"`
+	Level       CreateSecurityPolicyRequestLevel `json:"level"`
+	Name        string                           `json:"name"`
+
+	// NetworkPolicy 网络策略
+	NetworkPolicy *SchemasNetworkPolicy `json:"network_policy,omitempty"`
+
+	// ResourceLimits 资源限制
+	ResourceLimits *SchemasResourceLimits  `json:"resource_limits,omitempty"`
+	SandboxConfig  *map[string]interface{} `json:"sandbox_config,omitempty"`
+	Tags           *[]string               `json:"tags,omitempty"`
+
+	// ToolPermissions 工具权限配置
+	ToolPermissions *ToolPermissions `json:"tool_permissions,omitempty"`
+}
+
+// CreateSecurityPolicyRequestLevel defines model for CreateSecurityPolicyRequest.Level.
+type CreateSecurityPolicyRequestLevel string
+
+// CreateSkillRequest defines model for CreateSkillRequest.
+type CreateSkillRequest struct {
+	Category     CreateSkillRequestCategory `json:"category"`
+	Description  string                     `json:"description"`
+	Examples     *[]map[string]interface{}  `json:"examples,omitempty"`
+	Instructions string                     `json:"instructions"`
+	Level        CreateSkillRequestLevel    `json:"level"`
+	Name         string                     `json:"name"`
+	Parameters   *map[string]interface{}    `json:"parameters,omitempty"`
+	Source       *CreateSkillRequestSource  `json:"source,omitempty"`
+	Tags         *[]string                  `json:"tags,omitempty"`
+	Tools        *[]string                  `json:"tools,omitempty"`
+	Version      *string                    `json:"version,omitempty"`
+}
+
+// CreateSkillRequestCategory defines model for CreateSkillRequest.Category.
+type CreateSkillRequestCategory string
+
+// CreateSkillRequestLevel defines model for CreateSkillRequest.Level.
+type CreateSkillRequestLevel string
+
+// CreateSkillRequestSource defines model for CreateSkillRequest.Source.
+type CreateSkillRequestSource string
 
 // CreateTaskRequest defines model for CreateTaskRequest.
 type CreateTaskRequest struct {
@@ -207,6 +767,23 @@ type CreateTaskRequest struct {
 
 	// Workspace 工作空间配置
 	Workspace *WorkspaceConfig `json:"workspace,omitempty"`
+}
+
+// CreateTaskTemplateRequest defines model for CreateTaskTemplateRequest.
+type CreateTaskTemplateRequest struct {
+	Category       *string                 `json:"category,omitempty"`
+	DefaultConfig  *map[string]interface{} `json:"default_config,omitempty"`
+	Description    *string                 `json:"description,omitempty"`
+	Name           string                  `json:"name"`
+	PromptTemplate *string                 `json:"prompt_template,omitempty"`
+	Tags           *[]string               `json:"tags,omitempty"`
+	Variables      *[]string               `json:"variables,omitempty"`
+}
+
+// CreateTerminalSessionRequest defines model for CreateTerminalSessionRequest.
+type CreateTerminalSessionRequest struct {
+	ContainerName *string `json:"container_name,omitempty"`
+	NodeId        *string `json:"node_id,omitempty"`
 }
 
 // ErrorResponse defines model for ErrorResponse.
@@ -242,6 +819,15 @@ type EventInput struct {
 	Type string `json:"type"`
 }
 
+// Feedback defines model for Feedback.
+type Feedback struct {
+	Content   *string    `json:"content,omitempty"`
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+	Id        *string    `json:"id,omitempty"`
+	RunId     *string    `json:"run_id,omitempty"`
+	Type      *string    `json:"type,omitempty"`
+}
+
 // GitConfig Git 仓库配置
 type GitConfig struct {
 	// Branch 分支名称
@@ -265,9 +851,36 @@ type HealthResponse struct {
 // HeartbeatRequest defines model for HeartbeatRequest.
 type HeartbeatRequest struct {
 	Capacity *map[string]interface{} `json:"capacity,omitempty"`
-	Labels   *map[string]string      `json:"labels,omitempty"`
-	NodeId   string                  `json:"node_id"`
-	Status   *string                 `json:"status,omitempty"`
+
+	// Hostname 节点主机名
+	Hostname *string `json:"hostname,omitempty"`
+
+	// Ips 节点 IP 地址列表（逗号分隔）
+	Ips    *string            `json:"ips,omitempty"`
+	Labels *map[string]string `json:"labels,omitempty"`
+	NodeId string             `json:"node_id"`
+
+	// RunningRuns 当前正在运行的 Run ID 列表
+	RunningRuns *[]string `json:"running_runs,omitempty"`
+	Status      *string   `json:"status,omitempty"`
+}
+
+// HeartbeatResponse defines model for HeartbeatResponse.
+type HeartbeatResponse struct {
+	Directives *struct {
+		// CancelRuns 需要取消的 Run ID 列表（声明式状态协调）
+		CancelRuns *[]string `json:"cancel_runs,omitempty"`
+	} `json:"directives,omitempty"`
+	Status *string `json:"status,omitempty"`
+}
+
+// Intervention defines model for Intervention.
+type Intervention struct {
+	Content   *string    `json:"content,omitempty"`
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+	Id        *string    `json:"id,omitempty"`
+	RunId     *string    `json:"run_id,omitempty"`
+	Type      *string    `json:"type,omitempty"`
 }
 
 // LocalConfig 本地目录配置
@@ -277,6 +890,87 @@ type LocalConfig struct {
 
 	// ReadOnly 是否只读挂载
 	ReadOnly *bool `json:"read_only,omitempty"`
+}
+
+// LoginRequest defines model for LoginRequest.
+type LoginRequest struct {
+	Email    openapi_types.Email `json:"email"`
+	Password string              `json:"password"`
+}
+
+// MCPCapabilities MCP Server 能力声明
+type MCPCapabilities struct {
+	Prompts   *[]MCPPrompt   `json:"prompts,omitempty"`
+	Resources *[]MCPResource `json:"resources,omitempty"`
+	Tools     *[]MCPTool     `json:"tools,omitempty"`
+}
+
+// MCPPrompt defines model for MCPPrompt.
+type MCPPrompt struct {
+	Arguments *[]struct {
+		Description *string `json:"description,omitempty"`
+		Name        *string `json:"name,omitempty"`
+		Required    *bool   `json:"required,omitempty"`
+	} `json:"arguments,omitempty"`
+	Description *string `json:"description,omitempty"`
+	Name        *string `json:"name,omitempty"`
+}
+
+// MCPResource defines model for MCPResource.
+type MCPResource struct {
+	Description *string `json:"description,omitempty"`
+	MimeType    *string `json:"mime_type,omitempty"`
+	Name        *string `json:"name,omitempty"`
+	Uri         *string `json:"uri,omitempty"`
+}
+
+// MCPServer defines model for MCPServer.
+type MCPServer struct {
+	// Args 命令参数（stdio 模式）
+	Args   *[]string `json:"args,omitempty"`
+	Author *string   `json:"author,omitempty"`
+
+	// Capabilities MCP Server 能力声明
+	Capabilities *MCPCapabilities `json:"capabilities,omitempty"`
+
+	// Command stdio 模式的启动命令
+	Command     *string    `json:"command,omitempty"`
+	CreatedAt   *time.Time `json:"created_at,omitempty"`
+	Description *string    `json:"description,omitempty"`
+
+	// Headers HTTP 头
+	Headers   *map[string]string `json:"headers,omitempty"`
+	Id        string             `json:"id"`
+	IsBuiltin *bool              `json:"is_builtin,omitempty"`
+	Name      string             `json:"name"`
+
+	// Repository 仓库地址
+	Repository *string         `json:"repository,omitempty"`
+	Source     MCPServerSource `json:"source"`
+	Tags       *[]string       `json:"tags,omitempty"`
+
+	// Transport 传输协议
+	Transport MCPServerTransport `json:"transport"`
+	UpdatedAt *time.Time         `json:"updated_at,omitempty"`
+
+	// Url SSE/HTTP 模式的 URL
+	Url     *string `json:"url,omitempty"`
+	Version *string `json:"version,omitempty"`
+}
+
+// MCPServerSource defines model for MCPServer.Source.
+type MCPServerSource string
+
+// MCPServerTransport 传输协议
+type MCPServerTransport string
+
+// MCPTool defines model for MCPTool.
+type MCPTool struct {
+	Description *string `json:"description,omitempty"`
+
+	// InputSchema JSON Schema 格式的输入参数定义
+	InputSchema *map[string]interface{} `json:"input_schema,omitempty"`
+	Name        *string                 `json:"name,omitempty"`
 }
 
 // Message 对话消息
@@ -297,6 +991,14 @@ type MessageResponse struct {
 	Status  *string `json:"status,omitempty"`
 }
 
+// MonitorStats defines model for MonitorStats.
+type MonitorStats struct {
+	ActiveRuns  *int `json:"active_runs,omitempty"`
+	OnlineNodes *int `json:"online_nodes,omitempty"`
+	TotalEvents *int `json:"total_events,omitempty"`
+	TotalTasks  *int `json:"total_tasks,omitempty"`
+}
+
 // NetworkPolicy 网络访问策略
 type NetworkPolicy struct {
 	// AllowInternet 是否允许访问互联网
@@ -314,21 +1016,74 @@ type NetworkPolicy struct {
 
 // Node defines model for Node.
 type Node struct {
-	Capacity      *map[string]interface{} `json:"capacity,omitempty"`
-	CreatedAt     *time.Time              `json:"created_at,omitempty"`
-	Id            string                  `json:"id"`
-	Labels        *map[string]string      `json:"labels,omitempty"`
-	LastHeartbeat *time.Time              `json:"last_heartbeat,omitempty"`
-	Status        NodeStatus              `json:"status"`
-	UpdatedAt     *time.Time              `json:"updated_at,omitempty"`
+	Capacity  *map[string]interface{} `json:"capacity,omitempty"`
+	CreatedAt *time.Time              `json:"created_at,omitempty"`
+
+	// Hostname 节点主机名
+	Hostname *string `json:"hostname,omitempty"`
+	Id       string  `json:"id"`
+
+	// Ips 节点 IP 地址列表（逗号分隔）
+	Ips           *string            `json:"ips,omitempty"`
+	Labels        *map[string]string `json:"labels,omitempty"`
+	LastHeartbeat *time.Time         `json:"last_heartbeat,omitempty"`
+	Status        NodeStatus         `json:"status"`
+	UpdatedAt     *time.Time         `json:"updated_at,omitempty"`
 }
 
 // NodeStatus defines model for Node.Status.
 type NodeStatus string
 
+// Operation defines model for Operation.
+type Operation struct {
+	Actions *[]Action `json:"actions,omitempty"`
+
+	// Config 操作配置参数
+	Config    *map[string]interface{} `json:"config,omitempty"`
+	CreatedAt *time.Time              `json:"created_at,omitempty"`
+	Id        string                  `json:"id"`
+
+	// NodeId 目标节点 ID
+	NodeId *string `json:"node_id,omitempty"`
+
+	// Params 操作参数（向后兼容）
+	Params *map[string]interface{} `json:"params,omitempty"`
+	Status OperationStatus         `json:"status"`
+
+	// TargetId 操作目标 ID（如账号 ID、Agent ID）
+	TargetId *string `json:"target_id,omitempty"`
+
+	// Type 操作类型（如 auth、runtime_create、runtime_stop）
+	Type      string     `json:"type"`
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+}
+
+// OperationStatus defines model for Operation.Status.
+type OperationStatus string
+
 // PostEventsRequest defines model for PostEventsRequest.
 type PostEventsRequest struct {
 	Events []EventInput `json:"events"`
+}
+
+// Proxy defines model for Proxy.
+type Proxy struct {
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+	Enabled   *bool      `json:"enabled,omitempty"`
+	Id        string     `json:"id"`
+	Name      string     `json:"name"`
+	Password  *string    `json:"password,omitempty"`
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+
+	// Url 代理 URL（如 socks5://host:port）
+	Url      string  `json:"url"`
+	Username *string `json:"username,omitempty"`
+}
+
+// RegisterRequest defines model for RegisterRequest.
+type RegisterRequest struct {
+	Email    openapi_types.Email `json:"email"`
+	Password string              `json:"password"`
 }
 
 // RemoteConfig 远程系统配置
@@ -369,20 +1124,76 @@ type ResourceLimits struct {
 
 // Run defines model for Run.
 type Run struct {
-	CreatedAt    *time.Time `json:"created_at,omitempty"`
+	// AgentId 执行此 Run 的 Agent ID
+	AgentId   *string    `json:"agent_id,omitempty"`
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+
+	// Depth 执行深度（0 为顶层）
+	Depth        *int       `json:"depth,omitempty"`
 	ErrorMessage *string    `json:"error_message,omitempty"`
 	ExitCode     *int       `json:"exit_code,omitempty"`
 	FinishedAt   *time.Time `json:"finished_at,omitempty"`
 	Id           string     `json:"id"`
 	NodeId       *string    `json:"node_id,omitempty"`
-	StartedAt    *time.Time `json:"started_at,omitempty"`
-	Status       RunStatus  `json:"status"`
-	TaskId       string     `json:"task_id"`
-	UpdatedAt    *time.Time `json:"updated_at,omitempty"`
+
+	// ParentId 父 Run ID（层次化执行）
+	ParentId *string `json:"parent_id,omitempty"`
+
+	// RootId 根 Run ID
+	RootId    *string    `json:"root_id,omitempty"`
+	StartedAt *time.Time `json:"started_at,omitempty"`
+	Status    RunStatus  `json:"status"`
+	TaskId    string     `json:"task_id"`
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 }
 
 // RunStatus defines model for Run.Status.
 type RunStatus string
+
+// Runtime defines model for Runtime.
+type Runtime struct {
+	// AgentId 关联的 Agent ID
+	AgentId string `json:"agent_id"`
+
+	// ContainerId Docker 容器 ID（容器类型时填充）
+	ContainerId *string `json:"container_id,omitempty"`
+
+	// ContainerName Docker 容器名称
+	ContainerName *string    `json:"container_name,omitempty"`
+	CreatedAt     *time.Time `json:"created_at,omitempty"`
+	Id            string     `json:"id"`
+
+	// Image 容器镜像
+	Image *string `json:"image,omitempty"`
+
+	// IpAddress IP 地址
+	IpAddress *string `json:"ip_address,omitempty"`
+
+	// NodeId 所在节点 ID
+	NodeId string `json:"node_id"`
+
+	// Ports 端口映射
+	Ports *map[string]interface{} `json:"ports,omitempty"`
+
+	// Resources 资源配置（CPU/内存限制）
+	Resources *map[string]interface{} `json:"resources,omitempty"`
+	StartedAt *time.Time              `json:"started_at,omitempty"`
+	Status    RuntimeStatus           `json:"status"`
+	StoppedAt *time.Time              `json:"stopped_at,omitempty"`
+
+	// Type 运行时类型
+	Type      RuntimeType `json:"type"`
+	UpdatedAt *time.Time  `json:"updated_at,omitempty"`
+
+	// WorkspacePath 工作空间路径
+	WorkspacePath *string `json:"workspace_path,omitempty"`
+}
+
+// RuntimeStatus defines model for Runtime.Status.
+type RuntimeStatus string
+
+// RuntimeType 运行时类型
+type RuntimeType string
 
 // SecurityConfig 安全配置
 type SecurityConfig struct {
@@ -408,16 +1219,81 @@ type SecurityConfig struct {
 // SecurityConfigPolicy 安全策略等级
 type SecurityConfigPolicy string
 
-// StartAuthRequest defines model for StartAuthRequest.
-type StartAuthRequest struct {
-	Method *StartAuthRequestMethod `json:"method,omitempty"`
+// SecurityPolicy defines model for SecurityPolicy.
+type SecurityPolicy struct {
+	Category    *string    `json:"category,omitempty"`
+	CreatedAt   *time.Time `json:"created_at,omitempty"`
+	Description *string    `json:"description,omitempty"`
+	Id          string     `json:"id"`
+	IsBuiltin   *bool      `json:"is_builtin,omitempty"`
 
-	// ProxyId 代理 ID（可选）
-	ProxyId *string `json:"proxy_id,omitempty"`
+	// Level 安全等级
+	Level SecurityPolicyLevel `json:"level"`
+	Name  string              `json:"name"`
+
+	// NetworkPolicy 网络策略
+	NetworkPolicy *SchemasNetworkPolicy `json:"network_policy,omitempty"`
+
+	// ResourceLimits 资源限制
+	ResourceLimits *SchemasResourceLimits `json:"resource_limits,omitempty"`
+
+	// SandboxConfig 沙箱配置
+	SandboxConfig *map[string]interface{} `json:"sandbox_config,omitempty"`
+	Tags          *[]string               `json:"tags,omitempty"`
+
+	// ToolPermissions 工具权限配置
+	ToolPermissions *ToolPermissions `json:"tool_permissions,omitempty"`
+	UpdatedAt       *time.Time       `json:"updated_at,omitempty"`
 }
 
-// StartAuthRequestMethod defines model for StartAuthRequest.Method.
-type StartAuthRequestMethod string
+// SecurityPolicyLevel 安全等级
+type SecurityPolicyLevel string
+
+// Skill defines model for Skill.
+type Skill struct {
+	AuthorId    *string       `json:"author_id,omitempty"`
+	Category    SkillCategory `json:"category"`
+	CreatedAt   *time.Time    `json:"created_at,omitempty"`
+	Description *string       `json:"description,omitempty"`
+
+	// Examples 使用示例（输入输出）
+	Examples *[]map[string]interface{} `json:"examples,omitempty"`
+	Id       string                    `json:"id"`
+
+	// Instructions 技能说明/提示词
+	Instructions *string    `json:"instructions,omitempty"`
+	IsBuiltin    *bool      `json:"is_builtin,omitempty"`
+	Level        SkillLevel `json:"level"`
+	Name         string     `json:"name"`
+
+	// Parameters 技能参数定义（JSON Schema 格式）
+	Parameters *map[string]interface{} `json:"parameters,omitempty"`
+
+	// Rating 评分（0-5）
+	Rating *float64 `json:"rating,omitempty"`
+
+	// RegistryId 所属技能市场 ID
+	RegistryId *string     `json:"registry_id,omitempty"`
+	Source     SkillSource `json:"source"`
+	Tags       *[]string   `json:"tags,omitempty"`
+
+	// Tools 依赖的工具列表
+	Tools     *[]string  `json:"tools,omitempty"`
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+	UseCount  *int64     `json:"use_count,omitempty"`
+
+	// Version 语义化版本号
+	Version *string `json:"version,omitempty"`
+}
+
+// SkillCategory defines model for Skill.Category.
+type SkillCategory string
+
+// SkillLevel defines model for Skill.Level.
+type SkillLevel string
+
+// SkillSource defines model for Skill.Source.
+type SkillSource string
 
 // Task defines model for Task.
 type Task struct {
@@ -450,39 +1326,118 @@ type TaskContext struct {
 	ProducedContext *[]ContextItem `json:"produced_context,omitempty"`
 }
 
-// UpdateAuthTaskRequest defines model for UpdateAuthTaskRequest.
-type UpdateAuthTaskRequest struct {
-	// ContainerName 容器名称
-	ContainerName *string `json:"container_name,omitempty"`
+// TaskTemplate defines model for TaskTemplate.
+type TaskTemplate struct {
+	Category  *string    `json:"category,omitempty"`
+	CreatedAt *time.Time `json:"created_at,omitempty"`
 
-	// ErrorMessage 错误信息
-	ErrorMessage *string `json:"error_message,omitempty"`
+	// DefaultConfig 默认配置
+	DefaultConfig *map[string]interface{} `json:"default_config,omitempty"`
+	Description   *string                 `json:"description,omitempty"`
+	Id            string                  `json:"id"`
+	IsBuiltin     *bool                   `json:"is_builtin,omitempty"`
+	Name          string                  `json:"name"`
 
-	// Message 状态消息
-	Message *string `json:"message,omitempty"`
+	// PromptTemplate 提示词模板
+	PromptTemplate *string    `json:"prompt_template,omitempty"`
+	Tags           *[]string  `json:"tags,omitempty"`
+	UpdatedAt      *time.Time `json:"updated_at,omitempty"`
 
-	// OauthUrl OAuth 认证 URL
-	OauthUrl *string                      `json:"oauth_url,omitempty"`
-	Status   *UpdateAuthTaskRequestStatus `json:"status,omitempty"`
-
-	// TerminalPort 终端端口
-	TerminalPort *int `json:"terminal_port,omitempty"`
-
-	// TerminalSessionId 终端会话 ID
-	TerminalSessionId *string `json:"terminal_session_id,omitempty"`
-
-	// TerminalUrl 终端 URL
-	TerminalUrl *string `json:"terminal_url,omitempty"`
-
-	// UserCode 用户验证码
-	UserCode *string `json:"user_code,omitempty"`
-
-	// VolumeName Volume 名称
-	VolumeName *string `json:"volume_name,omitempty"`
+	// Variables 模板变量列表
+	Variables *[]string `json:"variables,omitempty"`
 }
 
-// UpdateAuthTaskRequestStatus defines model for UpdateAuthTaskRequest.Status.
-type UpdateAuthTaskRequestStatus string
+// TerminalSession defines model for TerminalSession.
+type TerminalSession struct {
+	ContainerName *string               `json:"container_name,omitempty"`
+	CreatedAt     *time.Time            `json:"created_at,omitempty"`
+	Id            string                `json:"id"`
+	NodeId        *string               `json:"node_id,omitempty"`
+	Port          *int                  `json:"port,omitempty"`
+	Status        TerminalSessionStatus `json:"status"`
+	UpdatedAt     *time.Time            `json:"updated_at,omitempty"`
+	Url           *string               `json:"url,omitempty"`
+}
+
+// TerminalSessionStatus defines model for TerminalSession.Status.
+type TerminalSessionStatus string
+
+// ToolPermissions 工具权限配置
+type ToolPermissions struct {
+	// Allowed 允许使用的工具列表
+	Allowed *[]string `json:"allowed,omitempty"`
+
+	// Denied 禁止使用的工具列表
+	Denied *[]string `json:"denied,omitempty"`
+
+	// RequireApproval 需要审批的工具列表
+	RequireApproval *[]string `json:"require_approval,omitempty"`
+}
+
+// UpdateActionRequest defines model for UpdateActionRequest.
+type UpdateActionRequest struct {
+	ContainerName     *string                    `json:"container_name,omitempty"`
+	ErrorMessage      *string                    `json:"error_message,omitempty"`
+	Message           *string                    `json:"message,omitempty"`
+	OauthUrl          *string                    `json:"oauth_url,omitempty"`
+	Status            *UpdateActionRequestStatus `json:"status,omitempty"`
+	TerminalPort      *int                       `json:"terminal_port,omitempty"`
+	TerminalSessionId *string                    `json:"terminal_session_id,omitempty"`
+	TerminalUrl       *string                    `json:"terminal_url,omitempty"`
+	UserCode          *string                    `json:"user_code,omitempty"`
+	VolumeName        *string                    `json:"volume_name,omitempty"`
+}
+
+// UpdateActionRequestStatus defines model for UpdateActionRequest.Status.
+type UpdateActionRequestStatus string
+
+// UpdateAgentRequest defines model for UpdateAgentRequest.
+type UpdateAgentRequest struct {
+	ConfigOverrides  *map[string]interface{} `json:"config_overrides,omitempty"`
+	MemoryEnabled    *bool                   `json:"memory_enabled,omitempty"`
+	Name             *string                 `json:"name,omitempty"`
+	SecurityPolicyId *string                 `json:"security_policy_id,omitempty"`
+}
+
+// UpdateAgentTemplateRequest defines model for UpdateAgentTemplateRequest.
+type UpdateAgentTemplateRequest struct {
+	Category                *string                   `json:"category,omitempty"`
+	DefaultSecurityPolicyId *string                   `json:"default_security_policy_id,omitempty"`
+	Description             *string                   `json:"description,omitempty"`
+	Documents               *[]map[string]interface{} `json:"documents,omitempty"`
+	Gambits                 *[]map[string]interface{} `json:"gambits,omitempty"`
+	Hooks                   *[]map[string]interface{} `json:"hooks,omitempty"`
+	MaxContext              *int                      `json:"max_context,omitempty"`
+	McpServers              *[]string                 `json:"mcp_servers,omitempty"`
+	Model                   *string                   `json:"model,omitempty"`
+	Name                    *string                   `json:"name,omitempty"`
+	Personality             *[]string                 `json:"personality,omitempty"`
+	Role                    *string                   `json:"role,omitempty"`
+	Skills                  *[]string                 `json:"skills,omitempty"`
+	SystemPrompt            *string                   `json:"system_prompt,omitempty"`
+	Tags                    *[]string                 `json:"tags,omitempty"`
+	Temperature             *float64                  `json:"temperature,omitempty"`
+	Tools                   *map[string]interface{}   `json:"tools,omitempty"`
+}
+
+// UpdateMCPServerRequest defines model for UpdateMCPServerRequest.
+type UpdateMCPServerRequest struct {
+	Args *[]string `json:"args,omitempty"`
+
+	// Capabilities MCP Server 能力声明
+	Capabilities *MCPCapabilities                 `json:"capabilities,omitempty"`
+	Command      *string                          `json:"command,omitempty"`
+	Description  *string                          `json:"description,omitempty"`
+	Headers      *map[string]string               `json:"headers,omitempty"`
+	Name         *string                          `json:"name,omitempty"`
+	Tags         *[]string                        `json:"tags,omitempty"`
+	Transport    *UpdateMCPServerRequestTransport `json:"transport,omitempty"`
+	Url          *string                          `json:"url,omitempty"`
+	Version      *string                          `json:"version,omitempty"`
+}
+
+// UpdateMCPServerRequestTransport defines model for UpdateMCPServerRequest.Transport.
+type UpdateMCPServerRequestTransport string
 
 // UpdateNodeRequest defines model for UpdateNodeRequest.
 type UpdateNodeRequest struct {
@@ -500,6 +1455,79 @@ type UpdateRunRequest struct {
 // UpdateRunRequestStatus defines model for UpdateRunRequest.Status.
 type UpdateRunRequestStatus string
 
+// UpdateSecurityPolicyRequest defines model for UpdateSecurityPolicyRequest.
+type UpdateSecurityPolicyRequest struct {
+	Category    *string                           `json:"category,omitempty"`
+	Description *string                           `json:"description,omitempty"`
+	Level       *UpdateSecurityPolicyRequestLevel `json:"level,omitempty"`
+	Name        *string                           `json:"name,omitempty"`
+
+	// NetworkPolicy 网络策略
+	NetworkPolicy *SchemasNetworkPolicy `json:"network_policy,omitempty"`
+
+	// ResourceLimits 资源限制
+	ResourceLimits *SchemasResourceLimits  `json:"resource_limits,omitempty"`
+	SandboxConfig  *map[string]interface{} `json:"sandbox_config,omitempty"`
+	Tags           *[]string               `json:"tags,omitempty"`
+
+	// ToolPermissions 工具权限配置
+	ToolPermissions *ToolPermissions `json:"tool_permissions,omitempty"`
+}
+
+// UpdateSecurityPolicyRequestLevel defines model for UpdateSecurityPolicyRequest.Level.
+type UpdateSecurityPolicyRequestLevel string
+
+// UpdateSkillRequest defines model for UpdateSkillRequest.
+type UpdateSkillRequest struct {
+	Category     *UpdateSkillRequestCategory `json:"category,omitempty"`
+	Description  *string                     `json:"description,omitempty"`
+	Examples     *[]map[string]interface{}   `json:"examples,omitempty"`
+	Instructions *string                     `json:"instructions,omitempty"`
+	Level        *UpdateSkillRequestLevel    `json:"level,omitempty"`
+	Name         *string                     `json:"name,omitempty"`
+	Parameters   *map[string]interface{}     `json:"parameters,omitempty"`
+	Tags         *[]string                   `json:"tags,omitempty"`
+	Tools        *[]string                   `json:"tools,omitempty"`
+	Version      *string                     `json:"version,omitempty"`
+}
+
+// UpdateSkillRequestCategory defines model for UpdateSkillRequest.Category.
+type UpdateSkillRequestCategory string
+
+// UpdateSkillRequestLevel defines model for UpdateSkillRequest.Level.
+type UpdateSkillRequestLevel string
+
+// UpdateTaskRequest defines model for UpdateTaskRequest.
+type UpdateTaskRequest struct {
+	Description *string                  `json:"description,omitempty"`
+	Labels      *map[string]string       `json:"labels,omitempty"`
+	Name        *string                  `json:"name,omitempty"`
+	Prompt      *string                  `json:"prompt,omitempty"`
+	Status      *UpdateTaskRequestStatus `json:"status,omitempty"`
+}
+
+// UpdateTaskRequestStatus defines model for UpdateTaskRequest.Status.
+type UpdateTaskRequestStatus string
+
+// UpdateTaskTemplateRequest defines model for UpdateTaskTemplateRequest.
+type UpdateTaskTemplateRequest struct {
+	Category       *string                 `json:"category,omitempty"`
+	DefaultConfig  *map[string]interface{} `json:"default_config,omitempty"`
+	Description    *string                 `json:"description,omitempty"`
+	Name           *string                 `json:"name,omitempty"`
+	PromptTemplate *string                 `json:"prompt_template,omitempty"`
+	Tags           *[]string               `json:"tags,omitempty"`
+	Variables      *[]string               `json:"variables,omitempty"`
+}
+
+// User defines model for User.
+type User struct {
+	CreatedAt *time.Time           `json:"created_at,omitempty"`
+	Email     *openapi_types.Email `json:"email,omitempty"`
+	Id        *string              `json:"id,omitempty"`
+	Role      *string              `json:"role,omitempty"`
+}
+
 // VolumeConfig 持久化卷配置
 type VolumeConfig struct {
 	// Name 卷名称
@@ -507,6 +1535,14 @@ type VolumeConfig struct {
 
 	// SubPath 卷内子路径
 	SubPath *string `json:"sub_path,omitempty"`
+}
+
+// Workflow defines model for Workflow.
+type Workflow struct {
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+	Id        *string    `json:"id,omitempty"`
+	Status    *string    `json:"status,omitempty"`
+	Type      *string    `json:"type,omitempty"`
 }
 
 // WorkspaceConfig 工作空间配置
@@ -530,6 +1566,39 @@ type WorkspaceConfig struct {
 // WorkspaceConfigType 工作空间类型
 type WorkspaceConfigType string
 
+// SchemasNetworkPolicy 网络策略
+type SchemasNetworkPolicy struct {
+	// AllowInternet 是否允许访问互联网
+	AllowInternet *bool `json:"allow_internet,omitempty"`
+
+	// AllowedDomains 允许访问的域名白名单
+	AllowedDomains *[]string `json:"allowed_domains,omitempty"`
+
+	// AllowedPorts 允许的端口
+	AllowedPorts *[]int `json:"allowed_ports,omitempty"`
+
+	// DeniedDomains 禁止访问的域名黑名单
+	DeniedDomains *[]string `json:"denied_domains,omitempty"`
+}
+
+// SchemasResourceLimits 资源限制
+type SchemasResourceLimits struct {
+	// MaxCpu CPU 限制（如 "2"）
+	MaxCpu *string `json:"max_cpu,omitempty"`
+
+	// MaxDisk 磁盘限制
+	MaxDisk *string `json:"max_disk,omitempty"`
+
+	// MaxExecutionTime 最大执行时间（秒）
+	MaxExecutionTime *int `json:"max_execution_time,omitempty"`
+
+	// MaxMemory 内存限制（如 "4Gi"）
+	MaxMemory *string `json:"max_memory,omitempty"`
+
+	// MaxNetworkBandwidth 网络带宽限制
+	MaxNetworkBandwidth *string `json:"max_network_bandwidth,omitempty"`
+}
+
 // IdParam defines model for IdParam.
 type IdParam = string
 
@@ -551,16 +1620,137 @@ type ListAccountsParams struct {
 	AgentType *string `form:"agent_type,omitempty" json:"agent_type,omitempty"`
 }
 
-// GetNodeAuthTasksParams defines parameters for GetNodeAuthTasks.
-type GetNodeAuthTasksParams struct {
+// ListAgentTemplatesParams defines parameters for ListAgentTemplates.
+type ListAgentTemplatesParams struct {
+	// Category 按分类过滤
+	Category *string `form:"category,omitempty" json:"category,omitempty"`
+
+	// Type 按模型类型过滤
+	Type *string `form:"type,omitempty" json:"type,omitempty"`
+}
+
+// CreateAgentFromTemplateJSONBody defines parameters for CreateAgentFromTemplate.
+type CreateAgentFromTemplateJSONBody struct {
+	// AccountId 绑定的认证账号 ID
+	AccountId string `json:"account_id"`
+
+	// ConfigOverrides 覆盖模板配置
+	ConfigOverrides *map[string]interface{} `json:"config_overrides,omitempty"`
+
+	// Name Agent 名称
+	Name string `json:"name"`
+
+	// SecurityPolicyId 安全策略 ID（覆盖模板默认策略）
+	SecurityPolicyId *string `json:"security_policy_id,omitempty"`
+}
+
+// ListAgentsParams defines parameters for ListAgents.
+type ListAgentsParams struct {
 	// Status 按状态过滤
-	Status *string `form:"status,omitempty" json:"status,omitempty"`
+	Status *ListAgentsParamsStatus `form:"status,omitempty" json:"status,omitempty"`
+
+	// Type 按模型类型过滤（claude/gemini/qwen/codex/custom）
+	Type *string `form:"type,omitempty" json:"type,omitempty"`
+
+	// NodeId 按节点过滤
+	NodeId *string `form:"node_id,omitempty" json:"node_id,omitempty"`
+}
+
+// ListAgentsParamsStatus defines parameters for ListAgents.
+type ListAgentsParamsStatus string
+
+// StartAgentJSONBody defines parameters for StartAgent.
+type StartAgentJSONBody struct {
+	// NodeId 指定运行节点（可选，默认由调度器选择）
+	NodeId *string `json:"node_id,omitempty"`
+}
+
+// RefreshTokenJSONBody defines parameters for RefreshToken.
+type RefreshTokenJSONBody struct {
+	RefreshToken *string `json:"refresh_token,omitempty"`
+}
+
+// UpdateConfigJSONBody defines parameters for UpdateConfig.
+type UpdateConfigJSONBody = map[string]interface{}
+
+// ResolveConfirmationJSONBody defines parameters for ResolveConfirmation.
+type ResolveConfirmationJSONBody struct {
+	Approved *bool   `json:"approved,omitempty"`
+	Message  *string `json:"message,omitempty"`
+}
+
+// ListMCPServersParams defines parameters for ListMCPServers.
+type ListMCPServersParams struct {
+	// Source 按来源过滤
+	Source *ListMCPServersParamsSource `form:"source,omitempty" json:"source,omitempty"`
+
+	// Transport 按传输协议过滤
+	Transport *ListMCPServersParamsTransport `form:"transport,omitempty" json:"transport,omitempty"`
+}
+
+// ListMCPServersParamsSource defines parameters for ListMCPServers.
+type ListMCPServersParamsSource string
+
+// ListMCPServersParamsTransport defines parameters for ListMCPServers.
+type ListMCPServersParamsTransport string
+
+// CreateNodeProvisionJSONBody defines parameters for CreateNodeProvision.
+type CreateNodeProvisionJSONBody = map[string]interface{}
+
+// UpdateNodeEnvConfigJSONBody defines parameters for UpdateNodeEnvConfig.
+type UpdateNodeEnvConfigJSONBody = map[string]interface{}
+
+// TestNodeProxyJSONBody defines parameters for TestNodeProxy.
+type TestNodeProxyJSONBody struct {
+	ProxyUrl *string `json:"proxy_url,omitempty"`
 }
 
 // GetEventsParams defines parameters for GetEvents.
 type GetEventsParams struct {
 	AfterSeq *int        `form:"after_seq,omitempty" json:"after_seq,omitempty"`
 	Limit    *LimitParam `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListSecurityPoliciesParams defines parameters for ListSecurityPolicies.
+type ListSecurityPoliciesParams struct {
+	// Category 按分类过滤
+	Category *string `form:"category,omitempty" json:"category,omitempty"`
+}
+
+// ListSkillsParams defines parameters for ListSkills.
+type ListSkillsParams struct {
+	// Category 按分类过滤
+	Category *ListSkillsParamsCategory `form:"category,omitempty" json:"category,omitempty"`
+
+	// Source 按来源过滤
+	Source *ListSkillsParamsSource `form:"source,omitempty" json:"source,omitempty"`
+
+	// Level 按等级过滤
+	Level *ListSkillsParamsLevel `form:"level,omitempty" json:"level,omitempty"`
+}
+
+// ListSkillsParamsCategory defines parameters for ListSkills.
+type ListSkillsParamsCategory string
+
+// ListSkillsParamsSource defines parameters for ListSkills.
+type ListSkillsParamsSource string
+
+// ListSkillsParamsLevel defines parameters for ListSkills.
+type ListSkillsParamsLevel string
+
+// ListTaskTemplatesParams defines parameters for ListTaskTemplates.
+type ListTaskTemplatesParams struct {
+	// Category 按分类过滤
+	Category *string `form:"category,omitempty" json:"category,omitempty"`
+}
+
+// InstantiateTaskTemplateJSONBody defines parameters for InstantiateTaskTemplate.
+type InstantiateTaskTemplateJSONBody struct {
+	// ConfigOverrides 覆盖模板默认配置
+	ConfigOverrides *map[string]interface{} `json:"config_overrides,omitempty"`
+
+	// Name 任务名称（可选，默认使用模板名称）
+	Name *string `json:"name,omitempty"`
 }
 
 // ListTasksParams defines parameters for ListTasks.
@@ -576,14 +1766,64 @@ type ListTaskRunsParams struct {
 	Offset *OffsetParam `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
+// UpdateTerminalSessionJSONBody defines parameters for UpdateTerminalSession.
+type UpdateTerminalSessionJSONBody struct {
+	Status *string `json:"status,omitempty"`
+}
+
 // CreateAccountJSONRequestBody defines body for CreateAccount for application/json ContentType.
 type CreateAccountJSONRequestBody = CreateAccountRequest
 
-// StartAccountAuthJSONRequestBody defines body for StartAccountAuth for application/json ContentType.
-type StartAccountAuthJSONRequestBody = StartAuthRequest
+// UpdateActionJSONRequestBody defines body for UpdateAction for application/json ContentType.
+type UpdateActionJSONRequestBody = UpdateActionRequest
 
-// UpdateAuthTaskJSONRequestBody defines body for UpdateAuthTask for application/json ContentType.
-type UpdateAuthTaskJSONRequestBody = UpdateAuthTaskRequest
+// CreateAgentTemplateJSONRequestBody defines body for CreateAgentTemplate for application/json ContentType.
+type CreateAgentTemplateJSONRequestBody = CreateAgentTemplateRequest
+
+// UpdateAgentTemplateJSONRequestBody defines body for UpdateAgentTemplate for application/json ContentType.
+type UpdateAgentTemplateJSONRequestBody = UpdateAgentTemplateRequest
+
+// CreateAgentFromTemplateJSONRequestBody defines body for CreateAgentFromTemplate for application/json ContentType.
+type CreateAgentFromTemplateJSONRequestBody CreateAgentFromTemplateJSONBody
+
+// CreateAgentJSONRequestBody defines body for CreateAgent for application/json ContentType.
+type CreateAgentJSONRequestBody = CreateAgentRequest
+
+// UpdateAgentJSONRequestBody defines body for UpdateAgent for application/json ContentType.
+type UpdateAgentJSONRequestBody = UpdateAgentRequest
+
+// StartAgentJSONRequestBody defines body for StartAgent for application/json ContentType.
+type StartAgentJSONRequestBody StartAgentJSONBody
+
+// CreateApprovalDecisionJSONRequestBody defines body for CreateApprovalDecision for application/json ContentType.
+type CreateApprovalDecisionJSONRequestBody = ApprovalDecision
+
+// LoginJSONRequestBody defines body for Login for application/json ContentType.
+type LoginJSONRequestBody = LoginRequest
+
+// ChangePasswordJSONRequestBody defines body for ChangePassword for application/json ContentType.
+type ChangePasswordJSONRequestBody = ChangePasswordRequest
+
+// RefreshTokenJSONRequestBody defines body for RefreshToken for application/json ContentType.
+type RefreshTokenJSONRequestBody RefreshTokenJSONBody
+
+// RegisterJSONRequestBody defines body for Register for application/json ContentType.
+type RegisterJSONRequestBody = RegisterRequest
+
+// UpdateConfigJSONRequestBody defines body for UpdateConfig for application/json ContentType.
+type UpdateConfigJSONRequestBody = UpdateConfigJSONBody
+
+// ResolveConfirmationJSONRequestBody defines body for ResolveConfirmation for application/json ContentType.
+type ResolveConfirmationJSONRequestBody ResolveConfirmationJSONBody
+
+// CreateMCPServerJSONRequestBody defines body for CreateMCPServer for application/json ContentType.
+type CreateMCPServerJSONRequestBody = CreateMCPServerRequest
+
+// UpdateMCPServerJSONRequestBody defines body for UpdateMCPServer for application/json ContentType.
+type UpdateMCPServerJSONRequestBody = UpdateMCPServerRequest
+
+// CreateNodeProvisionJSONRequestBody defines body for CreateNodeProvision for application/json ContentType.
+type CreateNodeProvisionJSONRequestBody = CreateNodeProvisionJSONBody
 
 // NodeHeartbeatJSONRequestBody defines body for NodeHeartbeat for application/json ContentType.
 type NodeHeartbeatJSONRequestBody = HeartbeatRequest
@@ -591,14 +1831,68 @@ type NodeHeartbeatJSONRequestBody = HeartbeatRequest
 // UpdateNodeJSONRequestBody defines body for UpdateNode for application/json ContentType.
 type UpdateNodeJSONRequestBody = UpdateNodeRequest
 
+// UpdateNodeEnvConfigJSONRequestBody defines body for UpdateNodeEnvConfig for application/json ContentType.
+type UpdateNodeEnvConfigJSONRequestBody = UpdateNodeEnvConfigJSONBody
+
+// TestNodeProxyJSONRequestBody defines body for TestNodeProxy for application/json ContentType.
+type TestNodeProxyJSONRequestBody TestNodeProxyJSONBody
+
+// CreateOperationJSONRequestBody defines body for CreateOperation for application/json ContentType.
+type CreateOperationJSONRequestBody = CreateOperationRequest
+
+// CreateProxyJSONRequestBody defines body for CreateProxy for application/json ContentType.
+type CreateProxyJSONRequestBody = CreateProxyRequest
+
+// UpdateProxyJSONRequestBody defines body for UpdateProxy for application/json ContentType.
+type UpdateProxyJSONRequestBody = CreateProxyRequest
+
 // UpdateRunJSONRequestBody defines body for UpdateRun for application/json ContentType.
 type UpdateRunJSONRequestBody = UpdateRunRequest
 
 // PostEventsJSONRequestBody defines body for PostEvents for application/json ContentType.
 type PostEventsJSONRequestBody = PostEventsRequest
 
+// CreateFeedbackJSONRequestBody defines body for CreateFeedback for application/json ContentType.
+type CreateFeedbackJSONRequestBody = CreateFeedbackRequest
+
+// CreateInterventionJSONRequestBody defines body for CreateIntervention for application/json ContentType.
+type CreateInterventionJSONRequestBody = CreateInterventionRequest
+
+// CreateSecurityPolicyJSONRequestBody defines body for CreateSecurityPolicy for application/json ContentType.
+type CreateSecurityPolicyJSONRequestBody = CreateSecurityPolicyRequest
+
+// UpdateSecurityPolicyJSONRequestBody defines body for UpdateSecurityPolicy for application/json ContentType.
+type UpdateSecurityPolicyJSONRequestBody = UpdateSecurityPolicyRequest
+
+// CreateSkillJSONRequestBody defines body for CreateSkill for application/json ContentType.
+type CreateSkillJSONRequestBody = CreateSkillRequest
+
+// UpdateSkillJSONRequestBody defines body for UpdateSkill for application/json ContentType.
+type UpdateSkillJSONRequestBody = UpdateSkillRequest
+
+// CreateTaskTemplateJSONRequestBody defines body for CreateTaskTemplate for application/json ContentType.
+type CreateTaskTemplateJSONRequestBody = CreateTaskTemplateRequest
+
+// UpdateTaskTemplateJSONRequestBody defines body for UpdateTaskTemplate for application/json ContentType.
+type UpdateTaskTemplateJSONRequestBody = UpdateTaskTemplateRequest
+
+// InstantiateTaskTemplateJSONRequestBody defines body for InstantiateTaskTemplate for application/json ContentType.
+type InstantiateTaskTemplateJSONRequestBody InstantiateTaskTemplateJSONBody
+
 // CreateTaskJSONRequestBody defines body for CreateTask for application/json ContentType.
 type CreateTaskJSONRequestBody = CreateTaskRequest
 
+// UpdateTaskJSONRequestBody defines body for UpdateTask for application/json ContentType.
+type UpdateTaskJSONRequestBody = UpdateTaskRequest
+
+// UpdateTaskContextJSONRequestBody defines body for UpdateTaskContext for application/json ContentType.
+type UpdateTaskContextJSONRequestBody = TaskContext
+
 // CreateRunJSONRequestBody defines body for CreateRun for application/json ContentType.
 type CreateRunJSONRequestBody = CreateRunRequest
+
+// CreateTerminalSessionJSONRequestBody defines body for CreateTerminalSession for application/json ContentType.
+type CreateTerminalSessionJSONRequestBody = CreateTerminalSessionRequest
+
+// UpdateTerminalSessionJSONRequestBody defines body for UpdateTerminalSession for application/json ContentType.
+type UpdateTerminalSessionJSONRequestBody UpdateTerminalSessionJSONBody

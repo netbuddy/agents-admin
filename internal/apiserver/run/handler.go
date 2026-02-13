@@ -23,6 +23,7 @@ type RunStore interface {
 	GetRun(ctx context.Context, id string) (*model.Run, error)
 	ListRunsByTask(ctx context.Context, taskID string) ([]*model.Run, error)
 	UpdateRunStatus(ctx context.Context, id string, status model.RunStatus, nodeID *string) error
+	UpdateTaskStatus(ctx context.Context, id string, status model.TaskStatus) error
 }
 
 // RunScheduler 定义 run handler 需要的调度队列接口
@@ -91,8 +92,30 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 创建任务快照
-	taskSnapshot, _ := json.Marshal(task)
+	// 构建执行快照（包含 NodeManager 所需的扁平化字段）
+	// agent.type = task.Type（Agent 类型，如 qwen-code）
+	// agent.instance_id = task.AgentID（实例 ID，前端选择的运行中实例）
+	// prompt = task.Prompt.Content（提示词纯文本）
+	agentSnapshot := map[string]interface{}{
+		"type": string(task.Type),
+	}
+	if task.AgentID != nil {
+		agentSnapshot["instance_id"] = *task.AgentID
+	}
+
+	execSnapshot := map[string]interface{}{
+		"task_id": task.ID,
+		"name":    task.Name,
+		"agent":   agentSnapshot,
+		"prompt":  task.GetPromptContent(),
+	}
+	if task.Workspace != nil {
+		execSnapshot["workspace"] = task.Workspace
+	}
+	if task.Labels != nil {
+		execSnapshot["labels"] = task.Labels
+	}
+	taskSnapshot, _ := json.Marshal(execSnapshot)
 
 	now := time.Now()
 	run := &model.Run{
@@ -174,12 +197,14 @@ func (h *Handler) Cancel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.store.UpdateRunStatus(r.Context(), id, model.RunStatusCancelled, nil)
+	h.maybeUpdateTaskStatus(r.Context(), id, model.RunStatusCancelled)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "cancelled"})
 }
 
 // Update 更新 Run 状态
 // PATCH /api/v1/runs/{id}
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	id := r.PathValue("id")
 	var req UpdateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -194,11 +219,45 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 
 	statusStr := string(*req.Status)
 	status := model.RunStatus(statusStr)
-	if err := h.store.UpdateRunStatus(r.Context(), id, status, nil); err != nil {
+	if err := h.store.UpdateRunStatus(ctx, id, status, nil); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to update run")
 		return
 	}
+
+	// Run 到达终态时，联动更新 Task 状态
+	h.maybeUpdateTaskStatus(ctx, id, status)
+
 	writeJSON(w, http.StatusOK, map[string]string{"status": statusStr})
+}
+
+// maybeUpdateTaskStatus 当 Run 到达终态时联动更新 Task 状态
+//
+// 映射关系：
+//   - Run done → Task completed
+//   - Run failed → Task failed
+//   - Run cancelled → Task cancelled
+func (h *Handler) maybeUpdateTaskStatus(ctx context.Context, runID string, runStatus model.RunStatus) {
+	var taskStatus model.TaskStatus
+	switch runStatus {
+	case model.RunStatusDone:
+		taskStatus = model.TaskStatusCompleted
+	case model.RunStatusFailed:
+		taskStatus = model.TaskStatusFailed
+	case model.RunStatusCancelled:
+		taskStatus = model.TaskStatusCancelled
+	default:
+		return
+	}
+
+	run, err := h.store.GetRun(ctx, runID)
+	if err != nil || run == nil {
+		log.Printf("[run.update.task_status] run_id=%s get_run_error=%v", runID, err)
+		return
+	}
+
+	if err := h.store.UpdateTaskStatus(ctx, run.TaskID, taskStatus); err != nil {
+		log.Printf("[run.update.task_status] run_id=%s task_id=%s error=%v", runID, run.TaskID, err)
+	}
 }
 
 // ============================================================================

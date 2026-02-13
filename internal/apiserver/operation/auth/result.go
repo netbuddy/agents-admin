@@ -37,7 +37,6 @@ func (h *Handler) HandleAuthSuccess(ctx context.Context, op *model.Operation, re
 		ID:          accountID,
 		Name:        config.Name,
 		AgentTypeID: config.AgentType,
-		NodeID:      op.NodeID,
 		Status:      model.AccountStatusAuthenticated,
 		CreatedAt:   now,
 		UpdatedAt:   now,

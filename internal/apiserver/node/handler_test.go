@@ -52,6 +52,15 @@ func (m *mockStore) UpsertNodeHeartbeat(ctx context.Context, node *model.Node) e
 	return nil
 }
 
+func (m *mockStore) DeactivateStaleNodes(ctx context.Context, activeNodeID string, hostname string) error {
+	for id, n := range m.nodes {
+		if id != activeNodeID && n.Hostname == hostname {
+			n.Status = model.NodeStatusOffline
+		}
+	}
+	return nil
+}
+
 func (m *mockStore) DeleteNode(ctx context.Context, id string) error {
 	delete(m.nodes, id)
 	return nil
@@ -115,13 +124,22 @@ func (m *mockStore) GetAccount(ctx context.Context, id string) (*model.Account, 
 func (m *mockStore) CreateAccount(ctx context.Context, account *model.Account) error { return nil }
 func (m *mockStore) UpdateAccount(ctx context.Context, account *model.Account) error { return nil }
 func (m *mockStore) DeleteAccount(ctx context.Context, id string) error              { return nil }
-func (m *mockStore) ListInstances(ctx context.Context) ([]*model.Instance, error)    { return nil, nil }
-func (m *mockStore) GetInstance(ctx context.Context, id string) (*model.Instance, error) {
+func (m *mockStore) ListAgentInstances(ctx context.Context) ([]*model.Instance, error) {
 	return nil, nil
 }
-func (m *mockStore) CreateInstance(ctx context.Context, instance *model.Instance) error { return nil }
-func (m *mockStore) UpdateInstance(ctx context.Context, instance *model.Instance) error { return nil }
-func (m *mockStore) DeleteInstance(ctx context.Context, id string) error                { return nil }
+func (m *mockStore) GetAgentInstance(ctx context.Context, id string) (*model.Instance, error) {
+	return nil, nil
+}
+func (m *mockStore) CreateAgentInstance(ctx context.Context, instance *model.Instance) error {
+	return nil
+}
+func (m *mockStore) ListAgentInstancesByNode(ctx context.Context, nodeID string) ([]*model.Instance, error) {
+	return nil, nil
+}
+func (m *mockStore) UpdateAgentInstance(ctx context.Context, id string, status model.InstanceStatus, containerName *string) error {
+	return nil
+}
+func (m *mockStore) DeleteAgentInstance(ctx context.Context, id string) error { return nil }
 func (m *mockStore) ListTaskTemplates(ctx context.Context, category string) ([]*model.TaskTemplate, error) {
 	return nil, nil
 }
@@ -170,7 +188,7 @@ func (m *mockStore) CreateProxy(ctx context.Context, proxy *model.Proxy) error  
 func (m *mockStore) UpdateProxy(ctx context.Context, proxy *model.Proxy) error         { return nil }
 func (m *mockStore) DeleteProxy(ctx context.Context, id string) error                  { return nil }
 func (m *mockStore) CleanupExpiredTerminalSessions(ctx context.Context) (int64, error) { return 0, nil }
-func (m *mockStore) ListPendingInstances(ctx context.Context, nodeID string) ([]*model.Instance, error) {
+func (m *mockStore) ListPendingAgentInstances(ctx context.Context, nodeID string) ([]*model.Instance, error) {
 	return nil, nil
 }
 func (m *mockStore) ListPendingAuthTasks(ctx context.Context, limit int) ([]*model.AuthTask, error) {
@@ -183,6 +201,9 @@ func (m *mockStore) UpdateAccountStatus(ctx context.Context, id string, status m
 	return nil
 }
 func (m *mockStore) UpdateAccountVolume(ctx context.Context, id, volumeName string) error {
+	return nil
+}
+func (m *mockStore) UpdateAccountVolumeArchive(ctx context.Context, id, archiveKey string) error {
 	return nil
 }
 func (m *mockStore) CreateNodeProvision(ctx context.Context, p *model.NodeProvision) error {
@@ -200,7 +221,7 @@ func (m *mockStore) ListNodeProvisions(ctx context.Context) ([]*model.NodeProvis
 
 func TestHandler_Heartbeat(t *testing.T) {
 	store := newMockStore()
-	h := NewHandler(store, nil)
+	h := NewHandler(store)
 
 	tests := []struct {
 		name       string
@@ -246,7 +267,7 @@ func TestHandler_List(t *testing.T) {
 		UpdatedAt: now,
 	}
 
-	h := NewHandler(store, nil)
+	h := NewHandler(store)
 
 	req := httptest.NewRequest("GET", "/api/v1/nodes", nil)
 	w := httptest.NewRecorder()
@@ -274,7 +295,7 @@ func TestHandler_Get(t *testing.T) {
 		UpdatedAt: now,
 	}
 
-	h := NewHandler(store, nil)
+	h := NewHandler(store)
 
 	tests := []struct {
 		name       string
@@ -325,7 +346,7 @@ func TestHandler_Delete(t *testing.T) {
 	}
 	store.runs["node-2"] = []*model.Run{{ID: "run-1"}}
 
-	h := NewHandler(store, nil)
+	h := NewHandler(store)
 
 	tests := []struct {
 		name       string
@@ -375,7 +396,7 @@ func TestHandler_Update(t *testing.T) {
 		UpdatedAt: now,
 	}
 
-	h := NewHandler(store, nil)
+	h := NewHandler(store)
 
 	tests := []struct {
 		name       string

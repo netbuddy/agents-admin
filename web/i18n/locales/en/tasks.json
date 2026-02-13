@@ -1,0 +1,67 @@
+{
+  "board": {
+    "title": "Task Board",
+    "total": "{{count}} tasks",
+    "newTask": "New Task",
+    "noTasks": "No tasks yet",
+    "searchPlaceholder": "Search tasks...",
+    "allTime": "All Time",
+    "last24h": "Last 24h",
+    "last7d": "Last 7 days",
+    "last30d": "Last 30 days"
+  },
+  "column": {
+    "pending": "Pending",
+    "running": "Running",
+    "completed": "Completed",
+    "failed": "Failed"
+  },
+  "card": {
+    "noPrompt": "No prompt",
+    "executing": "Executing...",
+    "confirmDelete": "Delete this task?",
+    "viewDetail": "View Details",
+    "startExecution": "Start",
+    "stop": "Stop",
+    "delete": "Delete"
+  },
+  "create": {
+    "title": "New Task",
+    "name": "Task Name",
+    "namePlaceholder": "e.g., Fix login page bug",
+    "agentType": "Agent Type",
+    "selectInstance": "Select Instance",
+    "prompt": "Task Prompt",
+    "promptPlaceholder": "Describe the task for AI Agent...",
+    "noInstance": "No available {{type}} instances",
+    "needInstance": "Create a running instance before creating tasks",
+    "goCreateInstance": "Go to create instance",
+    "selectRunningInstance": "Please select a running instance",
+    "createTask": "Create Task"
+  },
+  "detail": {
+    "missingId": "Missing task ID",
+    "notFound": "Task not found",
+    "goHome": "Back to Home",
+    "newRun": "New Run",
+    "runHistory": "Run History ({{count}})",
+    "taskConfig": "Task Config",
+    "noRuns": "No run history",
+    "selectRun": "Select a run to view details",
+    "liveConnection": "Live",
+    "waitingEvents": "Waiting for events...",
+    "error": "Error",
+    "cancelRun": "Cancel",
+    "taskName": "Task Name",
+    "taskPrompt": "Prompt",
+    "agentType": "Agent Type",
+    "agentId": "Agent ID",
+    "createdAt": "Created At",
+    "executionNode": "Execution Node",
+    "executionTime": "Execution Time",
+    "startedAt": "Started At",
+    "completedAt": "Completed At",
+    "events": "Events",
+    "runDetail": "Run Detail"
+  }
+}

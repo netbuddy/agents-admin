@@ -30,13 +30,13 @@ import "time"
 //   - Size：文件大小（字节）
 //   - ContentType：MIME 类型
 type Artifact struct {
-	ID          int64     `json:"id" db:"id"`                               // 产物 ID
-	RunID       string    `json:"run_id" db:"run_id"`                       // 所属 Run ID
-	Name        string    `json:"name" db:"name"`                           // 产物名称
-	Path        string    `json:"path" db:"path"`                           // 存储路径
-	Size        *int64    `json:"size,omitempty" db:"size"`                 // 文件大小
-	ContentType *string   `json:"content_type,omitempty" db:"content_type"` // MIME 类型
-	CreatedAt   time.Time `json:"created_at" db:"created_at"`               // 创建时间
+	ID          int64     `json:"id" bson:"_id" db:"id"`                               // 产物 ID
+	RunID       string    `json:"run_id" bson:"run_id" db:"run_id"`                       // 所属 Run ID
+	Name        string    `json:"name" bson:"name" db:"name"`                           // 产物名称
+	Path        string    `json:"path" bson:"path" db:"path"`                           // 存储路径
+	Size        *int64    `json:"size,omitempty" bson:"size,omitempty" db:"size"`                 // 文件大小
+	ContentType *string   `json:"content_type,omitempty" bson:"content_type,omitempty" db:"content_type"` // MIME 类型
+	CreatedAt   time.Time `json:"created_at" bson:"created_at" db:"created_at"`               // 创建时间
 }
 
 // ============================================================================

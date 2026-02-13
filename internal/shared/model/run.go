@@ -95,16 +95,16 @@ const (
 //   - Snapshot：执行时的任务快照（用于审计）
 //   - Error：错误信息（失败时填充）
 type Run struct {
-	ID         string          `json:"id" db:"id"`                             // 执行唯一标识
-	TaskID     string          `json:"task_id" db:"task_id"`                   // 所属任务 ID
-	Status     RunStatus       `json:"status" db:"status"`                     // 执行状态
-	NodeID     *string         `json:"node_id,omitempty" db:"node_id"`         // 执行节点 ID
-	StartedAt  *time.Time      `json:"started_at,omitempty" db:"started_at"`   // 开始时间
-	FinishedAt *time.Time      `json:"finished_at,omitempty" db:"finished_at"` // 结束时间
-	Snapshot   json.RawMessage `json:"snapshot,omitempty" db:"snapshot"`       // 任务快照
-	Error      *string         `json:"error,omitempty" db:"error"`             // 错误信息
-	CreatedAt  time.Time       `json:"created_at" db:"created_at"`             // 创建时间
-	UpdatedAt  time.Time       `json:"updated_at" db:"updated_at"`             // 更新时间
+	ID         string          `json:"id" bson:"_id" db:"id"`                             // 执行唯一标识
+	TaskID     string          `json:"task_id" bson:"task_id" db:"task_id"`                   // 所属任务 ID
+	Status     RunStatus       `json:"status" bson:"status" db:"status"`                     // 执行状态
+	NodeID     *string         `json:"node_id,omitempty" bson:"node_id,omitempty" db:"node_id"`         // 执行节点 ID
+	StartedAt  *time.Time      `json:"started_at,omitempty" bson:"started_at,omitempty" db:"started_at"`   // 开始时间
+	FinishedAt *time.Time      `json:"finished_at,omitempty" bson:"finished_at,omitempty" db:"finished_at"` // 结束时间
+	Snapshot   json.RawMessage `json:"snapshot,omitempty" bson:"snapshot,omitempty" db:"snapshot"`       // 任务快照
+	Error      *string         `json:"error,omitempty" bson:"error,omitempty" db:"error"`             // 错误信息
+	CreatedAt  time.Time       `json:"created_at" bson:"created_at" db:"created_at"`             // 创建时间
+	UpdatedAt  time.Time       `json:"updated_at" bson:"updated_at" db:"updated_at"`             // 更新时间
 }
 
 // ============================================================================

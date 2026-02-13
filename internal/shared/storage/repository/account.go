@@ -4,6 +4,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	"agents-admin/internal/shared/model"
 )
@@ -13,22 +14,22 @@ import (
 // CreateAccount 创建账号
 func (s *Store) CreateAccount(ctx context.Context, account *model.Account) error {
 	query := s.rebind(`
-		INSERT INTO accounts (id, name, agent_type_id, node_id, volume_name, status, created_at, updated_at, last_used_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO accounts (id, name, agent_type_id, volume_name, status, created_at, updated_at, last_used_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`)
 	_, err := s.db.ExecContext(ctx, query,
-		account.ID, account.Name, account.AgentTypeID, account.NodeID, account.VolumeName,
+		account.ID, account.Name, account.AgentTypeID, account.VolumeName,
 		account.Status, account.CreatedAt, account.UpdatedAt, account.LastUsedAt)
 	return err
 }
 
 // GetAccount 获取账号
 func (s *Store) GetAccount(ctx context.Context, id string) (*model.Account, error) {
-	query := s.rebind(`SELECT id, name, agent_type_id, node_id, volume_name, status, created_at, updated_at, last_used_at 
+	query := s.rebind(`SELECT id, name, agent_type_id, volume_name, status, created_at, updated_at, last_used_at 
 			  FROM accounts WHERE id = $1`)
 	account := &model.Account{}
 	err := s.db.QueryRowContext(ctx, query, id).Scan(
-		&account.ID, &account.Name, &account.AgentTypeID, &account.NodeID, &account.VolumeName,
+		&account.ID, &account.Name, &account.AgentTypeID, &account.VolumeName,
 		&account.Status, &account.CreatedAt, &account.UpdatedAt, &account.LastUsedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -38,21 +39,9 @@ func (s *Store) GetAccount(ctx context.Context, id string) (*model.Account, erro
 
 // ListAccounts 列出账号
 func (s *Store) ListAccounts(ctx context.Context) ([]*model.Account, error) {
-	query := `SELECT id, name, agent_type_id, node_id, volume_name, status, created_at, updated_at, last_used_at 
+	query := `SELECT id, name, agent_type_id, volume_name, status, created_at, updated_at, last_used_at 
 			  FROM accounts ORDER BY created_at DESC`
 	rows, err := s.db.QueryContext(ctx, query)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	return scanAccounts(rows)
-}
-
-// ListAccountsByNode 列出指定节点的账号
-func (s *Store) ListAccountsByNode(ctx context.Context, nodeID string) ([]*model.Account, error) {
-	query := s.rebind(`SELECT id, name, agent_type_id, node_id, volume_name, status, created_at, updated_at, last_used_at 
-			  FROM accounts WHERE node_id = $1 ORDER BY created_at DESC`)
-	rows, err := s.db.QueryContext(ctx, query, nodeID)
 	if err != nil {
 		return nil, err
 	}
@@ -64,6 +53,13 @@ func (s *Store) ListAccountsByNode(ctx context.Context, nodeID string) ([]*model
 func (s *Store) UpdateAccountStatus(ctx context.Context, id string, status model.AccountStatus) error {
 	query := s.rebind(`UPDATE accounts SET status = $1 WHERE id = $2`)
 	_, err := s.db.ExecContext(ctx, query, status, id)
+	return err
+}
+
+// UpdateAccountVolumeArchive 更新账号的 Volume 归档 key
+func (s *Store) UpdateAccountVolumeArchive(ctx context.Context, id string, archiveKey string) error {
+	query := s.rebind(`UPDATE accounts SET volume_archive_key = $1, updated_at = $2 WHERE id = $3`)
+	_, err := s.db.ExecContext(ctx, query, archiveKey, time.Now(), id)
 	return err
 }
 
@@ -85,7 +81,7 @@ func scanAccounts(rows *sql.Rows) ([]*model.Account, error) {
 	var accounts []*model.Account
 	for rows.Next() {
 		account := &model.Account{}
-		if err := rows.Scan(&account.ID, &account.Name, &account.AgentTypeID, &account.NodeID, &account.VolumeName,
+		if err := rows.Scan(&account.ID, &account.Name, &account.AgentTypeID, &account.VolumeName,
 			&account.Status, &account.CreatedAt, &account.UpdatedAt, &account.LastUsedAt); err != nil {
 			return nil, err
 		}

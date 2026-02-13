@@ -174,65 +174,65 @@ type MCPServer struct {
 	// === 基础字段 ===
 
 	// ID 唯一标识
-	ID string `json:"id" db:"id"`
+	ID string `json:"id" bson:"_id" db:"id"`
 
 	// Name 服务名称
-	Name string `json:"name" db:"name"`
+	Name string `json:"name" bson:"name" db:"name"`
 
 	// Description 服务描述
-	Description string `json:"description" db:"description"`
+	Description string `json:"description" bson:"description" db:"description"`
 
 	// === 来源 ===
 
 	// Source 服务来源
-	Source MCPSource `json:"source" db:"source"`
+	Source MCPSource `json:"source" bson:"source" db:"source"`
 
 	// === 连接配置 ===
 
 	// Transport 传输协议
-	Transport MCPTransport `json:"transport" db:"transport"`
+	Transport MCPTransport `json:"transport" bson:"transport" db:"transport"`
 
 	// Command stdio 模式的启动命令
-	Command string `json:"command,omitempty" db:"command"`
+	Command string `json:"command,omitempty" bson:"command,omitempty" db:"command"`
 
 	// Args 命令参数
-	Args []string `json:"args,omitempty" db:"args"`
+	Args []string `json:"args,omitempty" bson:"args,omitempty" db:"args"`
 
 	// URL sse/http 模式的 URL
-	URL string `json:"url,omitempty" db:"url"`
+	URL string `json:"url,omitempty" bson:"url,omitempty" db:"url"`
 
 	// Headers HTTP 头
-	Headers map[string]string `json:"headers,omitempty" db:"headers"`
+	Headers map[string]string `json:"headers,omitempty" bson:"headers,omitempty" db:"headers"`
 
 	// === 能力声明 ===
 
 	// Capabilities 能力声明
-	Capabilities MCPCapabilities `json:"capabilities" db:"capabilities"`
+	Capabilities MCPCapabilities `json:"capabilities" bson:"capabilities" db:"capabilities"`
 
 	// === 元数据 ===
 
 	// Version 版本号
-	Version string `json:"version" db:"version"`
+	Version string `json:"version" bson:"version" db:"version"`
 
 	// Author 作者
-	Author string `json:"author,omitempty" db:"author"`
+	Author string `json:"author,omitempty" bson:"author,omitempty" db:"author"`
 
 	// Repository 仓库地址
-	Repository string `json:"repository,omitempty" db:"repository"`
+	Repository string `json:"repository,omitempty" bson:"repository,omitempty" db:"repository"`
 
 	// IsBuiltin 是否内置
-	IsBuiltin bool `json:"is_builtin" db:"is_builtin"`
+	IsBuiltin bool `json:"is_builtin" bson:"is_builtin" db:"is_builtin"`
 
 	// Tags 标签
-	Tags []string `json:"tags,omitempty" db:"tags"`
+	Tags []string `json:"tags,omitempty" bson:"tags,omitempty" db:"tags"`
 
 	// === 时间戳 ===
 
 	// CreatedAt 创建时间
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	CreatedAt time.Time `json:"created_at" bson:"created_at" db:"created_at"`
 
 	// UpdatedAt 更新时间
-	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+	UpdatedAt time.Time `json:"updated_at" bson:"updated_at" db:"updated_at"`
 }
 
 // ============================================================================
@@ -276,31 +276,31 @@ func (s *MCPServer) GetResourceURIs() []string {
 // 管理一组 MCP Server 的集合。
 type MCPRegistry struct {
 	// ID 唯一标识
-	ID string `json:"id" db:"id"`
+	ID string `json:"id" bson:"_id" db:"id"`
 
 	// Name 名称
-	Name string `json:"name" db:"name"`
+	Name string `json:"name" bson:"name" db:"name"`
 
 	// Description 描述
-	Description string `json:"description" db:"description"`
+	Description string `json:"description" bson:"description" db:"description"`
 
 	// Type 类型
-	Type MCPSource `json:"type" db:"type"`
+	Type MCPSource `json:"type" bson:"type" db:"type"`
 
 	// OwnerID 所有者 ID
-	OwnerID *string `json:"owner_id,omitempty" db:"owner_id"`
+	OwnerID *string `json:"owner_id,omitempty" bson:"owner_id,omitempty" db:"owner_id"`
 
 	// IsPublic 是否公开
-	IsPublic bool `json:"is_public" db:"is_public"`
+	IsPublic bool `json:"is_public" bson:"is_public" db:"is_public"`
 
 	// ServerCount 服务数量
-	ServerCount int `json:"server_count" db:"server_count"`
+	ServerCount int `json:"server_count" bson:"server_count" db:"server_count"`
 
 	// CreatedAt 创建时间
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	CreatedAt time.Time `json:"created_at" bson:"created_at" db:"created_at"`
 
 	// UpdatedAt 更新时间
-	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+	UpdatedAt time.Time `json:"updated_at" bson:"updated_at" db:"updated_at"`
 }
 
 // ============================================================================
@@ -312,22 +312,22 @@ type MCPRegistry struct {
 // 记录 Agent 连接的 MCP Server 及其配置。
 type AgentMCPServer struct {
 	// AgentID Agent ID
-	AgentID string `json:"agent_id" db:"agent_id"`
+	AgentID string `json:"agent_id" bson:"agent_id" db:"agent_id"`
 
 	// MCPServerID MCP Server ID
-	MCPServerID string `json:"mcp_server_id" db:"mcp_server_id"`
+	MCPServerID string `json:"mcp_server_id" bson:"mcp_server_id" db:"mcp_server_id"`
 
 	// Enabled 是否启用
-	Enabled bool `json:"enabled" db:"enabled"`
+	Enabled bool `json:"enabled" bson:"enabled" db:"enabled"`
 
 	// Config 自定义配置（覆盖默认配置）
-	Config map[string]string `json:"config,omitempty" db:"config"`
+	Config map[string]string `json:"config,omitempty" bson:"config,omitempty" db:"config"`
 
 	// Priority 优先级（数值越小优先级越高）
-	Priority int `json:"priority" db:"priority"`
+	Priority int `json:"priority" bson:"priority" db:"priority"`
 
 	// CreatedAt 创建时间
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	CreatedAt time.Time `json:"created_at" bson:"created_at" db:"created_at"`
 }
 
 // ============================================================================

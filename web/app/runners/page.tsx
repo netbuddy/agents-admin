@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { RefreshCw, Plus, Trash2, Terminal, CheckCircle, XCircle, Clock, Server, X } from 'lucide-react'
 import Link from 'next/link'
+import { useTranslation } from 'react-i18next'
 
 interface Runner {
   account: string
@@ -21,6 +22,7 @@ interface TerminalSession {
 }
 
 export default function RunnersPage() {
+  const { t } = useTranslation('runners')
   const [runners, setRunners] = useState<Runner[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -71,11 +73,11 @@ export default function RunnersPage() {
         const data = await res.json()
         setTerminalSession(data)
       } else {
-        alert('无法打开终端，请确保后端服务正在运行')
+        alert(t('terminalError'))
       }
     } catch (err) {
       console.error('Failed to open terminal:', err)
-      alert('无法打开终端')
+      alert(t('terminalErrorShort'))
     }
   }
 
@@ -94,7 +96,7 @@ export default function RunnersPage() {
   }
 
   const deleteRunner = async (account: string, purge: boolean = false) => {
-    if (!confirm(`确定删除 Runner "${account}"？${purge ? '（包括认证数据）' : ''}`)) return
+    if (!confirm(purge ? t('confirmDeletePurge', { account }) : t('confirmDelete', { account }))) return
     try {
       await fetch(`/api/v1/runners?account=${encodeURIComponent(account)}&purge=${purge}`, {
         method: 'DELETE',
@@ -121,15 +123,15 @@ export default function RunnersPage() {
           <div className="min-w-0">
             <h1 className="text-base sm:text-xl font-semibold flex items-center gap-2">
               <Server className="w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0" />
-              <span className="truncate">Runner 管理</span>
+              <span className="truncate">{t('title')}</span>
             </h1>
             <p className="text-xs sm:text-sm text-gray-500 hidden sm:block">
-              管理 Qwen-Code Runner 容器和登录状态
+              {t('subtitle')}
             </p>
           </div>
           <div className="flex gap-1 sm:gap-2 flex-shrink-0">
             <Link href="/" className="hidden sm:flex px-4 py-2 border rounded-lg hover:bg-gray-100 text-sm">
-              返回看板
+              {t('backToBoard')}
             </Link>
             <button
               onClick={fetchRunners}
@@ -142,8 +144,8 @@ export default function RunnersPage() {
               className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
             >
               <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">添加账户</span>
-              <span className="sm:hidden">添加</span>
+              <span className="hidden sm:inline">{t('addAccount')}</span>
+              <span className="sm:hidden">{t('add')}</span>
             </button>
           </div>
         </div>
@@ -157,13 +159,13 @@ export default function RunnersPage() {
         ) : runners.length === 0 ? (
           <div className="bg-white rounded-lg border p-8 text-center">
             <Server className="w-12 h-12 mx-auto text-gray-400 mb-4" />
-            <h3 className="text-lg font-medium mb-2">暂无 Runner</h3>
-            <p className="text-gray-500 mb-4">添加一个 Qwen-Code 账户来开始使用</p>
+            <h3 className="text-lg font-medium mb-2">{t('noRunners')}</h3>
+            <p className="text-gray-500 mb-4">{t('noRunnersHint')}</p>
             <button
               onClick={() => setShowCreateModal(true)}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
             >
-              添加账户
+              {t('addAccount')}
             </button>
           </div>
         ) : (
@@ -181,7 +183,7 @@ export default function RunnersPage() {
                   <button
                     onClick={() => deleteRunner(runner.account, true)}
                     className="p-1.5 text-red-500 hover:bg-red-50 rounded"
-                    title="删除"
+                    title={t('action.delete', { ns: 'common' })}
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -191,12 +193,12 @@ export default function RunnersPage() {
                   <span className={`px-2 py-0.5 rounded text-xs ${
                     runner.status === 'running' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
                   }`}>
-                    {runner.status === 'running' ? '运行中' : '已停止'}
+                    {runner.status === 'running' ? t('statusRunning') : t('statusStopped')}
                   </span>
                   <span className={`px-2 py-0.5 rounded text-xs ${
                     runner.logged_in ? 'bg-blue-100 text-blue-800' : 'bg-yellow-100 text-yellow-800'
                   }`}>
-                    {runner.logged_in ? '已登录' : '未登录'}
+                    {runner.logged_in ? t('loggedIn') : t('notLoggedIn')}
                   </span>
                 </div>
 
@@ -205,12 +207,12 @@ export default function RunnersPage() {
                   className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100"
                 >
                   <Terminal className="w-4 h-4" />
-                  {runner.logged_in ? '打开终端' : '登录终端'}
+                  {runner.logged_in ? t('openTerminal') : t('loginTerminal')}
                 </button>
 
                 {runner.created_at && (
                   <p className="text-xs text-gray-400 mt-2">
-                    创建于 {runner.created_at}
+                    {t('createdAt')} {runner.created_at}
                   </p>
                 )}
               </div>
@@ -237,14 +239,15 @@ export default function RunnersPage() {
 }
 
 function CreateRunnerModal({ onClose, onCreate }: { onClose: () => void, onCreate: (account: string) => void }) {
+  const { t } = useTranslation('runners')
   const [account, setAccount] = useState('')
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50">
       <div className="bg-white rounded-t-2xl sm:rounded-lg w-full sm:max-w-md p-4 sm:p-6">
-        <h2 className="text-lg font-semibold mb-4">添加 Runner 账户</h2>
+        <h2 className="text-lg font-semibold mb-4">{t('create.title')}</h2>
         <div className="mb-4">
-          <label className="block text-sm font-medium mb-1">账户名/邮箱</label>
+          <label className="block text-sm font-medium mb-1">{t('create.accountLabel')}</label>
           <input
             type="text"
             value={account}
@@ -253,19 +256,19 @@ function CreateRunnerModal({ onClose, onCreate }: { onClose: () => void, onCreat
             placeholder="user@example.com"
           />
           <p className="text-xs text-gray-500 mt-1">
-            用于标识 Runner 容器，建议使用 Qwen 账户邮箱
+            {t('create.accountHint')}
           </p>
         </div>
         <div className="flex justify-end gap-2">
           <button onClick={onClose} className="px-4 py-2 border rounded-lg hover:bg-gray-100">
-            取消
+            {t('action.cancel', { ns: 'common' })}
           </button>
           <button
             onClick={() => onCreate(account)}
             disabled={!account}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
           >
-            创建
+            {t('action.create', { ns: 'common' })}
           </button>
         </div>
       </div>
@@ -274,7 +277,7 @@ function CreateRunnerModal({ onClose, onCreate }: { onClose: () => void, onCreat
 }
 
 function TerminalModal({ session, onClose }: { session: TerminalSession, onClose: () => void }) {
-  // 使用当前页面的主机名（宿主机 IP），而不是 localhost
+  const { t } = useTranslation('runners')
   const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost'
   const iframeUrl = `http://${host}:${session.port}/`
 
@@ -284,11 +287,11 @@ function TerminalModal({ session, onClose }: { session: TerminalSession, onClose
         <div className="flex items-center justify-between px-4 py-2 border-b border-gray-700">
           <div className="flex items-center gap-2 text-white">
             <Terminal className="w-5 h-5" />
-            <span className="font-medium">终端 - {session.account}</span>
+            <span className="font-medium">{t('terminal.title')} - {session.account}</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs text-gray-400">
-              提示：执行 <code className="bg-gray-800 px-1 rounded">qwen login</code> 进行登录
+              {t('terminal.loginHint')}
             </span>
             <button
               onClick={onClose}

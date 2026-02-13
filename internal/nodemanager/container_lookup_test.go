@@ -9,7 +9,7 @@ import (
 
 func TestExecutor_getContainerForInstance_containerName(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/instances/inst-1" {
+		if r.URL.Path != "/api/v1/agents/inst-1" {
 			http.NotFound(w, r)
 			return
 		}
@@ -34,7 +34,7 @@ func TestExecutor_getContainerForInstance_containerName(t *testing.T) {
 
 func TestExecutor_getContainerForInstance_backwardCompatContainer(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/instances/inst-2" {
+		if r.URL.Path != "/api/v1/agents/inst-2" {
 			http.NotFound(w, r)
 			return
 		}
@@ -59,12 +59,12 @@ func TestExecutor_getContainerForInstance_backwardCompatContainer(t *testing.T) 
 
 func TestExecutor_getContainerFromAPI_prefersRunning(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/instances" {
+		if r.URL.Path != "/api/v1/agents" {
 			http.NotFound(w, r)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"instances":[{"id":"i1","container_name":"c1","status":"stopped"},{"id":"i2","container_name":"c2","status":"running"}]}`))
+		_, _ = w.Write([]byte(`{"agents":[{"id":"i1","container_name":"c1","status":"stopped"},{"id":"i2","container_name":"c2","status":"running"}]}`))
 	}))
 	defer srv.Close()
 
@@ -84,12 +84,12 @@ func TestExecutor_getContainerFromAPI_prefersRunning(t *testing.T) {
 
 func TestExecutor_getContainerFromAPI_fallbackFirst(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/instances" {
+		if r.URL.Path != "/api/v1/agents" {
 			http.NotFound(w, r)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"instances":[{"id":"i1","container_name":"c1","status":"stopped"},{"id":"i2","container_name":"c2","status":"stopped"}]}`))
+		_, _ = w.Write([]byte(`{"agents":[{"id":"i1","container_name":"c1","status":"stopped"},{"id":"i2","container_name":"c2","status":"stopped"}]}`))
 	}))
 	defer srv.Close()
 
@@ -109,12 +109,12 @@ func TestExecutor_getContainerFromAPI_fallbackFirst(t *testing.T) {
 
 func TestExecutor_getContainerFromAPI_empty(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/instances" {
+		if r.URL.Path != "/api/v1/agents" {
 			http.NotFound(w, r)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"instances":[]}`))
+		_, _ = w.Write([]byte(`{"agents":[]}`))
 	}))
 	defer srv.Close()
 
@@ -128,4 +128,3 @@ func TestExecutor_getContainerFromAPI_empty(t *testing.T) {
 		t.Fatalf("expected error, got nil")
 	}
 }
-

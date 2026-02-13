@@ -12,72 +12,106 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 
-	"github.com/joho/godotenv"
-	"gopkg.in/yaml.v3"
-
+	"agents-admin/internal/config"
 	"agents-admin/internal/nodemanager"
 	"agents-admin/internal/nodemanager/adapter/claude"
 	"agents-admin/internal/nodemanager/adapter/gemini"
 	"agents-admin/internal/nodemanager/adapter/qwencode"
-	"agents-admin/internal/shared/infra"
-	"agents-admin/internal/shared/storage"
+	"agents-admin/internal/nodemanager/setup"
 )
 
-// nodeManagerYAML YAML 配置文件结构
-type nodeManagerYAML struct {
-	Node struct {
-		ID           string            `yaml:"id"`
-		APIServerURL string            `yaml:"api_server_url"`
-		WorkspaceDir string            `yaml:"workspace_dir"`
-		Labels       map[string]string `yaml:"labels"`
-	} `yaml:"node"`
-	Redis struct {
-		URL string `yaml:"url"`
-	} `yaml:"redis"`
-	Etcd struct {
-		Endpoints string `yaml:"endpoints"`
-		Prefix    string `yaml:"prefix"`
-	} `yaml:"etcd"`
-	TLS struct {
-		Enabled bool   `yaml:"enabled"`
-		CAFile  string `yaml:"ca_file"`
-	} `yaml:"tls"`
-}
-
 func main() {
-	configDir := flag.String("config", "", "配置文件目录（默认搜索 configs/）")
+	configDirFlag := flag.String("config", "", "配置文件目录（或 YAML 文件路径）")
+	reconfigure := flag.Bool("reconfigure", false, "强制重新进入配置向导")
+	setupPort := flag.Int("setup-port", 15700, "Setup 向导监听端口")
+	setupListen := flag.String("setup-listen", "0.0.0.0", "Setup 向导监听地址")
 	flag.Parse()
 
-	// 加载 .env 文件（如果存在）
-	if err := godotenv.Load(); err != nil {
-		log.Println("No .env file found, using environment variables")
+	// 环境变量覆盖命令行参数
+	if p := os.Getenv("SETUP_PORT"); p != "" {
+		fmt.Sscanf(p, "%d", setupPort)
+	}
+	if l := os.Getenv("SETUP_LISTEN"); l != "" {
+		*setupListen = l
 	}
 
+	// 设置配置目录（复用 config 包的统一路径策略）
+	if *configDirFlag != "" {
+		dir := *configDirFlag
+		// 支持直接指定 YAML 文件路径
+		if strings.HasSuffix(dir, ".yaml") || strings.HasSuffix(dir, ".yml") {
+			dir = filepath.Dir(dir)
+		}
+		config.SetConfigDir(dir)
+	}
+
+	// 配置文件路径（Setup Wizard 写入位置）
+	configPath := filepath.Join(config.GetConfigDir(), config.ConfigFileName())
+
+	// 判断运行模式：Setup Mode vs Worker Mode
+	// 简单规则：--reconfigure 强制安装，或 {env}.yaml 不存在时进入安装向导
+	// 配置文件存在即视为已配置，缺失字段由 runWorkerMode() 中的回退逻辑处理
+	needSetup := *reconfigure || !config.NodeManagerConfigExists()
+	if needSetup {
+		if *reconfigure {
+			log.Println("Reconfigure mode: ignoring existing config file")
+		}
+		// Setup Mode: 启动配置向导
+		runSetupMode(configPath, *setupListen, *setupPort)
+		return
+	}
+
+	// Worker Mode: 正常运行
+	runWorkerMode()
+}
+
+// runSetupMode 启动配置向导 Web 服务
+func runSetupMode(configPath, listenAddr string, port int) {
+	srv := setup.NewServer(configPath, listenAddr, port)
+	srv.Run()
+}
+
+// runWorkerMode 正常工作模式
+func runWorkerMode() {
 	log.Println("Starting NodeManager...")
 
-	// 加载 YAML 配置
-	yamlCfg := loadNodeManagerConfig(*configDir)
+	// 通过统一的 config 包加载配置
+	appCfg := config.LoadNodeManager()
 
+	// 环境变量 > yaml 配置 > 默认值
 	cfg := nodemanager.Config{
-		NodeID:       firstNonEmpty(yamlCfg.Node.ID, getEnv("NODE_ID", "node-001")),
-		APIServerURL: firstNonEmpty(yamlCfg.Node.APIServerURL, getEnv("API_SERVER_URL", "http://localhost:8080")),
-		WorkspaceDir: firstNonEmpty(yamlCfg.Node.WorkspaceDir, getEnv("WORKSPACE_DIR", "/tmp/workspaces")),
-		Labels:       yamlCfg.Node.Labels,
+		NodeID:       firstNonEmpty(os.Getenv("NODE_ID"), appCfg.Node.ID, nodemanager.GenerateNodeID()),
+		APIServerURL: firstNonEmpty(os.Getenv("API_SERVER_URL"), appCfg.APIServer.URL, "http://localhost:8080"),
+		WorkspaceDir: firstNonEmpty(os.Getenv("WORKSPACE_DIR"), appCfg.Node.WorkspaceDir, "/tmp/workspaces"),
+		Labels:       appCfg.Node.Labels,
+		NodeToken:    firstNonEmpty(os.Getenv("NODE_TOKEN"), appCfg.Auth.NodeToken),
 	}
 	if len(cfg.Labels) == 0 {
 		cfg.Labels = map[string]string{"os": "linux"}
 	}
 
-	// 如果启用 TLS，配置自定义 CA 的 HTTP 客户端
-	if yamlCfg.TLS.Enabled && yamlCfg.TLS.CAFile != "" {
-		tlsClient, err := buildTLSClient(yamlCfg.TLS.CAFile)
+	// TLS 客户端配置：环境变量 > yaml 配置 > 自动检测 HTTPS URL
+	tlsCAFile := firstNonEmpty(os.Getenv("TLS_CA_FILE"), appCfg.TLS.CAFile)
+	tlsEnabled := appCfg.TLS.Enabled || strings.HasPrefix(cfg.APIServerURL, "https://")
+
+	if tlsEnabled && tlsCAFile != "" {
+		tlsClient, err := buildTLSClient(tlsCAFile)
 		if err != nil {
 			log.Fatalf("Failed to load TLS CA: %v", err)
 		}
 		cfg.HTTPClient = tlsClient
-		log.Printf("TLS enabled, CA: %s", yamlCfg.TLS.CAFile)
+		log.Printf("TLS enabled, CA: %s", tlsCAFile)
+	} else if tlsEnabled {
+		// HTTPS URL 但无 CA 文件：跳过证书验证（开发便利，生产应提供 CA）
+		log.Println("WARNING: TLS enabled but no CA file, skipping certificate verification")
+		cfg.HTTPClient = &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			},
+		}
 	}
 
 	log.Printf("Node ID: %s", cfg.NodeID)
@@ -96,32 +130,8 @@ func main() {
 	mgr.RegisterAdapter(gemini.New())
 	mgr.RegisterAdapter(claude.New())
 
-	// 初始化 Redis（用于任务分发事件驱动）
-	redisURL := firstNonEmpty(yamlCfg.Redis.URL, getEnv("REDIS_URL", "redis://localhost:6379/0"))
-	redisInfra, err := infra.NewRedisInfra(redisURL)
-	if err != nil {
-		log.Printf("WARNING: Redis not available, using HTTP polling mode: %v", err)
-	} else {
-		defer redisInfra.Close()
-		mgr.SetNodeQueue(redisInfra)
-		log.Println("Node queue enabled (event-driven task dispatch)")
-	}
-
-	// 初始化 etcd EventBus（可选，用于事件驱动模式）
-	etcdEndpoints := firstNonEmpty(yamlCfg.Etcd.Endpoints, getEnv("ETCD_ENDPOINTS", "localhost:2379"))
-	etcdPrefix := firstNonEmpty(yamlCfg.Etcd.Prefix, "/agents")
-	etcdStore, err := storage.NewEtcdStore(storage.EtcdConfig{
-		Endpoints: []string{etcdEndpoints},
-		Prefix:    etcdPrefix,
-	})
-	if err != nil {
-		log.Printf("WARNING: etcd not available, using HTTP mode: %v", err)
-	} else {
-		defer etcdStore.Close()
-		eventBus := storage.NewEtcdEventBusFromStore(etcdStore)
-		mgr.SetEventBus(eventBus)
-		log.Println("EventBus enabled (event-driven mode)")
-	}
+	// HTTP-Only 架构：所有通信通过 HTTPS 与 API Server 交互，无需直连 Redis
+	log.Println("HTTP-Only mode: task polling via API Server")
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -137,13 +147,6 @@ func main() {
 	mgr.Start(ctx)
 }
 
-func getEnv(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
-}
-
 func firstNonEmpty(values ...string) string {
 	for _, v := range values {
 		if v != "" {
@@ -151,34 +154,6 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
-}
-
-// loadNodeManagerConfig 加载 nodemanager.yaml 配置
-// 搜索顺序: --config 指定目录 → configs/ → ../configs/ → 环境变量兜底
-func loadNodeManagerConfig(cfgDir string) *nodeManagerYAML {
-	cfg := &nodeManagerYAML{}
-
-	searchPaths := []string{"configs", "../configs", "../../configs"}
-	if cfgDir != "" {
-		searchPaths = []string{cfgDir}
-	}
-
-	for _, base := range searchPaths {
-		path := filepath.Join(base, "nodemanager.yaml")
-		data, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
-		if err := yaml.Unmarshal(data, cfg); err != nil {
-			log.Printf("WARNING: failed to parse %s: %v", path, err)
-			continue
-		}
-		log.Printf("Loaded config from %s", path)
-		return cfg
-	}
-
-	log.Println("No nodemanager.yaml found, using environment variables")
-	return cfg
 }
 
 // buildTLSClient 构建带自定义 CA 证书的 HTTP 客户端

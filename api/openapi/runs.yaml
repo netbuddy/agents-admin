@@ -1,3 +1,8 @@
+openapi: 3.0.3
+info:
+  title: Runs API
+  version: 1.0.0
+
 # Run 执行管理 API
 
 paths:
@@ -103,11 +108,23 @@ components:
           type: string
         task_id:
           type: string
-        status:
+        agent_id:
           type: string
-          enum: [queued, running, done, failed, cancelled]
+          description: 执行此 Run 的 Agent ID
         node_id:
           type: string
+        parent_id:
+          type: string
+          description: 父 Run ID（层次化执行）
+        root_id:
+          type: string
+          description: 根 Run ID
+        depth:
+          type: integer
+          description: 执行深度（0 为顶层）
+        status:
+          type: string
+          enum: [pending, queued, assigned, running, done, failed, cancelled, timeout]
         exit_code:
           type: integer
         error_message:

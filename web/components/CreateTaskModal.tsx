@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { X, AlertCircle, CheckCircle, Box, Server } from 'lucide-react'
 import Link from 'next/link'
+import { useTranslation } from 'react-i18next'
 
 interface AgentType {
   id: string
@@ -26,6 +27,7 @@ interface Props {
 }
 
 export default function CreateTaskModal({ onClose, onCreated }: Props) {
+  const { t } = useTranslation('tasks')
   const [name, setName] = useState('')
   const [prompt, setPrompt] = useState('')
   const [agentType, setAgentType] = useState('')
@@ -43,7 +45,7 @@ export default function CreateTaskModal({ onClose, onCreated }: Props) {
       try {
         const [typesRes, instancesRes] = await Promise.all([
           fetch('/api/v1/agent-types'),
-          fetch('/api/v1/instances')
+          fetch('/api/v1/agents')
         ])
         
         if (typesRes.ok) {
@@ -58,7 +60,7 @@ export default function CreateTaskModal({ onClose, onCreated }: Props) {
         
         if (instancesRes.ok) {
           const data = await instancesRes.json()
-          setInstances(data.instances || [])
+          setInstances(data.agents || [])
         }
       } catch (err) {
         console.error('Failed to fetch data:', err)
@@ -91,7 +93,7 @@ export default function CreateTaskModal({ onClose, onCreated }: Props) {
     e.preventDefault()
     
     if (!instanceId) {
-      alert('请选择一个运行中的实例')
+      alert(t('create.selectRunningInstance'))
       return
     }
     
@@ -143,7 +145,7 @@ export default function CreateTaskModal({ onClose, onCreated }: Props) {
     <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50">
       <div className="bg-white rounded-t-2xl sm:rounded-lg w-full sm:max-w-lg p-4 sm:p-6 max-h-[90vh] overflow-y-auto touch-scroll">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">新建任务</h2>
+          <h2 className="text-lg font-semibold">{t('create.title')}</h2>
           <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded">
             <X className="w-5 h-5" />
           </button>
@@ -156,19 +158,19 @@ export default function CreateTaskModal({ onClose, onCreated }: Props) {
         ) : (
           <form onSubmit={handleSubmit}>
             <div className="mb-4">
-              <label className="block text-sm font-medium mb-1">任务名称</label>
+              <label className="block text-sm font-medium mb-1">{t('create.name')}</label>
               <input
                 type="text"
                 value={name}
                 onChange={e => setName(e.target.value)}
                 className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="例如：修复登录页面 bug"
+                placeholder={t('create.namePlaceholder')}
                 required
               />
             </div>
 
             <div className="mb-4">
-              <label className="block text-sm font-medium mb-1">Agent 类型</label>
+              <label className="block text-sm font-medium mb-1">{t('create.agentType')}</label>
               <select
                 value={agentType}
                 onChange={e => setAgentType(e.target.value)}
@@ -183,24 +185,24 @@ export default function CreateTaskModal({ onClose, onCreated }: Props) {
             </div>
 
             <div className="mb-4">
-              <label className="block text-sm font-medium mb-1">选择实例</label>
+              <label className="block text-sm font-medium mb-1">{t('create.selectInstance')}</label>
               {filteredInstances.length === 0 ? (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                   <div className="flex items-start gap-3">
                     <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
                     <div className="flex-1">
                       <p className="text-sm text-yellow-800">
-                        没有可用的 {getAgentTypeName(agentType)} 实例
+                        {t('create.noInstance', { type: getAgentTypeName(agentType) })}
                       </p>
                       <p className="text-xs text-yellow-600 mt-1">
-                        需要先创建一个运行中的实例才能创建任务
+                        {t('create.needInstance')}
                       </p>
                       <Link 
                         href="/instances" 
                         className="inline-flex items-center gap-1 mt-2 text-sm text-blue-600 hover:underline"
                       >
                         <Box className="w-4 h-4" />
-                        前往创建实例
+                        {t('create.goCreateInstance')}
                       </Link>
                     </div>
                   </div>
@@ -242,7 +244,7 @@ export default function CreateTaskModal({ onClose, onCreated }: Props) {
                           )}
                         </div>
                         <p className="text-xs text-gray-500 flex items-center gap-2">
-                          <span>账号: {getAccountName(inst.account_id)}</span>
+                          <span>{t('label.account', { ns: 'common' })}: {getAccountName(inst.account_id)}</span>
                           <span className="flex items-center gap-1">
                             <Server className="w-3 h-3" />
                             {inst.node_id || '-'}
@@ -256,12 +258,12 @@ export default function CreateTaskModal({ onClose, onCreated }: Props) {
             </div>
 
             <div className="mb-4">
-              <label className="block text-sm font-medium mb-1">任务提示词</label>
+              <label className="block text-sm font-medium mb-1">{t('create.prompt')}</label>
               <textarea
                 value={prompt}
                 onChange={e => setPrompt(e.target.value)}
                 className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 h-32"
-                placeholder="描述你希望 AI Agent 完成的任务..."
+                placeholder={t('create.promptPlaceholder')}
                 required
               />
             </div>
@@ -272,14 +274,14 @@ export default function CreateTaskModal({ onClose, onCreated }: Props) {
                 onClick={onClose}
                 className="px-4 py-2 border rounded-lg hover:bg-gray-100"
               >
-                取消
+                {t('action.cancel', { ns: 'common' })}
               </button>
               <button
                 type="submit"
                 disabled={loading || !instanceId}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading ? '创建中...' : '创建任务'}
+                {loading ? t('action.creating', { ns: 'common' }) : t('create.createTask')}
               </button>
             </div>
           </form>

@@ -1,197 +1,197 @@
-# 测试目录结构
+# 测试策略与目录结构
 
-本项目采用测试金字塔模型，包含以下测试类型：
+> **更新日期**：2026-02-10
+> **存储引擎**：MongoDB（默认）/ PostgreSQL / SQLite，通过 `PersistentStore` 接口统一抽象
+
+## 1. 测试分层
 
 ```
                     ╱╲
-                   ╱  ╲         tests/e2e/
-                  ╱────╲        E2E Tests (浏览器自动化)
+                   ╱  ╲         tests/e2e/           ← 部署环境运行（发布前验收）
+                  ╱────╲        E2E / Acceptance Tests
                  ╱      ╲
-                ╱────────╲      tests/integration/
-               ╱          ╲     Integration Tests (真实 HTTP + 真实 DB)
+                ╱────────╲      tests/integration/    ← 本地运行 + 真实 DB
+               ╱          ╲     Integration Tests
               ╱────────────╲
-             ╱              ╲   tests/handler/
-            ╱────────────────╲  Handler Unit Tests (内存调用 + 可 Mock)
+             ╱              ╲   tests/handler/        ← 本地运行，纯内存
+            ╱────────────────╲  Handler Unit Tests
            ╱                  ╲
-          ╱────────────────────╲  internal/*_test.go
-         ╱                      ╲ Pure Unit Tests (函数级别)
+          ╱────────────────────╲  internal/*_test.go  ← 本地运行，无依赖
+         ╱                      ╲ Pure Unit Tests
 ```
 
-## 测试类型详解
+> **关于回归测试**：回归测试（Regression Testing）不是一个独立的测试层级，而是一种
+> **变更后再验证策略**——任何层级（单元/集成/E2E）的测试都可以承担回归验证的职责。
+> 本项目通过 CI 在每次变更后自动运行各层级测试来实现回归保护，不再设置独立的
+> `regression/` 目录。参见 [ISTQB 术语表](https://istqb-glossary.page/regression-testing/)。
 
-### 1. Pure Unit Tests（纯单元测试）
+## 2. 执行环境
+
+| 测试层级 | 执行环境 | 外部依赖 | 触发时机 |
+|----------|----------|----------|----------|
+| **纯单元测试** | 本地开发环境 | 无（纯内存 / Mock） | 每次提交前 |
+| **Handler 单元测试** | 本地开发环境 | 无（httptest + Mock） | 每次提交前 |
+| **集成测试** | 本地开发环境 | 真实数据库（MongoDB / PG） | 功能开发完成后 |
+| **E2E 验收测试** | **部署环境** | 完整部署的 API Server + DB | 发布前验收 |
+
+> **关键区别**：
+> - **单元/Handler 测试**：`go test` 直接运行，零外部依赖
+> - **集成测试**：本地运行，连接真实数据库（如 `mongodb://localhost:27017`）
+> - **E2E 验收测试**：需要完整部署的测试环境（API Server + MongoDB + 认证）
+
+## 3. 目录结构
+
+```
+tests/
+├── README.md                    # 本文档
+├── testutil/                    # 共享测试基础设施
+│   ├── db.go                    # 数据库连接工具（集成测试用）
+│   ├── env.go                   # 进程内测试环境 InProcEnv（handler/integration 用）
+│   └── e2e.go                   # E2E 客户端 E2EClient（HTTPS + Cookie 认证）
+│
+├── handler/                     # Handler 单元测试（本地运行）
+│   ├── 10-task-management/
+│   └── 20-run-management/
+│
+├── integration/                 # 集成测试（本地运行 + 真实 DB）
+│   ├── 10-task-management/
+│   ├── 20-run-management/
+│   ├── 30-scheduling/
+│   ├── 40-node-management/
+│   ├── 48-agent/
+│   ├── 50-auth/
+│   ├── 55-runner/
+│   └── 60-proxy/
+│
+└── e2e/                         # E2E 验收测试（部署环境运行）
+    ├── README.md                # 验收测试总览与 API 覆盖率
+    ├── health/                  # 健康检查、指标、引导配置
+    ├── auth/                    # 认证授权（登录、令牌、权限）
+    ├── task/                    # 任务管理（CRUD、分页、子任务、树）
+    ├── run/                     # 执行管理（生命周期、事件流、取消）
+    ├── node/                    # 节点管理（心跳、环境配置、预配置）
+    ├── proxy/                   # 代理管理（CRUD、连通性测试）
+    ├── instance/                # 实例管理（CRUD、启停）
+    ├── terminal/                # 终端会话（CRUD）
+    ├── template/                # 模板资源（任务/Agent/技能/MCP/安全策略）
+    ├── hitl/                    # 人机协作（审批、反馈、干预、确认）
+    ├── operation/               # 系统操作（Operation、Action、账号、Agent类型）
+    ├── monitor/                 # 监控（统计、工作流）
+    └── sysconfig/               # 系统配置（读写）
+```
+
+## 4. 测试层级详解
+
+### 4.1 纯单元测试
 
 **位置**: `internal/**/*_test.go`（与源码同目录）
 
-**特点**:
-- 测试单个函数或方法
-- 完全隔离，不依赖外部系统
-- 使用 Mock 替代所有外部依赖
+- 测试单个函数或方法，完全隔离
+- 使用 Mock 替代外部依赖
 - 速度最快（微秒级）
 
-**示例**:
-```go
-func TestGenerateID(t *testing.T) {
-    id := generateID("task")
-    if !strings.HasPrefix(id, "task-") {
-        t.Errorf("expected prefix 'task-', got %s", id)
-    }
-}
+```bash
+go test ./internal/...
 ```
 
-**运行**: `go test ./internal/...`
-
----
-
-### 2. Handler Unit Tests（处理器单元测试）
+### 4.2 Handler 单元测试
 
 **位置**: `tests/handler/`
 
-**特点**:
-- 使用 `router.ServeHTTP(w, req)` 直接调用 Handler
-- 跳过网络层，在内存中完成
-- 可以使用 Mock Database 隔离外部依赖
-- 速度极快（毫秒级）
+- 使用 `httptest.NewRecorder` + `router.ServeHTTP()` 在内存中调用
+- 可用 Mock Database 隔离，速度极快（毫秒级）
 
-**适用场景**:
-- 测试 Handler 的业务逻辑
-- 测试参数校验和错误处理
-- 测试边界条件
-- 需要快速反馈的 TDD 开发
-
-**架构图**:
-```
-┌──────────────┐        ┌─────────────┐
-│  Test Code   │──────→ │   Handler   │ ──→ Mock DB (可选)
-│ ServeHTTP()  │        │  Create()   │
-└──────────────┘        └─────────────┘
-      ↑ 内存中直接调用，无网络开销
+```bash
+go test ./tests/handler/...
 ```
 
-**示例**:
-```go
-req := httptest.NewRequest("POST", "/api/v1/tasks", body)
-w := httptest.NewRecorder()
-router.ServeHTTP(w, req)  // 直接调用，跳过网络层
-```
-
-**运行**: `go test ./tests/handler/...`
-
----
-
-### 3. Integration Tests（集成测试）
+### 4.3 集成测试
 
 **位置**: `tests/integration/`
 
-**特点**:
 - 使用 `httptest.NewServer` 启动真实 HTTP 服务器
-- 请求经过完整的 TCP/IP 网络栈
-- 使用真实的 PostgreSQL 数据库
+- 连接真实数据库（MongoDB 默认，可选 PostgreSQL）
 - 测试组件间的真实交互
 
-**适用场景**:
-- 验证 API 端到端流程
-- 测试中间件（CORS、认证、指标）
-- 验证数据库读写正确性
-- 测试多组件协作
+```bash
+# 默认使用 MongoDB
+go test ./tests/integration/...
 
-**架构图**:
-```
-┌──────────────┐  HTTP  ┌─────────────┐
-│  Test Code   │──────→ │ HTTP Server │ ──→ Real PostgreSQL
-│ http.Post()  │ TCP/IP │  :random    │
-└──────────────┘        └─────────────┘
-      ↑ 真实网络请求，完整流程
+# 使用 PostgreSQL
+TEST_DB_DRIVER=postgres TEST_DATABASE_URL="postgres://..." go test ./tests/integration/...
 ```
 
-**示例**:
-```go
-server := httptest.NewServer(handler.Router())
-defer server.Close()
-
-resp, err := http.Post(server.URL+"/api/v1/tasks", "application/json", body)
-```
-
-**运行**: `go test ./tests/integration/...`
-
----
-
-### 4. E2E Tests（端到端测试）
+### 4.4 E2E 验收测试
 
 **位置**: `tests/e2e/`
 
-**特点**:
-- 启动完整的系统（API Server + Web UI）
-- 使用浏览器自动化工具（如 Playwright）
-- 模拟真实用户操作
-- 速度最慢，但最接近真实场景
+**定位**：发布前验收测试，按功能维度全面覆盖项目所有 API 端点。
 
-**适用场景**:
-- 验证关键用户流程
-- 测试前后端集成
-- 验收测试
-
-**运行**: `./tests/e2e/browser/run_all_tests.sh`
-
----
-
-### 5. Regression Tests（回归测试）
-
-**位置**: `tests/regression/`
-
-**特点**:
-- 针对已修复的 Bug 编写的测试
-- 防止 Bug 重新出现
-- 通常与 Integration Tests 类似，但更聚焦特定场景
-
-**运行**: `go test ./tests/regression/...`
-
----
-
-## 目录命名规则
-
-测试目录和文件名与 `docs/business-flow/` 中的文档保持一致：
-
-| 文档路径 | Handler 测试路径 | 集成测试路径 |
-|----------|------------------|--------------|
-| `docs/business-flow/10-任务管理/01-任务创建.md` | `tests/handler/10-task-management/01-task-create_test.go` | `tests/integration/10-task-management/01-task-create_test.go` |
-
-规则：
-- 保留数字前缀（如 `10-`）
-- 中文翻译为英文（如 `任务管理` → `task-management`）
-- 测试文件以 `_test.go` 结尾
-
----
-
-## 何时使用哪种测试？
-
-| 场景 | 推荐测试类型 |
-|------|--------------|
-| 开发新功能，快速验证逻辑 | Handler Unit Test |
-| 验证参数校验和错误处理 | Handler Unit Test |
-| 验证 API 完整流程 | Integration Test |
-| 验证数据库操作正确性 | Integration Test |
-| 验证前后端集成 | E2E Test |
-| 验证关键用户流程 | E2E Test |
-| 修复 Bug 后防止回归 | Regression Test |
-
----
-
-## 运行所有测试
+- 13 个功能子目录，覆盖 **65+ 个 API 端点**
+- 共享 `testutil.E2EClient`：HTTPS（TLS 跳过验证）+ Cookie 认证 + 自动登录
+- 每个子目录包含 `README.md` 详细描述覆盖的功能
+- **需要完整部署的测试环境**
 
 ```bash
-# 运行所有单元测试
-go test ./internal/...
+# 全量验收
+API_BASE_URL=https://test-server:8080 go test -v ./tests/e2e/...
 
-# 运行 Handler 单元测试
-go test ./tests/handler/...
+# 按维度运行
+API_BASE_URL=https://test-server:8080 go test -v ./tests/e2e/health/...
+API_BASE_URL=https://test-server:8080 go test -v ./tests/e2e/task/...
+API_BASE_URL=https://test-server:8080 go test -v ./tests/e2e/run/...
 
-# 运行集成测试（需要数据库）
-go test ./tests/integration/...
+# 快速冒烟
+API_BASE_URL=https://test-server:8080 go test -v ./tests/e2e/health/... ./tests/e2e/auth/...
+```
 
-# 运行回归测试
-go test ./tests/regression/...
+**E2E 环境变量**：
 
-# 运行所有测试
-make test-all
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `API_BASE_URL` | `https://localhost:8080` | API Server 地址 |
+| `ADMIN_EMAIL` | `admin@agents-admin.local` | 管理员邮箱 |
+| `ADMIN_PASSWORD` | `admin123456` | 管理员密码 |
+
+## 5. 回归测试策略
+
+回归测试是一种**变更后再验证的测试活动**（ISTQB），不是固定的测试形态。
+本项目通过以下方式实现回归保护：
+
+| 变更阶段 | 回归手段 | 覆盖范围 |
+|----------|----------|----------|
+| **每次提交** | 单元测试 + Handler 测试 | 函数/接口逻辑 |
+| **功能完成** | 集成测试 | 组件间交互、数据库读写 |
+| **发布前** | E2E 验收测试（全量） | 所有功能维度端到端 |
+| **热修复后** | 按影响范围选择性运行 | 受影响的测试层级 |
+
+> 不再维护独立的 `tests/regression/` 目录。
+> 任何层级的测试在变更后重新运行，都在承担回归验证的职责。
+
+## 6. 存储驱动环境变量
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `TEST_DB_DRIVER` | `mongodb` | 存储驱动：`mongodb` / `postgres` |
+| `TEST_MONGO_URI` | `mongodb://localhost:27017` | MongoDB 连接 URI |
+| `TEST_MONGO_DB` | `agents_admin_test` | MongoDB 测试数据库名 |
+| `TEST_DATABASE_URL` | `postgres://agents:...@localhost:5432/agents_admin` | PostgreSQL 连接 URL |
+| `TEST_REDIS_URL` | `redis://localhost:6380/0` | Redis 连接 URL（可选） |
+
+## 7. 快速参考
+
+```bash
+# ---- 本地开发（每次提交前） ----
+go test ./internal/...                # 纯单元测试
+go test ./tests/handler/...           # Handler 测试
+
+# ---- 本地开发（功能完成后） ----
+go test ./tests/integration/...       # 集成测试（需本地 MongoDB）
+go test -v ./internal/shared/storage/mongostore/...  # mongostore 测试
+
+# ---- 部署环境（发布前验收） ----
+API_BASE_URL=https://test-server:8080 go test -v ./tests/e2e/...
+
+# ---- 全量验证 ----
+go test ./...
 ```

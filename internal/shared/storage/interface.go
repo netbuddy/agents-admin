@@ -172,6 +172,7 @@ type NodeStore interface {
 	GetNode(ctx context.Context, id string) (*model.Node, error)
 	ListAllNodes(ctx context.Context) ([]*model.Node, error)
 	ListOnlineNodes(ctx context.Context) ([]*model.Node, error)
+	DeactivateStaleNodes(ctx context.Context, activeNodeID string, hostname string) error
 	DeleteNode(ctx context.Context, id string) error
 	CreateNodeProvision(ctx context.Context, p *model.NodeProvision) error
 	UpdateNodeProvision(ctx context.Context, p *model.NodeProvision) error
@@ -184,9 +185,9 @@ type AccountStore interface {
 	CreateAccount(ctx context.Context, account *model.Account) error
 	GetAccount(ctx context.Context, id string) (*model.Account, error)
 	ListAccounts(ctx context.Context) ([]*model.Account, error)
-	ListAccountsByNode(ctx context.Context, nodeID string) ([]*model.Account, error)
 	UpdateAccountStatus(ctx context.Context, id string, status model.AccountStatus) error
 	UpdateAccountVolume(ctx context.Context, id string, volumeName string) error
+	UpdateAccountVolumeArchive(ctx context.Context, id string, archiveKey string) error
 	DeleteAccount(ctx context.Context, id string) error
 }
 
@@ -232,16 +233,20 @@ type ProxyStore interface {
 	DeleteProxy(ctx context.Context, id string) error
 }
 
-// InstanceStore 实例存储接口
-type InstanceStore interface {
-	CreateInstance(ctx context.Context, instance *model.Instance) error
-	GetInstance(ctx context.Context, id string) (*model.Instance, error)
-	ListInstances(ctx context.Context) ([]*model.Instance, error)
-	ListInstancesByNode(ctx context.Context, nodeID string) ([]*model.Instance, error)
-	ListPendingInstances(ctx context.Context, nodeID string) ([]*model.Instance, error)
-	UpdateInstance(ctx context.Context, id string, status model.InstanceStatus, containerName *string) error
-	DeleteInstance(ctx context.Context, id string) error
+// AgentInstanceStore Agent 实例存储接口（原 InstanceStore，已重命名对齐领域模型）
+type AgentInstanceStore interface {
+	CreateAgentInstance(ctx context.Context, instance *model.Instance) error
+	GetAgentInstance(ctx context.Context, id string) (*model.Instance, error)
+	ListAgentInstances(ctx context.Context) ([]*model.Instance, error)
+	ListAgentInstancesByNode(ctx context.Context, nodeID string) ([]*model.Instance, error)
+	ListPendingAgentInstances(ctx context.Context, nodeID string) ([]*model.Instance, error)
+	UpdateAgentInstance(ctx context.Context, id string, status model.InstanceStatus, containerName *string) error
+	DeleteAgentInstance(ctx context.Context, id string) error
 }
+
+// InstanceStore 向后兼容别名
+// Deprecated: 使用 AgentInstanceStore
+type InstanceStore = AgentInstanceStore
 
 // TerminalSessionStore 终端会话存储接口
 type TerminalSessionStore interface {

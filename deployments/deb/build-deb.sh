@@ -55,8 +55,6 @@ build_deb() {
   local binary_name="$3"   # 安装后的二进制名
   local service_name="$4"  # systemd service 名
   local description="$5"
-  shift 5
-  local config_files=("$@")  # 配置文件列表
 
   echo "==> Building ${pkg_name}_${VERSION}_${ARCH}.deb ..."
 
@@ -74,12 +72,8 @@ build_deb() {
   cp "$binary_src" "$BUILD_DIR/usr/bin/$binary_name"
   chmod 755 "$BUILD_DIR/usr/bin/$binary_name"
 
-  # 复制配置文件
+  # 配置文件由 Setup 向导在首次运行时动态生成，不再随包分发
   > "$BUILD_DIR/DEBIAN/conffiles"
-  for cf in "${config_files[@]}"; do
-    cp "$SCRIPT_DIR/config/$cf" "$BUILD_DIR/etc/agents-admin/$cf"
-    echo "/etc/agents-admin/$cf" >> "$BUILD_DIR/DEBIAN/conffiles"
-  done
 
   # 计算安装大小 (KB)
   local installed_size
@@ -119,6 +113,7 @@ if [ "$1" = "configure" ]; then
   mkdir -p /etc/agents-admin/certs
   chown -R agents-admin:agents-admin /var/log/agents-admin
   chown -R agents-admin:agents-admin /var/lib/agents-admin
+  chown -R agents-admin:agents-admin /etc/agents-admin
 
   # 保护 .env 文件权限（仅 root 和服务用户可读）
   if [ -f /etc/agents-admin/*.env ]; then
@@ -160,11 +155,9 @@ PRERM
 #!/bin/sh
 set -e
 if [ "$1" = "purge" ]; then
-  rm -rf /etc/agents-admin/__CONFIG__ || true
   systemctl daemon-reload || true
 fi
 POSTRM
-  sed -i "s/__CONFIG__/${config_env}/g" "$BUILD_DIR/DEBIAN/postrm"
   chmod 755 "$BUILD_DIR/DEBIAN/postrm"
 
   # 构建 deb
@@ -186,8 +179,7 @@ build_deb \
   "$API_BIN" \
   "agents-admin-api-server" \
   "agents-admin-api-server" \
-  "Agents Admin API Server - 智能体管理平台 API 服务" \
-  "api-server.yaml" "api-server.env"
+  "Agents Admin API Server - 智能体管理平台 API 服务"
 
 # ---------- 构建 node-manager ----------
 
@@ -202,8 +194,7 @@ build_deb \
   "$NM_BIN" \
   "agents-admin-node-manager" \
   "agents-admin-node-manager" \
-  "Agents Admin Node Manager - 智能体节点管理器" \
-  "nodemanager.yaml" "node-manager.env"
+  "Agents Admin Node Manager - 智能体节点管理器"
 
 echo ""
 echo "All .deb packages built in ${DIST_DIR}/"

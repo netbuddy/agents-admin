@@ -76,34 +76,34 @@ const (
 // 状态流转：pending → approved / rejected / expired
 type ApprovalRequest struct {
 	// ID 唯一标识
-	ID string `json:"id" db:"id"`
+	ID string `json:"id" bson:"_id" db:"id"`
 
 	// RunID 关联的 Run
-	RunID string `json:"run_id" db:"run_id"`
+	RunID string `json:"run_id" bson:"run_id" db:"run_id"`
 
 	// Type 审批类型
-	Type ApprovalType `json:"type" db:"type"`
+	Type ApprovalType `json:"type" bson:"type" db:"type"`
 
 	// Status 状态
-	Status ApprovalStatus `json:"status" db:"status"`
+	Status ApprovalStatus `json:"status" bson:"status" db:"status"`
 
 	// Operation 请求的操作描述
-	Operation string `json:"operation" db:"operation"`
+	Operation string `json:"operation" bson:"operation" db:"operation"`
 
 	// Reason 请求原因
-	Reason string `json:"reason" db:"reason"`
+	Reason string `json:"reason" bson:"reason" db:"reason"`
 
 	// Context 操作上下文（详细信息，如命令、文件路径等）
-	Context json.RawMessage `json:"context,omitempty" db:"context"`
+	Context json.RawMessage `json:"context,omitempty" bson:"context,omitempty" db:"context"`
 
 	// ExpiresAt 过期时间（可选）
-	ExpiresAt *time.Time `json:"expires_at,omitempty" db:"expires_at"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty" bson:"expires_at,omitempty" db:"expires_at"`
 
 	// CreatedAt 创建时间
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	CreatedAt time.Time `json:"created_at" bson:"created_at" db:"created_at"`
 
 	// ResolvedAt 处理时间
-	ResolvedAt *time.Time `json:"resolved_at,omitempty" db:"resolved_at"`
+	ResolvedAt *time.Time `json:"resolved_at,omitempty" bson:"resolved_at,omitempty" db:"resolved_at"`
 }
 
 // IsPending 判断是否待处理
@@ -128,25 +128,25 @@ func (r *ApprovalRequest) IsExpired() bool {
 // 用户对 ApprovalRequest 的响应，包含决策结果和可选的附加指令。
 type ApprovalDecision struct {
 	// ID 唯一标识
-	ID string `json:"id" db:"id"`
+	ID string `json:"id" bson:"_id" db:"id"`
 
 	// RequestID 关联的请求
-	RequestID string `json:"request_id" db:"request_id"`
+	RequestID string `json:"request_id" bson:"request_id" db:"request_id"`
 
 	// Decision 决策：approve 或 reject
-	Decision string `json:"decision" db:"decision"`
+	Decision string `json:"decision" bson:"decision" db:"decision"`
 
 	// DecidedBy 决策者 UserID
-	DecidedBy string `json:"decided_by" db:"decided_by"`
+	DecidedBy string `json:"decided_by" bson:"decided_by" db:"decided_by"`
 
 	// Comment 审批意见（可选）
-	Comment string `json:"comment,omitempty" db:"comment"`
+	Comment string `json:"comment,omitempty" bson:"comment,omitempty" db:"comment"`
 
 	// Instructions 附加指令（批准时可选提供额外指导）
-	Instructions string `json:"instructions,omitempty" db:"instructions"`
+	Instructions string `json:"instructions,omitempty" bson:"instructions,omitempty" db:"instructions"`
 
 	// CreatedAt 决策时间
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	CreatedAt time.Time `json:"created_at" bson:"created_at" db:"created_at"`
 }
 
 // IsApproved 判断是否批准
@@ -190,25 +190,25 @@ const (
 //   - clarification：澄清（"我的意思是..."）
 type HumanFeedback struct {
 	// ID 唯一标识
-	ID string `json:"id" db:"id"`
+	ID string `json:"id" bson:"_id" db:"id"`
 
 	// RunID 关联的 Run
-	RunID string `json:"run_id" db:"run_id"`
+	RunID string `json:"run_id" bson:"run_id" db:"run_id"`
 
 	// Type 反馈类型
-	Type FeedbackType `json:"type" db:"type"`
+	Type FeedbackType `json:"type" bson:"type" db:"type"`
 
 	// Content 反馈内容
-	Content string `json:"content" db:"content"`
+	Content string `json:"content" bson:"content" db:"content"`
 
 	// CreatedBy 创建者 UserID
-	CreatedBy string `json:"created_by" db:"created_by"`
+	CreatedBy string `json:"created_by" bson:"created_by" db:"created_by"`
 
 	// CreatedAt 创建时间
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	CreatedAt time.Time `json:"created_at" bson:"created_at" db:"created_at"`
 
 	// ProcessedAt 处理时间（Agent 确认收到反馈的时间）
-	ProcessedAt *time.Time `json:"processed_at,omitempty" db:"processed_at"`
+	ProcessedAt *time.Time `json:"processed_at,omitempty" bson:"processed_at,omitempty" db:"processed_at"`
 }
 
 // IsProcessed 判断是否已处理
@@ -251,28 +251,28 @@ const (
 //   - 紧急终止任务
 type Intervention struct {
 	// ID 唯一标识
-	ID string `json:"id" db:"id"`
+	ID string `json:"id" bson:"_id" db:"id"`
 
 	// RunID 关联的 Run
-	RunID string `json:"run_id" db:"run_id"`
+	RunID string `json:"run_id" bson:"run_id" db:"run_id"`
 
 	// Action 干预动作
-	Action InterventionAction `json:"action" db:"action"`
+	Action InterventionAction `json:"action" bson:"action" db:"action"`
 
 	// Reason 干预原因（可选）
-	Reason string `json:"reason,omitempty" db:"reason"`
+	Reason string `json:"reason,omitempty" bson:"reason,omitempty" db:"reason"`
 
 	// Parameters 参数（modify 时使用，如新的 Prompt、新的 AgentID 等）
-	Parameters json.RawMessage `json:"parameters,omitempty" db:"parameters"`
+	Parameters json.RawMessage `json:"parameters,omitempty" bson:"parameters,omitempty" db:"parameters"`
 
 	// CreatedBy 创建者 UserID
-	CreatedBy string `json:"created_by" db:"created_by"`
+	CreatedBy string `json:"created_by" bson:"created_by" db:"created_by"`
 
 	// CreatedAt 创建时间
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	CreatedAt time.Time `json:"created_at" bson:"created_at" db:"created_at"`
 
 	// ExecutedAt 执行时间
-	ExecutedAt *time.Time `json:"executed_at,omitempty" db:"executed_at"`
+	ExecutedAt *time.Time `json:"executed_at,omitempty" bson:"executed_at,omitempty" db:"executed_at"`
 }
 
 // IsExecuted 判断是否已执行
@@ -342,31 +342,31 @@ const (
 //   - irreversible：不可逆操作前确认
 type Confirmation struct {
 	// ID 唯一标识
-	ID string `json:"id" db:"id"`
+	ID string `json:"id" bson:"_id" db:"id"`
 
 	// RunID 关联的 Run
-	RunID string `json:"run_id" db:"run_id"`
+	RunID string `json:"run_id" bson:"run_id" db:"run_id"`
 
 	// Type 确认类型
-	Type ConfirmationType `json:"type" db:"type"`
+	Type ConfirmationType `json:"type" bson:"type" db:"type"`
 
 	// Message 确认消息（展示给用户）
-	Message string `json:"message" db:"message"`
+	Message string `json:"message" bson:"message" db:"message"`
 
 	// Status 状态
-	Status ConfirmStatus `json:"status" db:"status"`
+	Status ConfirmStatus `json:"status" bson:"status" db:"status"`
 
 	// Options 可选项（如 ["继续", "取消", "稍后"]）
-	Options []string `json:"options,omitempty" db:"options"`
+	Options []string `json:"options,omitempty" bson:"options,omitempty" db:"options"`
 
 	// SelectedOption 用户选择的选项
-	SelectedOption *string `json:"selected_option,omitempty" db:"selected_option"`
+	SelectedOption *string `json:"selected_option,omitempty" bson:"selected_option,omitempty" db:"selected_option"`
 
 	// CreatedAt 创建时间
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	CreatedAt time.Time `json:"created_at" bson:"created_at" db:"created_at"`
 
 	// ResolvedAt 处理时间
-	ResolvedAt *time.Time `json:"resolved_at,omitempty" db:"resolved_at"`
+	ResolvedAt *time.Time `json:"resolved_at,omitempty" bson:"resolved_at,omitempty" db:"resolved_at"`
 }
 
 // IsPending 判断是否待确认

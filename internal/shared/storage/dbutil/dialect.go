@@ -19,6 +19,7 @@ const (
 	DriverPostgres DriverType = "postgres"
 	DriverSQLite   DriverType = "sqlite"
 	DriverMySQL    DriverType = "mysql"
+	DriverMongoDB  DriverType = "mongodb"
 )
 
 // Dialect 数据库方言接口

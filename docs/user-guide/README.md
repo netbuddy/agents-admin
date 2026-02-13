@@ -1,7 +1,7 @@
 # Agent Admin 用户使用手册
 
 > **版本**：v1.0 (MVP)
-> **更新日期**：2026-02-06
+> **更新日期**：2026-02-10
 
 ## 简介
 
@@ -30,6 +30,9 @@ Agent Admin 是一个 **AI Agent 任务编排与可观测平台**，让你可以
 5. **[代理管理](./05-proxy-management.md)** — 配置网络代理
 6. **[监控与运维](./06-monitoring.md)** — 系统监控和健康检查
 7. **[TLS/HTTPS 安全通信](./07-tls-https.md)** — 配置 HTTPS 加密通信
+8. **[Node Manager 安装指南](./08-nodemanager-installation.md)** — 安装、配置和部署 Node Manager
+9. **[API Server 安装指南](./09-apiserver-installation.md)** — 安装、配置和部署 API Server
+10. **[配置系统指南](./10-configuration.md)** — 配置文件格式、环境变量和配置管理
 
 ## 系统架构概览
 
@@ -47,13 +50,13 @@ Agent Admin 是一个 **AI Agent 任务编排与可观测平台**，让你可以
 │  └──────────┘  └──────────┘  └──────────┘          │
 └────────┬──────────────┬──────────────┬──────────────┘
          │              │              │
-    PostgreSQL        Redis        NodeManager
-    (持久化)       (缓存/队列)    (Agent 执行)
+      MongoDB         Redis        NodeManager
+     (默认持久化)   (缓存/队列)    (Agent 执行)
 ```
 
 ## 技术栈
 
-- **后端**：Go 1.22+、PostgreSQL、Redis
+- **后端**：Go 1.22+、MongoDB（默认）/ PostgreSQL / SQLite、Redis
 - **前端**：Next.js 14、React、TailwindCSS
 - **部署**：Docker Compose / 单二进制（Go embed）
 - **监控**：Prometheus + Grafana（可选）

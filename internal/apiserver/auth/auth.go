@@ -30,6 +30,7 @@ type Config struct {
 	JWTSecret       string        `yaml:"jwt_secret"`
 	AccessTokenTTL  time.Duration `yaml:"access_token_ttl"`
 	RefreshTokenTTL time.Duration `yaml:"refresh_token_ttl"`
+	NodeToken       string        `yaml:"-"` // NodeManager 共享密钥，从 NODE_TOKEN 环境变量读取
 }
 
 // DefaultConfig 返回默认认证配置

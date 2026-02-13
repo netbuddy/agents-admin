@@ -1,0 +1,40 @@
+{
+  "title": "代理管理",
+  "subtitle": "管理网络代理配置，用于Agent访问外部网络",
+  "addProxy": "添加代理",
+  "noProxies": "暂无代理配置",
+  "noProxiesHint": "添加代理配置以便Agent访问需要代理的网络",
+  "confirmDelete": "确定删除此代理配置？",
+  "disabled": "已禁用",
+  "authUser": "认证",
+  "testFailed": "测试请求失败",
+  "form": {
+    "addTitle": "添加代理",
+    "editTitle": "编辑代理",
+    "name": "名称",
+    "namePlaceholder": "公司代理",
+    "type": "类型",
+    "host": "主机",
+    "port": "端口",
+    "username": "用户名（可选）",
+    "password": "密码（可选）",
+    "passwordKeep": "留空保持不变",
+    "noProxyList": "不代理的地址列表（可选）",
+    "noProxyHint": "每行一个地址，可使用通配符匹配规则（如 192.168.213.*）",
+    "enabled": "启用"
+  },
+  "test": {
+    "title": "测试代理连接",
+    "desc": "通过代理 <strong>{{name}}</strong> ({{host}}:{{port}}) 访问目标网址，验证代理是否可用。",
+    "targetUrl": "目标网址",
+    "quickTargets": "常用目标",
+    "proxyAvailable": "代理可用",
+    "testFailed": "测试失败",
+    "evidence": "验证证据：",
+    "pageTitle": "页面标题",
+    "statusCode": "HTTP 状态码",
+    "responseHeaders": "响应头",
+    "testing": "测试中...",
+    "startTest": "开始测试"
+  }
+}

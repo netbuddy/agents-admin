@@ -1,7 +1,7 @@
-// Package executor Instance 工作线程
+// Package nodemanager Agent 工作线程
 //
-// P2-1 重构：将 Docker 操作从 API Server 下沉到 Executor
-// 负责轮询 API Server 获取待处理的 Instance，然后执行实际的 Docker 操作
+// P2-1 重构：将 Docker 操作从 API Server 下沉到 NodeManager
+// 负责轮询 API Server 获取待处理的 Agent，然后执行实际的 Docker 操作
 package nodemanager
 
 import (
@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os/exec"
@@ -16,27 +17,29 @@ import (
 	"time"
 )
 
-// InstanceWorker Instance 工作线程
-type InstanceWorker struct {
+// AgentWorker Instance 工作线程
+type AgentWorker struct {
 	config        Config
 	httpClient    *http.Client
 	lastReconcile time.Time
 }
 
-// NewInstanceWorker 创建 Instance 工作线程
-func NewInstanceWorker(cfg Config) *InstanceWorker {
-	return &InstanceWorker{
-		config: cfg,
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
+// NewAgentWorker 创建 Instance 工作线程
+func NewAgentWorker(cfg Config) *AgentWorker {
+	httpClient := cfg.HTTPClient
+	if httpClient == nil {
+		httpClient = &http.Client{Timeout: 30 * time.Second}
+	}
+	return &AgentWorker{
+		config:        cfg,
+		httpClient:    httpClient,
 		lastReconcile: time.Time{},
 	}
 }
 
 // Start 启动 Instance 工作线程
-func (w *InstanceWorker) Start(ctx context.Context) {
-	log.Printf("[InstanceWorker] 启动实例工作线程，节点: %s", w.config.NodeID)
+func (w *AgentWorker) Start(ctx context.Context) {
+	log.Printf("[AgentWorker] 启动实例工作线程，节点: %s", w.config.NodeID)
 
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
@@ -44,7 +47,7 @@ func (w *InstanceWorker) Start(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("[InstanceWorker] 工作线程停止")
+			log.Println("[AgentWorker] 工作线程停止")
 			return
 		case <-ticker.C:
 			w.processPendingInstances(ctx)
@@ -58,10 +61,10 @@ func (w *InstanceWorker) Start(ctx context.Context) {
 }
 
 // processPendingInstances 处理待处理的实例
-func (w *InstanceWorker) processPendingInstances(ctx context.Context) {
+func (w *AgentWorker) processPendingInstances(ctx context.Context) {
 	instances, err := w.fetchPendingInstances(ctx)
 	if err != nil {
-		log.Printf("[InstanceWorker] 获取待处理实例失败: %v", err)
+		log.Printf("[AgentWorker] 获取待处理实例失败: %v", err)
 		return
 	}
 
@@ -81,9 +84,10 @@ type instanceInfo struct {
 	Status        string `json:"status"`
 }
 
-// fetchAllInstances 获取所有实例（用于对账）
-func (w *InstanceWorker) fetchAllInstances(ctx context.Context) ([]instanceInfo, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", w.config.APIServerURL+"/api/v1/instances", nil)
+// fetchAllInstances 获取本节点的所有实例（用于对账）
+func (w *AgentWorker) fetchAllInstances(ctx context.Context) ([]instanceInfo, error) {
+	url := w.config.APIServerURL + "/api/v1/nodes/" + w.config.NodeID + "/agents?status=all"
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("创建请求失败: %w", err)
 	}
@@ -95,23 +99,36 @@ func (w *InstanceWorker) fetchAllInstances(ctx context.Context) ([]instanceInfo,
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API 返回错误状态: %d", resp.StatusCode)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return nil, fmt.Errorf("API 返回错误状态: %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	// 先读取完整 body，方便诊断
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("读取响应失败: %w", err)
 	}
 
 	var result struct {
-		Instances []instanceInfo `json:"instances"`
+		Agents []instanceInfo `json:"agents"`
+		Count  int            `json:"count"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("解析响应失败: %w", err)
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("解析响应失败: %w, body: %s", err, string(body))
 	}
 
-	return result.Instances, nil
+	// 诊断日志：API 返回 0 实例时输出完整响应帮助排查
+	if len(result.Agents) == 0 {
+		log.Printf("[AgentWorker] fetchAllInstances: API 返回 0 个实例 (url=%s, count=%d, body=%s)", url, result.Count, string(body))
+	}
+
+	return result.Agents, nil
 }
 
 // fetchPendingInstances 获取待处理的实例列表
-func (w *InstanceWorker) fetchPendingInstances(ctx context.Context) ([]instanceInfo, error) {
+func (w *AgentWorker) fetchPendingInstances(ctx context.Context) ([]instanceInfo, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET",
-		w.config.APIServerURL+"/api/v1/nodes/"+w.config.NodeID+"/instances", nil)
+		w.config.APIServerURL+"/api/v1/nodes/"+w.config.NodeID+"/agents", nil)
 	if err != nil {
 		return nil, fmt.Errorf("创建请求失败: %w", err)
 	}
@@ -127,18 +144,18 @@ func (w *InstanceWorker) fetchPendingInstances(ctx context.Context) ([]instanceI
 	}
 
 	var result struct {
-		Instances []instanceInfo `json:"instances"`
+		Agents []instanceInfo `json:"agents"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("解析响应失败: %w", err)
 	}
 
-	return result.Instances, nil
+	return result.Agents, nil
 }
 
 // processInstance 处理单个实例
-func (w *InstanceWorker) processInstance(ctx context.Context, inst instanceInfo) {
-	log.Printf("[InstanceWorker] 处理实例: %s (状态: %s)", inst.ID, inst.Status)
+func (w *AgentWorker) processInstance(ctx context.Context, inst instanceInfo) {
+	log.Printf("[AgentWorker] 处理实例: %s (状态: %s)", inst.ID, inst.Status)
 
 	switch inst.Status {
 	case "pending":
@@ -149,13 +166,13 @@ func (w *InstanceWorker) processInstance(ctx context.Context, inst instanceInfo)
 	case "stopping":
 		w.stopInstance(ctx, inst)
 	default:
-		log.Printf("[InstanceWorker] 跳过状态 %s 的实例: %s", inst.Status, inst.ID)
+		log.Printf("[AgentWorker] 跳过状态 %s 的实例: %s", inst.Status, inst.ID)
 	}
 }
 
 // startOrCreateInstance 启动或创建实例容器
-func (w *InstanceWorker) startOrCreateInstance(ctx context.Context, inst instanceInfo) {
-	log.Printf("[InstanceWorker] 处理 pending 实例: %s (container_name=%q)", inst.ID, inst.ContainerName)
+func (w *AgentWorker) startOrCreateInstance(ctx context.Context, inst instanceInfo) {
+	log.Printf("[AgentWorker] 处理 pending 实例: %s (container_name=%q)", inst.ID, inst.ContainerName)
 
 	// 优先使用 DB 中的 container_name；若不存在/已被污染，则尝试根据实例信息发现历史容器名
 	resolvedName, ok := w.resolveContainerName(ctx, inst)
@@ -170,13 +187,13 @@ func (w *InstanceWorker) startOrCreateInstance(ctx context.Context, inst instanc
 }
 
 // isContainerExists 检查容器是否存在
-func (w *InstanceWorker) isContainerExists(ctx context.Context, containerName string) bool {
+func (w *AgentWorker) isContainerExists(ctx context.Context, containerName string) bool {
 	cmd := exec.CommandContext(ctx, "docker", "inspect", containerName)
 	return cmd.Run() == nil
 }
 
 // isContainerRunning 检查容器是否运行中
-func (w *InstanceWorker) isContainerRunning(ctx context.Context, containerName string) (bool, error) {
+func (w *AgentWorker) isContainerRunning(ctx context.Context, containerName string) (bool, error) {
 	cmd := exec.CommandContext(ctx, "docker", "inspect", "-f", "{{.State.Running}}", containerName)
 	out, err := cmd.Output()
 	if err != nil {
@@ -186,7 +203,7 @@ func (w *InstanceWorker) isContainerRunning(ctx context.Context, containerName s
 }
 
 // listAllContainerNames 列出所有容器名称（包含 stopped）
-func (w *InstanceWorker) listAllContainerNames(ctx context.Context) ([]string, error) {
+func (w *AgentWorker) listAllContainerNames(ctx context.Context) ([]string, error) {
 	cmd := exec.CommandContext(ctx, "docker", "ps", "-a", "--format", "{{.Names}}")
 	out, err := cmd.Output()
 	if err != nil {
@@ -212,7 +229,7 @@ func (w *InstanceWorker) listAllContainerNames(ctx context.Context) ([]string, e
 // 2) 尝试历史命名规则（agent_inst_<accountID>_<suffix>）
 // 3) 尝试新命名规则（agent_<instanceID>）
 // 4) 最后按 suffix 在所有容器名中模糊匹配（只有唯一匹配才接受）
-func (w *InstanceWorker) resolveContainerName(ctx context.Context, inst instanceInfo) (string, bool) {
+func (w *AgentWorker) resolveContainerName(ctx context.Context, inst instanceInfo) (string, bool) {
 	if inst.ContainerName != "" && w.isContainerExists(ctx, inst.ContainerName) {
 		return inst.ContainerName, true
 	}
@@ -247,11 +264,11 @@ func (w *InstanceWorker) resolveContainerName(ctx context.Context, inst instance
 }
 
 // startExistingContainer 启动已存在的容器
-func (w *InstanceWorker) startExistingContainer(ctx context.Context, inst instanceInfo) {
-	log.Printf("[InstanceWorker] 启动已存在的容器: %s", inst.ContainerName)
+func (w *AgentWorker) startExistingContainer(ctx context.Context, inst instanceInfo) {
+	log.Printf("[AgentWorker] 启动已存在的容器: %s", inst.ContainerName)
 
 	if inst.ContainerName == "" {
-		log.Printf("[InstanceWorker] 实例 %s 缺少 container_name，无法启动", inst.ID)
+		log.Printf("[AgentWorker] 实例 %s 缺少 container_name，无法启动", inst.ID)
 		_ = w.updateInstanceStatus(ctx, inst.ID, "error", nil)
 		return
 	}
@@ -259,7 +276,7 @@ func (w *InstanceWorker) startExistingContainer(ctx context.Context, inst instan
 	// 幂等：已运行则直接回填 running（并修正 container_name）
 	if running, err := w.isContainerRunning(ctx, inst.ContainerName); err == nil && running {
 		if err := w.updateInstanceStatus(ctx, inst.ID, "running", &inst.ContainerName); err != nil {
-			log.Printf("[InstanceWorker] 更新状态失败: %v", err)
+			log.Printf("[AgentWorker] 更新状态失败: %v", err)
 		}
 		return
 	}
@@ -267,28 +284,28 @@ func (w *InstanceWorker) startExistingContainer(ctx context.Context, inst instan
 	cmd := exec.CommandContext(ctx, "docker", "start", inst.ContainerName)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		log.Printf("[InstanceWorker] 启动容器失败: %v, 输出: %s", err, string(output))
+		log.Printf("[AgentWorker] 启动容器失败: %v, 输出: %s", err, string(output))
 		_ = w.updateInstanceStatus(ctx, inst.ID, "error", nil)
 		return
 	}
 
 	// 更新状态为 running
 	if err := w.updateInstanceStatus(ctx, inst.ID, "running", &inst.ContainerName); err != nil {
-		log.Printf("[InstanceWorker] 更新状态失败: %v", err)
+		log.Printf("[AgentWorker] 更新状态失败: %v", err)
 		return
 	}
 
-	log.Printf("[InstanceWorker] 容器 %s 启动成功", inst.ContainerName)
+	log.Printf("[AgentWorker] 容器 %s 启动成功", inst.ContainerName)
 }
 
 // stopInstance 停止实例容器
-func (w *InstanceWorker) stopInstance(ctx context.Context, inst instanceInfo) {
+func (w *AgentWorker) stopInstance(ctx context.Context, inst instanceInfo) {
 	resolvedName, ok := w.resolveContainerName(ctx, inst)
 	if ok {
 		inst.ContainerName = resolvedName
 	}
 	if inst.ContainerName == "" || !w.isContainerExists(ctx, inst.ContainerName) {
-		log.Printf("[InstanceWorker] 实例 %s 无可用容器，标记为 stopped", inst.ID)
+		log.Printf("[AgentWorker] 实例 %s 无可用容器，标记为 stopped", inst.ID)
 		_ = w.updateInstanceStatus(ctx, inst.ID, "stopped", nil)
 		return
 	}
@@ -299,34 +316,34 @@ func (w *InstanceWorker) stopInstance(ctx context.Context, inst instanceInfo) {
 		return
 	}
 
-	log.Printf("[InstanceWorker] 停止容器: %s", inst.ContainerName)
+	log.Printf("[AgentWorker] 停止容器: %s", inst.ContainerName)
 
 	cmd := exec.CommandContext(ctx, "docker", "stop", "-t", "10", inst.ContainerName)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		log.Printf("[InstanceWorker] 停止容器失败: %v, 输出: %s", err, string(output))
+		log.Printf("[AgentWorker] 停止容器失败: %v, 输出: %s", err, string(output))
 		// 即使失败也尝试标记为 stopped（避免界面卡死）
 	}
 
 	// 更新状态为 stopped
 	if err := w.updateInstanceStatus(ctx, inst.ID, "stopped", &inst.ContainerName); err != nil {
-		log.Printf("[InstanceWorker] 更新状态失败: %v", err)
+		log.Printf("[AgentWorker] 更新状态失败: %v", err)
 		return
 	}
 
-	log.Printf("[InstanceWorker] 容器 %s 已停止", inst.ContainerName)
+	log.Printf("[AgentWorker] 容器 %s 已停止", inst.ContainerName)
 }
 
 // createInstance 创建实例容器
-func (w *InstanceWorker) createInstance(ctx context.Context, inst instanceInfo) {
-	log.Printf("[InstanceWorker] 创建实例容器: %s", inst.ID)
+func (w *AgentWorker) createInstance(ctx context.Context, inst instanceInfo) {
+	log.Printf("[AgentWorker] 创建实例容器: %s", inst.ID)
 
 	// 生成容器名称（与旧数据隔离：使用 instanceID 作为唯一键）
 	containerName := fmt.Sprintf("agent_%s", inst.ID)
 
 	// 幂等：同名容器已存在则转为启动/回填
 	if w.isContainerExists(ctx, containerName) {
-		log.Printf("[InstanceWorker] 发现同名容器已存在，转为启动: %s", containerName)
+		log.Printf("[AgentWorker] 发现同名容器已存在，转为启动: %s", containerName)
 		inst.ContainerName = containerName
 		w.startExistingContainer(ctx, inst)
 		return
@@ -334,28 +351,35 @@ func (w *InstanceWorker) createInstance(ctx context.Context, inst instanceInfo) 
 
 	// 更新状态为 creating
 	if err := w.updateInstanceStatus(ctx, inst.ID, "creating", nil); err != nil {
-		log.Printf("[InstanceWorker] 更新状态失败: %v", err)
+		log.Printf("[AgentWorker] 更新状态失败: %v", err)
 		return
 	}
 
 	// 获取账号信息（包含 Volume 名称）
 	account, err := w.getAccount(ctx, inst.AccountID)
 	if err != nil {
-		log.Printf("[InstanceWorker] 获取账号失败: %v", err)
+		log.Printf("[AgentWorker] 获取账号失败: %v", err)
 		_ = w.updateInstanceStatus(ctx, inst.ID, "error", nil)
 		return
 	}
 
 	if account.VolumeName == "" {
-		log.Printf("[InstanceWorker] 账号没有 Volume: %s", inst.AccountID)
+		log.Printf("[AgentWorker] 账号没有 Volume: %s", inst.AccountID)
 		_ = w.updateInstanceStatus(ctx, inst.ID, "error", nil)
 		return
 	}
 
-	// 获取 Agent 类型配置
+	// 获取 Agent 类型配置（提前获取，ensureVolume 需要 authDir）
 	agentType, err := w.getAgentType(ctx, inst.AgentTypeID)
 	if err != nil {
-		log.Printf("[InstanceWorker] 获取 Agent 类型失败: %v", err)
+		log.Printf("[AgentWorker] 获取 Agent 类型失败: %v", err)
+		_ = w.updateInstanceStatus(ctx, inst.ID, "error", nil)
+		return
+	}
+
+	// 确保 volume 存在（本地有则跳过，否则从 MinIO 下载）
+	if err := w.ensureVolumeFromArchive(ctx, inst.AccountID, account.VolumeName, agentType.AuthDir); err != nil {
+		log.Printf("[AgentWorker] 确保 volume 可用失败: %v", err)
 		_ = w.updateInstanceStatus(ctx, inst.ID, "error", nil)
 		return
 	}
@@ -377,27 +401,27 @@ func (w *InstanceWorker) createInstance(ctx context.Context, inst instanceInfo) 
 		agentType.Image,
 	}
 
-	log.Printf("[InstanceWorker] 执行: docker %v", runArgs)
+	log.Printf("[AgentWorker] 执行: docker %v", runArgs)
 
 	cmd := exec.CommandContext(ctx, "docker", runArgs...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		log.Printf("[InstanceWorker] 创建容器失败: %v, 输出: %s", err, string(output))
+		log.Printf("[AgentWorker] 创建容器失败: %v, 输出: %s", err, string(output))
 		_ = w.updateInstanceStatus(ctx, inst.ID, "error", nil)
 		return
 	}
 
 	// 更新状态为 running，回填容器名称
 	if err := w.updateInstanceStatus(ctx, inst.ID, "running", &containerName); err != nil {
-		log.Printf("[InstanceWorker] 更新状态失败: %v", err)
+		log.Printf("[AgentWorker] 更新状态失败: %v", err)
 		return
 	}
 
-	log.Printf("[InstanceWorker] 实例 %s 创建成功，容器: %s", inst.ID, containerName)
+	log.Printf("[AgentWorker] 实例 %s 创建成功，容器: %s", inst.ID, containerName)
 }
 
 // checkInstanceCreation 检查容器创建状态
-func (w *InstanceWorker) checkInstanceCreation(ctx context.Context, inst instanceInfo) {
+func (w *AgentWorker) checkInstanceCreation(ctx context.Context, inst instanceInfo) {
 	if inst.ContainerName == "" {
 		return
 	}
@@ -405,7 +429,7 @@ func (w *InstanceWorker) checkInstanceCreation(ctx context.Context, inst instanc
 	// 检查容器是否运行中
 	running, err := w.isContainerRunning(ctx, inst.ContainerName)
 	if err != nil {
-		log.Printf("[InstanceWorker] 检查容器状态失败: %v", err)
+		log.Printf("[AgentWorker] 检查容器状态失败: %v", err)
 		return
 	}
 
@@ -416,12 +440,14 @@ func (w *InstanceWorker) checkInstanceCreation(ctx context.Context, inst instanc
 }
 
 // reconcileInstances 对账：将“稳定状态实例”的 DB 状态与容器真实状态对齐
-func (w *InstanceWorker) reconcileInstances(ctx context.Context) {
+func (w *AgentWorker) reconcileInstances(ctx context.Context) {
 	instances, err := w.fetchAllInstances(ctx)
 	if err != nil {
-		log.Printf("[InstanceWorker] 对账失败（拉取实例列表）：%v", err)
+		log.Printf("[AgentWorker] 对账失败（拉取实例列表）：%v", err)
 		return
 	}
+
+	log.Printf("[AgentWorker] 对账：API 返回 %d 个实例", len(instances))
 
 	// 额外：清理“DB 已删除但容器仍残留”的孤儿容器，避免资源泄漏
 	// 说明：API DeleteInstance 当前会直接删除 DB 记录，因此需要数据面做 GC。
@@ -443,7 +469,7 @@ func (w *InstanceWorker) reconcileInstances(ctx context.Context) {
 		if !ok {
 			// 容器不存在：running 视为异常，其他保持原样
 			if inst.Status == "running" {
-				log.Printf("[InstanceWorker] 对账：实例 %s 标记 running 但找不到容器，置为 error", inst.ID)
+				log.Printf("[AgentWorker] 对账：实例 %s 标记 running 但找不到容器，置为 error", inst.ID)
 				_ = w.updateInstanceStatus(ctx, inst.ID, "error", nil)
 			}
 			continue
@@ -456,7 +482,7 @@ func (w *InstanceWorker) reconcileInstances(ctx context.Context) {
 
 		if running {
 			if inst.Status != "running" || inst.ContainerName != resolvedName {
-				log.Printf("[InstanceWorker] 对账：实例 %s 容器在运行，修正 DB 状态为 running (container=%s)", inst.ID, resolvedName)
+				log.Printf("[AgentWorker] 对账：实例 %s 容器在运行，修正 DB 状态为 running (container=%s)", inst.ID, resolvedName)
 				_ = w.updateInstanceStatus(ctx, inst.ID, "running", &resolvedName)
 			}
 			continue
@@ -464,7 +490,7 @@ func (w *InstanceWorker) reconcileInstances(ctx context.Context) {
 
 		// 容器不在运行
 		if inst.Status == "running" {
-			log.Printf("[InstanceWorker] 对账：实例 %s DB=running 但容器未运行，修正为 stopped (container=%s)", inst.ID, resolvedName)
+			log.Printf("[AgentWorker] 对账：实例 %s DB=running 但容器未运行，修正为 stopped (container=%s)", inst.ID, resolvedName)
 			_ = w.updateInstanceStatus(ctx, inst.ID, "stopped", &resolvedName)
 		}
 	}
@@ -475,7 +501,7 @@ func (w *InstanceWorker) reconcileInstances(ctx context.Context) {
 // - 新命名：agent_<instanceID> -> 形如 agent_inst-<suffix>
 // - 旧命名：agent_inst_<...>
 func isManagedInstanceContainerName(name string) bool {
-	return strings.HasPrefix(name, "agent_inst-") || strings.HasPrefix(name, "agent_inst_")
+	return strings.HasPrefix(name, "agent_inst-") || strings.HasPrefix(name, "agent_inst_") || strings.HasPrefix(name, "agent_agent-")
 }
 
 type containerMeta struct {
@@ -485,7 +511,7 @@ type containerMeta struct {
 	managed bool // 是否带 agents-admin.managed=true 标签
 }
 
-func (w *InstanceWorker) inspectContainerMeta(ctx context.Context, containerName string) (*containerMeta, error) {
+func (w *AgentWorker) inspectContainerMeta(ctx context.Context, containerName string) (*containerMeta, error) {
 	// 输出格式：image|running|status|managedLabel
 	// managedLabel 可能为空
 	cmd := exec.CommandContext(
@@ -510,7 +536,7 @@ func (w *InstanceWorker) inspectContainerMeta(ctx context.Context, containerName
 	}, nil
 }
 
-func (w *InstanceWorker) cleanupOrphanInstanceContainers(ctx context.Context, instances []instanceInfo) {
+func (w *AgentWorker) cleanupOrphanInstanceContainers(ctx context.Context, instances []instanceInfo) {
 	// keep：DB 中仍存在的实例容器名（以及新命名的“预期容器名”）
 	keep := make(map[string]struct{}, len(instances)*2)
 	for _, inst := range instances {
@@ -523,7 +549,22 @@ func (w *InstanceWorker) cleanupOrphanInstanceContainers(ctx context.Context, in
 
 	names, err := w.listAllContainerNames(ctx)
 	if err != nil {
-		log.Printf("[InstanceWorker] 孤儿容器清理失败（列出容器）：%v", err)
+		log.Printf("[AgentWorker] 孤儿容器清理失败（列出容器）：%v", err)
+		return
+	}
+
+	// 统计本系统管理的容器数量
+	var managedCount int
+	for _, name := range names {
+		if isManagedInstanceContainerName(name) {
+			managedCount++
+		}
+	}
+
+	// 安全防护：如果 API 返回 0 个实例但存在管理容器，跳过清理
+	// 防止 API 异常/DB 查询失败/节点 ID 不匹配 导致全部容器被误删
+	if len(instances) == 0 && managedCount > 0 {
+		log.Printf("[AgentWorker] ⚠️ 安全防护：API 返回 0 个实例但发现 %d 个管理容器，跳过孤儿清理（可能 API 异常或节点 ID 不匹配）", managedCount)
 		return
 	}
 
@@ -545,23 +586,84 @@ func (w *InstanceWorker) cleanupOrphanInstanceContainers(ctx context.Context, in
 			continue
 		}
 
-		// 安全策略：
-		// - 对 legacy 命名（agent_inst_...）且无 managed 标签的运行容器：默认不清理，避免误删
-		// - 对新命名（agent_inst-... == agent_<instanceID>）的容器：即便无标签，只要已判定为 orphan，就可清理
-		// - 有 managed 标签的容器：可清理运行/停止态 orphan（删除实例即期望释放资源）
-		if meta.running && !meta.managed && strings.HasPrefix(name, "agent_inst_") {
-			log.Printf("[InstanceWorker] 发现孤儿运行容器但无管理标签（legacy 命名），跳过清理: %s (image=%s)", name, meta.image)
+		// 安全策略：运行中的容器需要更高的删除门槛
+		// - 运行中且有 managed 标签：仅在 DB 明确无记录时才清理（keep 未命中已保证）
+		// - 运行中但无 managed 标签（legacy）：跳过，避免误删
+		// - 已停止的容器：可安全清理
+		if meta.running && !meta.managed {
+			log.Printf("[AgentWorker] 发现孤儿运行容器但无管理标签，跳过清理: %s (image=%s)", name, meta.image)
 			continue
 		}
 
-		log.Printf("[InstanceWorker] 清理孤儿容器: %s (image=%s, status=%s, running=%v, managed=%v)", name, meta.image, meta.status, meta.running, meta.managed)
+		log.Printf("[AgentWorker] 清理孤儿容器: %s (image=%s, status=%s, running=%v, managed=%v)", name, meta.image, meta.status, meta.running, meta.managed)
 		rmCmd := exec.CommandContext(ctx, "docker", "rm", "-f", name)
 		out, err := rmCmd.CombinedOutput()
 		if err != nil {
-			log.Printf("[InstanceWorker] 删除孤儿容器失败: %s: %v, 输出: %s", name, err, string(out))
+			log.Printf("[AgentWorker] 删除孤儿容器失败: %s: %v, 输出: %s", name, err, string(out))
 			continue
 		}
 	}
+}
+
+// ensureVolumeFromArchive 确保本地 volume 可用：本地已存在则跳过，否则从 API Server 下载
+func (w *AgentWorker) ensureVolumeFromArchive(ctx context.Context, accountID, volumeName, mountPath string) error {
+	// 1. 检查 volume 是否已存在
+	cmd := exec.CommandContext(ctx, "docker", "volume", "inspect", volumeName)
+	if cmd.Run() == nil {
+		log.Printf("[AgentWorker] Volume %s 已存在，跳过下载", volumeName)
+		return nil
+	}
+
+	// 2. 从 API Server 下载 archive
+	log.Printf("[AgentWorker] Volume %s 不存在，从 API Server 下载", volumeName)
+	apiURL := fmt.Sprintf("%s/api/v1/accounts/%s/volume-archive", w.config.APIServerURL, accountID)
+	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
+	if err != nil {
+		return fmt.Errorf("创建下载请求失败: %w", err)
+	}
+
+	resp, err := w.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("下载请求失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return fmt.Errorf("账号 %s 没有可用的 volume 归档", accountID)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("下载失败: HTTP %d", resp.StatusCode)
+	}
+
+	// 3. 创建 volume
+	createCmd := exec.CommandContext(ctx, "docker", "volume", "create", volumeName)
+	if output, err := createCmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("创建 volume 失败: %w, 输出: %s", err, string(output))
+	}
+
+	// 4. 通过临时容器导入 tar 数据到 volume
+	containerName := fmt.Sprintf("import_%s_%d", volumeName, time.Now().UnixNano())
+	runCmd := exec.CommandContext(ctx, "docker", "create",
+		"--name", containerName,
+		"-v", fmt.Sprintf("%s:%s", volumeName, mountPath),
+		"alpine:latest", "true")
+	if output, err := runCmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("创建导入容器失败: %w, 输出: %s", err, string(output))
+	}
+	defer func() {
+		rmCmd := exec.CommandContext(ctx, "docker", "rm", "-f", containerName)
+		rmCmd.Run()
+	}()
+
+	// docker cp - (stdin) -> container:mountPath
+	cpCmd := exec.CommandContext(ctx, "docker", "cp", "-", fmt.Sprintf("%s:%s", containerName, mountPath))
+	cpCmd.Stdin = resp.Body
+	if output, err := cpCmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("导入 volume 数据失败: %w, 输出: %s", err, string(output))
+	}
+
+	log.Printf("[AgentWorker] Volume %s 从归档恢复成功", volumeName)
+	return nil
 }
 
 // accountInfo 账号信息结构
@@ -573,7 +675,7 @@ type accountInfo struct {
 }
 
 // getAccount 获取账号信息
-func (w *InstanceWorker) getAccount(ctx context.Context, accountID string) (*accountInfo, error) {
+func (w *AgentWorker) getAccount(ctx context.Context, accountID string) (*accountInfo, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET",
 		w.config.APIServerURL+"/api/v1/accounts/"+accountID, nil)
 	if err != nil {
@@ -607,7 +709,7 @@ type agentTypeInfo struct {
 }
 
 // getAgentType 获取 Agent 类型信息
-func (w *InstanceWorker) getAgentType(ctx context.Context, agentTypeID string) (*agentTypeInfo, error) {
+func (w *AgentWorker) getAgentType(ctx context.Context, agentTypeID string) (*agentTypeInfo, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET",
 		w.config.APIServerURL+"/api/v1/agent-types/"+agentTypeID, nil)
 	if err != nil {
@@ -633,7 +735,7 @@ func (w *InstanceWorker) getAgentType(ctx context.Context, agentTypeID string) (
 }
 
 // updateInstanceStatus 更新实例状态
-func (w *InstanceWorker) updateInstanceStatus(ctx context.Context, instanceID, status string, containerName *string) error {
+func (w *AgentWorker) updateInstanceStatus(ctx context.Context, instanceID, status string, containerName *string) error {
 	payload := map[string]interface{}{
 		"status": status,
 	}
@@ -643,7 +745,7 @@ func (w *InstanceWorker) updateInstanceStatus(ctx context.Context, instanceID, s
 
 	body, _ := json.Marshal(payload)
 	req, err := http.NewRequestWithContext(ctx, "PATCH",
-		w.config.APIServerURL+"/api/v1/instances/"+instanceID,
+		w.config.APIServerURL+"/api/v1/agents/"+instanceID,
 		bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("创建请求失败: %w", err)

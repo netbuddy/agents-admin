@@ -1,0 +1,29 @@
+{
+  "title": "Runner 管理",
+  "subtitle": "管理 Qwen-Code Runner 容器和登录状态",
+  "backToBoard": "返回看板",
+  "addAccount": "添加账户",
+  "add": "添加",
+  "noRunners": "暂无 Runner",
+  "noRunnersHint": "添加一个 Qwen-Code 账户来开始使用",
+  "statusRunning": "运行中",
+  "statusStopped": "已停止",
+  "loggedIn": "已登录",
+  "notLoggedIn": "未登录",
+  "openTerminal": "打开终端",
+  "loginTerminal": "登录终端",
+  "createdAt": "创建于",
+  "confirmDelete": "确定删除 Runner \"{{account}}\"？",
+  "confirmDeletePurge": "确定删除 Runner \"{{account}}\"？（包括认证数据）",
+  "terminalError": "无法打开终端，请确保后端服务正在运行",
+  "terminalErrorShort": "无法打开终端",
+  "create": {
+    "title": "添加 Runner 账户",
+    "accountLabel": "账户名/邮箱",
+    "accountHint": "用于标识 Runner 容器，建议使用 Qwen 账户邮箱"
+  },
+  "terminal": {
+    "title": "终端",
+    "loginHint": "提示：执行 <code>qwen login</code> 进行登录"
+  }
+}

@@ -3,10 +3,12 @@
 import { useEffect, useState, useCallback } from 'react'
 import {
   Network, CheckCircle, Clock, AlertCircle, Server,
-  Cpu, HardDrive, Tag, ChevronRight, X, Trash2, RefreshCw, Plus
+  Cpu, HardDrive, Tag, ChevronRight, X, Trash2, RefreshCw, Plus, Pencil, Check
 } from 'lucide-react'
 import { AdminLayout } from '@/components/layout'
 import AddNodeWizard from '@/components/AddNodeWizard'
+import { useTranslation } from 'react-i18next'
+import { useFormatDate } from '@/i18n/useFormatDate'
 
 interface NodeLabels {
   [key: string]: string
@@ -21,7 +23,10 @@ interface NodeCapacity {
 
 interface Node {
   id: string
+  display_name?: string
   status: string
+  hostname?: string
+  ips?: string
   labels?: NodeLabels
   capacity?: NodeCapacity
   last_heartbeat?: string
@@ -37,35 +42,21 @@ const getNodeStatus = (node: Node): NodeStatus => {
   return 'unknown'
 }
 
-const statusConfig: Record<NodeStatus, { color: string; bg: string; dot: string; label: string }> = {
-  online:  { color: 'text-green-700', bg: 'bg-green-50 border-green-200', dot: 'bg-green-500', label: '在线' },
-  offline: { color: 'text-red-700',   bg: 'bg-red-50 border-red-200',     dot: 'bg-red-500',   label: '离线' },
-  unknown: { color: 'text-gray-500',  bg: 'bg-gray-50 border-gray-200',   dot: 'bg-gray-400',  label: '未知' },
+const statusConfig: Record<NodeStatus, { color: string; bg: string; dot: string; labelKey: string }> = {
+  online:  { color: 'text-green-700', bg: 'bg-green-50 border-green-200', dot: 'bg-green-500', labelKey: 'online' },
+  offline: { color: 'text-red-700',   bg: 'bg-red-50 border-red-200',     dot: 'bg-red-500',   labelKey: 'offline' },
+  unknown: { color: 'text-gray-500',  bg: 'bg-gray-50 border-gray-200',   dot: 'bg-gray-400',  labelKey: 'unknown' },
 }
 
-function formatTime(time?: string): string {
-  if (!time) return '-'
-  return new Date(time).toLocaleString('zh-CN', {
-    month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-  })
-}
-
-function timeAgo(time?: string): string {
-  if (!time) return '从未上报'
-  const diff = Date.now() - new Date(time).getTime()
-  const seconds = Math.floor(diff / 1000)
-  if (seconds < 60) return `${seconds}秒前`
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes}分钟前`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}小时前`
-  return `${Math.floor(hours / 24)}天前`
-}
+// formatTime and timeAgo are now handled by useFormatDate hook and useTranslation in components
 
 function NodeCard({ node, onClick }: { node: Node; onClick: () => void }) {
+  const { t } = useTranslation('nodes')
+  const { formatRelative } = useFormatDate()
   const status = getNodeStatus(node)
   const cfg = statusConfig[status]
+  const displayName = node.display_name || node.hostname || node.id
+  const firstIP = node.ips ? node.ips.split(',')[0] : ''
   const labelCount = node.labels ? Object.keys(node.labels).length : 0
 
   return (
@@ -79,27 +70,26 @@ function NodeCard({ node, onClick }: { node: Node; onClick: () => void }) {
             <Server className={`w-5 h-5 ${cfg.color}`} />
           </div>
           <div className="min-w-0">
-            <h3 className="font-semibold text-gray-900 truncate">{node.id}</h3>
-            <p className="text-xs text-gray-500 mt-0.5">心跳: {timeAgo(node.last_heartbeat)}</p>
+            <h3 className="font-semibold text-gray-900 truncate">{displayName}</h3>
+            {firstIP && <p className="text-xs text-gray-500 mt-0.5 font-mono">{firstIP}</p>}
+            {!firstIP && <p className="text-xs text-gray-500 mt-0.5">{t('heartbeat')}: {node.last_heartbeat ? formatRelative(node.last_heartbeat) : t('neverReported')}</p>}
           </div>
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0">
           <span className={`w-2 h-2 rounded-full ${cfg.dot} ${status === 'online' ? 'animate-pulse' : ''}`} />
-          <span className={`text-xs font-medium ${cfg.color}`}>{cfg.label}</span>
+          <span className={`text-xs font-medium ${cfg.color}`}>{t(cfg.labelKey)}</span>
         </div>
       </div>
 
       <div className="flex items-center gap-3 text-xs text-gray-500">
+        <div className="flex items-center gap-1">
+          <Clock className="w-3 h-3" />
+          <span>{node.last_heartbeat ? formatRelative(node.last_heartbeat) : t('neverReported')}</span>
+        </div>
         {labelCount > 0 && (
           <div className="flex items-center gap-1">
             <Tag className="w-3 h-3" />
-            <span>{labelCount} 标签</span>
-          </div>
-        )}
-        {node.capacity?.max_runners !== undefined && (
-          <div className="flex items-center gap-1">
-            <Cpu className="w-3 h-3" />
-            <span>容量 {node.capacity.max_runners}</span>
+            <span>{labelCount} {t('labels')}</span>
           </div>
         )}
         <ChevronRight className="w-4 h-4 ml-auto text-gray-400" />
@@ -108,13 +98,43 @@ function NodeCard({ node, onClick }: { node: Node; onClick: () => void }) {
   )
 }
 
-function NodeDetail({ node, onClose, onDelete }: { node: Node; onClose: () => void; onDelete: (id: string) => void }) {
+function NodeDetail({ node, onClose, onDelete, onUpdate }: { node: Node; onClose: () => void; onDelete: (id: string) => void; onUpdate?: (updated: Node) => void }) {
+  const { t } = useTranslation('nodes')
+  const { formatShortDateTime } = useFormatDate()
   const status = getNodeStatus(node)
   const cfg = statusConfig[status]
   const [deleting, setDeleting] = useState(false)
+  const [editingName, setEditingName] = useState(false)
+  const [nameInput, setNameInput] = useState(node.display_name || '')
+  const [nameError, setNameError] = useState('')
+  const displayName = node.display_name || node.hostname || node.id
+  const ipList = node.ips ? node.ips.split(',').filter(Boolean) : []
+
+  const handleSaveName = async () => {
+    const trimmed = nameInput.trim()
+    if (!trimmed) { setNameError(t('nameRequired')); return }
+    setNameError('')
+    try {
+      const res = await fetch(`/api/v1/nodes/${node.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ display_name: trimmed }),
+      })
+      if (res.ok) {
+        const updated = await res.json()
+        onUpdate?.({ ...node, display_name: updated.display_name })
+        setEditingName(false)
+      } else if (res.status === 409) {
+        const data = await res.json()
+        setNameError(data.error || t('nameDuplicate'))
+      }
+    } catch (err) {
+      console.error('Update display name failed:', err)
+    }
+  }
 
   const handleDelete = async () => {
-    if (!confirm(`确定要删除节点 "${node.id}" 吗？`)) return
+    if (!confirm(t('confirmDelete', { id: displayName }))) return
     setDeleting(true)
     try {
       const res = await fetch(`/api/v1/nodes/${node.id}`, { method: 'DELETE' })
@@ -140,10 +160,38 @@ function NodeDetail({ node, onClose, onDelete }: { node: Node; onClose: () => vo
               <Server className={`w-5 h-5 ${cfg.color}`} />
             </div>
             <div className="min-w-0">
-              <h2 className="font-bold text-gray-900 truncate">{node.id}</h2>
+              {editingName ? (
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      value={nameInput}
+                      onChange={e => { setNameInput(e.target.value); setNameError('') }}
+                      onKeyDown={e => e.key === 'Enter' && handleSaveName()}
+                      className={`text-sm font-bold border rounded px-2 py-0.5 w-40 focus:outline-none focus:ring-2 focus:ring-blue-500 ${nameError ? 'border-red-400' : ''}`}
+                      autoFocus
+                      placeholder={node.hostname || node.id}
+                    />
+                    <button onClick={handleSaveName} className="p-1 hover:bg-green-100 rounded">
+                      <Check className="w-4 h-4 text-green-600" />
+                    </button>
+                    <button onClick={() => { setEditingName(false); setNameError('') }} className="p-1 hover:bg-gray-100 rounded">
+                      <X className="w-4 h-4 text-gray-400" />
+                    </button>
+                  </div>
+                  {nameError && <p className="text-xs text-red-500 mt-0.5">{nameError}</p>}
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  <h2 className="font-bold text-gray-900 truncate">{displayName}</h2>
+                  <button onClick={() => { setNameInput(node.display_name || ''); setEditingName(true) }} className="p-1 hover:bg-gray-100 rounded" title={t('editDisplayName')}>
+                    <Pencil className="w-3.5 h-3.5 text-gray-400" />
+                  </button>
+                </div>
+              )}
               <div className="flex items-center gap-1.5 mt-0.5">
                 <span className={`w-2 h-2 rounded-full ${cfg.dot}`} />
-                <span className={`text-xs font-medium ${cfg.color}`}>{cfg.label}</span>
+                <span className={`text-xs font-medium ${cfg.color}`}>{t(cfg.labelKey)}</span>
               </div>
             </div>
           </div>
@@ -154,39 +202,57 @@ function NodeDetail({ node, onClose, onDelete }: { node: Node; onClose: () => vo
 
         {/* Body */}
         <div className="p-5 space-y-5">
-          {/* Basic Info */}
+          {/* Host Info */}
           <div>
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">基本信息</h3>
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">{t('hostInfo')}</h3>
             <div className="grid grid-cols-2 gap-3">
-              <InfoItem label="节点 ID" value={node.id} />
-              <InfoItem label="状态" value={cfg.label} />
-              <InfoItem label="最后心跳" value={formatTime(node.last_heartbeat)} />
-              <InfoItem label="创建时间" value={formatTime(node.created_at)} />
+              <InfoItem label={t('hostname')} value={node.hostname || '-'} />
+              <InfoItem label={t('status')} value={t(cfg.labelKey)} />
+              {ipList.length > 0 && (
+                <div className="col-span-2">
+                  <p className="text-xs text-gray-500 mb-1">{t('ipAddresses')}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {ipList.map(ip => (
+                      <span key={ip} className="inline-flex px-2 py-0.5 rounded text-xs font-mono bg-gray-100 text-gray-700">{ip}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
+
+          {/* Basic Info */}
+          <div>
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">{t('basicInfo')}</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <InfoItem label={t('nodeId')} value={node.id} />
+              <InfoItem label={t('lastHeartbeat')} value={node.last_heartbeat ? formatShortDateTime(node.last_heartbeat) : '-'} />
+              <InfoItem label={t('createdAt')} value={node.created_at ? formatShortDateTime(node.created_at) : '-'} />
+            </div>
+          </div>
+
+          {/* Capacity */}
+          {node.capacity && Object.keys(node.capacity).length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">{t('capacityConfig')}</h3>
+              <div className="bg-gray-50 rounded-lg p-3">
+                <pre className="text-xs text-gray-600 whitespace-pre-wrap">
+                  {JSON.stringify(node.capacity, null, 2)}
+                </pre>
+              </div>
+            </div>
+          )}
 
           {/* Labels */}
           {node.labels && Object.keys(node.labels).length > 0 && (
             <div>
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">标签</h3>
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">{t('labels')}</h3>
               <div className="flex flex-wrap gap-2">
                 {Object.entries(node.labels).map(([k, v]) => (
                   <span key={k} className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
                     {k}: {v}
                   </span>
                 ))}
-              </div>
-            </div>
-          )}
-
-          {/* Capacity */}
-          {node.capacity && Object.keys(node.capacity).length > 0 && (
-            <div>
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">容量配置</h3>
-              <div className="bg-gray-50 rounded-lg p-3">
-                <pre className="text-xs text-gray-600 whitespace-pre-wrap">
-                  {JSON.stringify(node.capacity, null, 2)}
-                </pre>
               </div>
             </div>
           )}
@@ -199,7 +265,7 @@ function NodeDetail({ node, onClose, onDelete }: { node: Node; onClose: () => vo
               className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
             >
               <Trash2 className="w-4 h-4" />
-              {deleting ? '删除中...' : '删除此节点'}
+              {deleting ? t('deleting') : t('deleteNode')}
             </button>
           </div>
         </div>
@@ -218,6 +284,7 @@ function InfoItem({ label, value }: { label: string; value: string }) {
 }
 
 export default function NodesPage() {
+  const { t } = useTranslation('nodes')
   const [nodes, setNodes] = useState<Node[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
@@ -259,7 +326,7 @@ export default function NodesPage() {
   const selected = selectedNode ? nodes.find(n => n.id === selectedNode) : null
 
   return (
-    <AdminLayout title="节点管理" onRefresh={fetchNodes} loading={loading}>
+    <AdminLayout title={t('title')} onRefresh={fetchNodes} loading={loading}>
       {/* 操作栏 */}
       <div className="flex justify-end mb-4">
         <button
@@ -267,7 +334,7 @@ export default function NodesPage() {
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
         >
           <Plus className="w-4 h-4" />
-          添加节点
+          {t('addNode')}
         </button>
       </div>
 
@@ -275,15 +342,15 @@ export default function NodesPage() {
       <div className="grid grid-cols-3 gap-3 mb-5">
         <div className="bg-white rounded-xl border p-4 text-center">
           <p className="text-2xl font-bold text-gray-900">{nodes.length}</p>
-          <p className="text-xs text-gray-500 mt-1">总计</p>
+          <p className="text-xs text-gray-500 mt-1">{t('total')}</p>
         </div>
         <div className="bg-white rounded-xl border p-4 text-center">
           <p className="text-2xl font-bold text-green-600">{onlineCount}</p>
-          <p className="text-xs text-gray-500 mt-1">在线</p>
+          <p className="text-xs text-gray-500 mt-1">{t('online')}</p>
         </div>
         <div className="bg-white rounded-xl border p-4 text-center">
           <p className="text-2xl font-bold text-red-600">{offlineCount}</p>
-          <p className="text-xs text-gray-500 mt-1">离线</p>
+          <p className="text-xs text-gray-500 mt-1">{t('offline')}</p>
         </div>
       </div>
 
@@ -294,8 +361,8 @@ export default function NodesPage() {
       ) : nodes.length === 0 ? (
         <div className="bg-white rounded-xl border p-8 text-center">
           <Network className="w-12 h-12 mx-auto text-gray-400 mb-4" />
-          <h3 className="text-lg font-medium mb-2">暂无节点</h3>
-          <p className="text-gray-500 text-sm">启动 NodeManager 后，节点将自动注册并显示在此处</p>
+          <h3 className="text-lg font-medium mb-2">{t('noNodes')}</h3>
+          <p className="text-gray-500 text-sm">{t('noNodesHint')}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
@@ -315,6 +382,7 @@ export default function NodesPage() {
           node={selected}
           onClose={() => setSelectedNode(null)}
           onDelete={handleDelete}
+          onUpdate={(updated) => setNodes(prev => prev.map(n => n.id === updated.id ? updated : n))}
         />
       )}
 

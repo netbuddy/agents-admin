@@ -1,0 +1,2 @@
+-- 021: 节点显示名称
+ALTER TABLE nodes ADD COLUMN IF NOT EXISTS display_name VARCHAR(255) DEFAULT '';

@@ -68,53 +68,53 @@ type Memory struct {
 	// === 基础字段 ===
 
 	// ID 唯一标识
-	ID string `json:"id" db:"id"`
+	ID string `json:"id" bson:"_id" db:"id"`
 
 	// AgentID 所属 Agent
-	AgentID string `json:"agent_id" db:"agent_id"`
+	AgentID string `json:"agent_id" bson:"agent_id" db:"agent_id"`
 
 	// Type 记忆类型
-	Type MemoryType `json:"type" db:"type"`
+	Type MemoryType `json:"type" bson:"type" db:"type"`
 
 	// === 内容 ===
 
 	// Content 记忆内容（文本形式）
-	Content string `json:"content" db:"content"`
+	Content string `json:"content" bson:"content" db:"content"`
 
 	// Embedding 向量表示（用于语义检索）
 	// 维度根据使用的嵌入模型确定，如 OpenAI text-embedding-3-small 是 1536 维
-	Embedding []float32 `json:"embedding,omitempty" db:"embedding"`
+	Embedding []float32 `json:"embedding,omitempty" bson:"embedding,omitempty" db:"embedding"`
 
 	// === 元数据 ===
 
 	// Metadata 额外元数据
-	Metadata json.RawMessage `json:"metadata,omitempty" db:"metadata"`
+	Metadata json.RawMessage `json:"metadata,omitempty" bson:"metadata,omitempty" db:"metadata"`
 
 	// Importance 重要性评分（0-1）
 	// 用于检索时排序和垃圾回收时选择
-	Importance float64 `json:"importance" db:"importance"`
+	Importance float64 `json:"importance" bson:"importance" db:"importance"`
 
 	// Tags 标签（用于分类和检索）
-	Tags []string `json:"tags,omitempty" db:"tags"`
+	Tags []string `json:"tags,omitempty" bson:"tags,omitempty" db:"tags"`
 
 	// === 关联 ===
 
 	// SourceRunID 来源 Run（可选，记录记忆来源）
-	SourceRunID *string `json:"source_run_id,omitempty" db:"source_run_id"`
+	SourceRunID *string `json:"source_run_id,omitempty" bson:"source_run_id,omitempty" db:"source_run_id"`
 
 	// SourceTaskID 来源 Task（可选）
-	SourceTaskID *string `json:"source_task_id,omitempty" db:"source_task_id"`
+	SourceTaskID *string `json:"source_task_id,omitempty" bson:"source_task_id,omitempty" db:"source_task_id"`
 
 	// === 生命周期 ===
 
 	// CreatedAt 创建时间
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	CreatedAt time.Time `json:"created_at" bson:"created_at" db:"created_at"`
 
 	// AccessedAt 最后访问时间
-	AccessedAt time.Time `json:"accessed_at" db:"accessed_at"`
+	AccessedAt time.Time `json:"accessed_at" bson:"accessed_at" db:"accessed_at"`
 
 	// ExpiresAt 过期时间（可选）
-	ExpiresAt *time.Time `json:"expires_at,omitempty" db:"expires_at"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty" bson:"expires_at,omitempty" db:"expires_at"`
 }
 
 // ============================================================================

@@ -1,3 +1,8 @@
+openapi: 3.0.3
+info:
+  title: Events API
+  version: 1.0.0
+
 # Event 事件管理 API
 
 paths:

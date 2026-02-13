@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from 'react'
 import { Bot, FileText, Terminal, PenTool, AlertCircle, Rocket, PartyPopper, Loader2, Wrench, Eye, Info, CheckCircle2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { useFormatDate } from '@/i18n/useFormatDate'
 import MessageBlock from './MessageBlock'
 import ToolBlock from './ToolBlock'
 import FileBlock from './FileBlock'
@@ -40,6 +42,8 @@ const eventIcons: Record<string, React.ReactNode> = {
 }
 
 export default function AgentOutput({ events, isStreaming, error }: AgentOutputProps) {
+  const { t } = useTranslation()
+  const { formatTime } = useFormatDate()
   const containerRef = useRef<HTMLDivElement>(null)
   const endRef = useRef<HTMLDivElement>(null)
 
@@ -68,7 +72,7 @@ export default function AgentOutput({ events, isStreaming, error }: AgentOutputP
 
   const renderEventGroup = (eventGroup: Event[], index: number) => {
     const event = eventGroup[0]
-    const timestamp = new Date(event.timestamp).toLocaleTimeString('zh-CN')
+    const timestamp = formatTime(event.timestamp)
     
     switch (event.type) {
       case 'run_started':
@@ -76,7 +80,7 @@ export default function AgentOutput({ events, isStreaming, error }: AgentOutputP
           <div key={index} className="flex items-center gap-3 py-3 px-4 bg-green-50 rounded-lg border border-green-200">
             {eventIcons.run_started}
             <div className="flex-1">
-              <span className="text-sm font-medium text-green-700">任务开始执行</span>
+              <span className="text-sm font-medium text-green-700">{t('monitor.runStarted', { ns: 'monitor', defaultValue: 'Run Started' })}</span>
               <span className="text-xs text-green-600 ml-2">{timestamp}</span>
             </div>
           </div>
@@ -87,7 +91,7 @@ export default function AgentOutput({ events, isStreaming, error }: AgentOutputP
           <div key={index} className="flex items-center gap-3 py-3 px-4 bg-green-50 rounded-lg border border-green-200">
             {eventIcons.run_completed}
             <div className="flex-1">
-              <span className="text-sm font-medium text-green-700">任务执行完成</span>
+              <span className="text-sm font-medium text-green-700">{t('monitor.runCompleted', { ns: 'monitor', defaultValue: 'Run Completed' })}</span>
               <span className="text-xs text-green-600 ml-2">{timestamp}</span>
             </div>
           </div>
@@ -99,11 +103,11 @@ export default function AgentOutput({ events, isStreaming, error }: AgentOutputP
           <div key={index} className="flex items-start gap-3 py-2 px-4 bg-blue-50 rounded-lg border border-blue-200">
             {eventIcons.system_info}
             <div className="flex-1">
-              <span className="text-xs font-medium text-blue-700">Agent 初始化</span>
+              <span className="text-xs font-medium text-blue-700">{t('monitor.agentInit', { ns: 'monitor', defaultValue: 'Agent Init' })}</span>
               <div className="text-xs text-blue-600 mt-1 space-x-2">
-                {event.payload?.qwen_code_version && <span>版本: {event.payload.qwen_code_version}</span>}
-                {event.payload?.model && <span>模型: {event.payload.model}</span>}
-                {event.payload?.permission_mode && <span>模式: {event.payload.permission_mode}</span>}
+                {event.payload?.qwen_code_version && <span>{t('label.version', { ns: 'common' })}: {event.payload.qwen_code_version}</span>}
+                {event.payload?.model && <span>{t('monitor.model', { ns: 'monitor', defaultValue: 'Model' })}: {event.payload.model}</span>}
+                {event.payload?.permission_mode && <span>{t('monitor.mode', { ns: 'monitor', defaultValue: 'Mode' })}: {event.payload.permission_mode}</span>}
               </div>
             </div>
             <span className="text-xs text-blue-400">{timestamp}</span>
@@ -116,7 +120,7 @@ export default function AgentOutput({ events, isStreaming, error }: AgentOutputP
           <div key={index} className="flex items-start gap-3 py-3 px-4 bg-green-50 rounded-lg border border-green-200">
             {eventIcons.result}
             <div className="flex-1">
-              <span className="text-sm font-medium text-green-700">执行结果</span>
+              <span className="text-sm font-medium text-green-700">{t('monitor.result', { ns: 'monitor', defaultValue: 'Result' })}</span>
               {event.payload?.usage && (
                 <div className="text-xs text-green-600 mt-1">
                   Token 使用: {event.payload.usage.total_tokens?.toLocaleString() || '-'}
@@ -141,7 +145,7 @@ export default function AgentOutput({ events, isStreaming, error }: AgentOutputP
           <div key={index} className="flex items-start gap-3 py-2 px-4 bg-gray-50 rounded-lg border border-gray-200 italic">
             {eventIcons.thinking}
             <div className="flex-1 text-sm text-gray-500">
-              {event.payload?.content || '思考中...'}
+              {event.payload?.content || t('monitor.thinking', { ns: 'monitor', defaultValue: 'Thinking...' })}
             </div>
           </div>
         )
@@ -200,8 +204,8 @@ export default function AgentOutput({ events, isStreaming, error }: AgentOutputP
           <div key={index} className="flex items-start gap-3 py-3 px-4 bg-red-50 rounded-lg border border-red-200">
             {eventIcons.error}
             <div className="flex-1">
-              <span className="text-sm font-medium text-red-700">错误</span>
-              <p className="text-sm text-red-600 mt-1">{event.payload?.message || event.payload?.error || '未知错误'}</p>
+              <span className="text-sm font-medium text-red-700">{t('status.error')}</span>
+              <p className="text-sm text-red-600 mt-1">{event.payload?.message || event.payload?.error || t('error.unknown')}</p>
             </div>
             <span className="text-xs text-red-400">{timestamp}</span>
           </div>
@@ -232,7 +236,7 @@ export default function AgentOutput({ events, isStreaming, error }: AgentOutputP
         {events.length === 0 && !isStreaming && (
           <div className="text-center py-12 text-gray-400">
             <Terminal className="w-12 h-12 mx-auto mb-4 opacity-50" />
-            <p className="text-sm">等待输出...</p>
+            <p className="text-sm">{t('monitor.waitingOutput', { ns: 'monitor', defaultValue: 'Waiting for output...' })}</p>
           </div>
         )}
         
@@ -241,7 +245,7 @@ export default function AgentOutput({ events, isStreaming, error }: AgentOutputP
         {isStreaming && (
           <div className="flex items-center gap-2 py-2 px-4 text-blue-600">
             <Loader2 className="w-4 h-4 animate-spin" />
-            <span className="text-sm">Agent 正在工作中...</span>
+            <span className="text-sm">{t('monitor.agentWorking', { ns: 'monitor', defaultValue: 'Agent is working...' })}</span>
           </div>
         )}
         
@@ -249,7 +253,7 @@ export default function AgentOutput({ events, isStreaming, error }: AgentOutputP
           <div className="flex items-start gap-3 py-3 px-4 bg-red-50 rounded-lg border border-red-200">
             <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
             <div className="flex-1">
-              <span className="text-sm font-medium text-red-700">执行失败</span>
+              <span className="text-sm font-medium text-red-700">{t('monitor.executionFailed', { ns: 'monitor', defaultValue: 'Execution Failed' })}</span>
               <p className="text-sm text-red-600 mt-1">{error}</p>
             </div>
           </div>

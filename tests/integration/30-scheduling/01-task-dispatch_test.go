@@ -1064,10 +1064,10 @@ func TestSchedule_TC_SCHEDULE_006_FixedNodeScheduling(t *testing.T) {
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
-	if err := testStore.CreateInstance(ctx, inst); err != nil {
+	if err := testStore.CreateAgentInstance(ctx, inst); err != nil {
 		t.Fatalf("Failed to create instance: %v", err)
 	}
-	defer testStore.DeleteInstance(ctx, instID)
+	defer testStore.DeleteAgentInstance(ctx, instID)
 
 	taskID := uniqueID("task-fixed")
 	agentID := instID
@@ -1528,10 +1528,10 @@ func TestSchedule_TC_SCHEDULE_015_ChainPriority(t *testing.T) {
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
-	if err := testStore.CreateInstance(ctx, inst); err != nil {
+	if err := testStore.CreateAgentInstance(ctx, inst); err != nil {
 		t.Fatalf("Failed to create instance: %v", err)
 	}
-	defer testStore.DeleteInstance(ctx, instID)
+	defer testStore.DeleteAgentInstance(ctx, instID)
 
 	taskID := uniqueID("task-pri")
 	agentID := instID

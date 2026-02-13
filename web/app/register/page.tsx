@@ -4,9 +4,11 @@ import { useState } from 'react'
 import { useAuth } from '@/lib/auth'
 import { UserPlus, Mail, Lock, User, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
+import { useTranslation } from 'react-i18next'
 
 export default function RegisterPage() {
   const { register } = useAuth()
+  const { t } = useTranslation('auth')
   const [email, setEmail] = useState('')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -19,11 +21,11 @@ export default function RegisterPage() {
     setError('')
 
     if (password !== confirmPassword) {
-      setError('两次输入的密码不一致')
+      setError(t('register.passwordMismatch'))
       return
     }
     if (password.length < 8) {
-      setError('密码至少需要 8 个字符')
+      setError(t('register.passwordTooShort'))
       return
     }
 
@@ -45,11 +47,11 @@ export default function RegisterPage() {
             <UserPlus className="w-7 h-7 text-white" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Agents Admin</h1>
-          <p className="text-sm text-gray-500 mt-1">创建新账号</p>
+          <p className="text-sm text-gray-500 mt-1">{t('register.subtitle')}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-sm border p-6 space-y-4">
-          <h2 className="text-lg font-semibold text-gray-900 text-center">注册</h2>
+          <h2 className="text-lg font-semibold text-gray-900 text-center">{t('register.title')}</h2>
 
           {error && (
             <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
@@ -59,7 +61,7 @@ export default function RegisterPage() {
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">邮箱</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('register.email')}</label>
             <div className="relative">
               <Mail className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
               <input
@@ -74,14 +76,14 @@ export default function RegisterPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">用户名</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('register.username')}</label>
             <div className="relative">
               <User className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
               <input
                 type="text"
                 value={username}
                 onChange={e => setUsername(e.target.value)}
-                placeholder="你的名字"
+                placeholder={t('register.usernamePlaceholder')}
                 required
                 className="w-full pl-9 pr-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
@@ -89,14 +91,14 @@ export default function RegisterPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">密码</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('register.password')}</label>
             <div className="relative">
               <Lock className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
               <input
                 type="password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                placeholder="至少 8 个字符"
+                placeholder={t('register.passwordPlaceholder')}
                 required
                 className="w-full pl-9 pr-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
@@ -104,14 +106,14 @@ export default function RegisterPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">确认密码</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('register.confirmPassword')}</label>
             <div className="relative">
               <Lock className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
               <input
                 type="password"
                 value={confirmPassword}
                 onChange={e => setConfirmPassword(e.target.value)}
-                placeholder="再次输入密码"
+                placeholder={t('register.confirmPlaceholder')}
                 required
                 className="w-full pl-9 pr-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
@@ -128,13 +130,13 @@ export default function RegisterPage() {
             ) : (
               <UserPlus className="w-4 h-4" />
             )}
-            注册
+            {t('register.submit')}
           </button>
 
           <p className="text-center text-sm text-gray-500">
-            已有账号？{' '}
+            {t('register.hasAccount')}{' '}
             <Link href="/login" className="text-blue-600 hover:text-blue-700 font-medium">
-              登录
+              {t('register.login')}
             </Link>
           </p>
         </form>

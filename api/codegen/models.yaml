@@ -1,13 +1,8 @@
-# oapi-codegen 配置 - 模型定义
+# yaml-language-server: $schema=https://raw.githubusercontent.com/oapi-codegen/oapi-codegen/HEAD/configuration-schema.json
 package: api
 output: api/generated/go/models.gen.go
-
 generate:
   models: true
-  std-http-server: false
-  embedded-spec: false
-  client: false
-
 output-options:
   skip-prune: true
   nullable-type: true

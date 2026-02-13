@@ -1,4 +1,4 @@
-// Package repository Instance 相关的存储操作
+// Package repository Agent 实例相关的存储操作（原 Instance，已重命名对齐领域模型）
 package repository
 
 import (
@@ -8,27 +8,27 @@ import (
 	"agents-admin/internal/shared/model"
 )
 
-// CreateInstance 创建实例
-func (s *Store) CreateInstance(ctx context.Context, instance *model.Instance) error {
+// CreateAgentInstance 创建 Agent 实例
+func (s *Store) CreateAgentInstance(ctx context.Context, instance *model.Instance) error {
 	query := s.rebind(`
-		INSERT INTO instances (id, name, account_id, agent_type_id, container_name, node_id, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO agents (id, name, account_id, agent_type_id, template_id, container_name, node_id, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	`)
 	_, err := s.db.ExecContext(ctx, query,
 		instance.ID, instance.Name, instance.AccountID, instance.AgentTypeID,
-		instance.ContainerName, instance.NodeID, instance.Status,
+		instance.TemplateID, instance.ContainerName, instance.NodeID, instance.Status,
 		instance.CreatedAt, instance.UpdatedAt)
 	return err
 }
 
-// GetInstance 获取实例
-func (s *Store) GetInstance(ctx context.Context, id string) (*model.Instance, error) {
-	query := s.rebind(`SELECT id, name, account_id, agent_type_id, container_name, node_id, status, created_at, updated_at 
-			  FROM instances WHERE id = $1`)
+// GetAgentInstance 获取 Agent 实例
+func (s *Store) GetAgentInstance(ctx context.Context, id string) (*model.Instance, error) {
+	query := s.rebind(`SELECT id, name, account_id, agent_type_id, template_id, container_name, node_id, status, created_at, updated_at 
+			  FROM agents WHERE id = $1`)
 	instance := &model.Instance{}
 	err := s.db.QueryRowContext(ctx, query, id).Scan(
 		&instance.ID, &instance.Name, &instance.AccountID, &instance.AgentTypeID,
-		&instance.ContainerName, &instance.NodeID, &instance.Status,
+		&instance.TemplateID, &instance.ContainerName, &instance.NodeID, &instance.Status,
 		&instance.CreatedAt, &instance.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -36,10 +36,10 @@ func (s *Store) GetInstance(ctx context.Context, id string) (*model.Instance, er
 	return instance, err
 }
 
-// ListInstances 列出所有实例
-func (s *Store) ListInstances(ctx context.Context) ([]*model.Instance, error) {
-	query := `SELECT id, name, account_id, agent_type_id, container_name, node_id, status, created_at, updated_at 
-			  FROM instances ORDER BY created_at DESC`
+// ListAgentInstances 列出所有 Agent 实例
+func (s *Store) ListAgentInstances(ctx context.Context) ([]*model.Instance, error) {
+	query := `SELECT id, name, account_id, agent_type_id, template_id, container_name, node_id, status, created_at, updated_at 
+			  FROM agents ORDER BY created_at DESC`
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
@@ -48,10 +48,10 @@ func (s *Store) ListInstances(ctx context.Context) ([]*model.Instance, error) {
 	return scanInstances(rows)
 }
 
-// ListInstancesByNode 列出指定节点的实例
-func (s *Store) ListInstancesByNode(ctx context.Context, nodeID string) ([]*model.Instance, error) {
-	query := s.rebind(`SELECT id, name, account_id, agent_type_id, container_name, node_id, status, created_at, updated_at 
-			  FROM instances WHERE node_id = $1 ORDER BY created_at DESC`)
+// ListAgentInstancesByNode 列出指定节点的 Agent 实例
+func (s *Store) ListAgentInstancesByNode(ctx context.Context, nodeID string) ([]*model.Instance, error) {
+	query := s.rebind(`SELECT id, name, account_id, agent_type_id, template_id, container_name, node_id, status, created_at, updated_at 
+			  FROM agents WHERE node_id = $1 ORDER BY created_at DESC`)
 	rows, err := s.db.QueryContext(ctx, query, nodeID)
 	if err != nil {
 		return nil, err
@@ -60,10 +60,10 @@ func (s *Store) ListInstancesByNode(ctx context.Context, nodeID string) ([]*mode
 	return scanInstances(rows)
 }
 
-// ListPendingInstances 列出待处理的实例
-func (s *Store) ListPendingInstances(ctx context.Context, nodeID string) ([]*model.Instance, error) {
-	query := s.rebind(`SELECT id, name, account_id, agent_type_id, container_name, node_id, status, created_at, updated_at 
-			  FROM instances WHERE node_id = $1 AND status IN ('pending', 'creating', 'stopping') ORDER BY created_at ASC`)
+// ListPendingAgentInstances 列出待处理的 Agent 实例
+func (s *Store) ListPendingAgentInstances(ctx context.Context, nodeID string) ([]*model.Instance, error) {
+	query := s.rebind(`SELECT id, name, account_id, agent_type_id, template_id, container_name, node_id, status, created_at, updated_at 
+			  FROM agents WHERE node_id = $1 AND status IN ('pending', 'creating', 'stopping') ORDER BY created_at ASC`)
 	rows, err := s.db.QueryContext(ctx, query, nodeID)
 	if err != nil {
 		return nil, err
@@ -72,10 +72,10 @@ func (s *Store) ListPendingInstances(ctx context.Context, nodeID string) ([]*mod
 	return scanInstances(rows)
 }
 
-// UpdateInstance 更新实例
-func (s *Store) UpdateInstance(ctx context.Context, id string, status model.InstanceStatus, containerName *string) error {
+// UpdateAgentInstance 更新 Agent 实例
+func (s *Store) UpdateAgentInstance(ctx context.Context, id string, status model.InstanceStatus, containerName *string) error {
 	if containerName != nil {
-		query := s.rebind(`UPDATE instances SET status = $1, container_name = $2 WHERE id = $3`)
+		query := s.rebind(`UPDATE agents SET status = $1, container_name = $2 WHERE id = $3`)
 		result, err := s.db.ExecContext(ctx, query, status, *containerName, id)
 		if err != nil {
 			return err
@@ -85,7 +85,7 @@ func (s *Store) UpdateInstance(ctx context.Context, id string, status model.Inst
 		}
 		return nil
 	}
-	query := s.rebind(`UPDATE instances SET status = $1 WHERE id = $2`)
+	query := s.rebind(`UPDATE agents SET status = $1 WHERE id = $2`)
 	result, err := s.db.ExecContext(ctx, query, status, id)
 	if err != nil {
 		return err
@@ -96,9 +96,9 @@ func (s *Store) UpdateInstance(ctx context.Context, id string, status model.Inst
 	return nil
 }
 
-// DeleteInstance 删除实例
-func (s *Store) DeleteInstance(ctx context.Context, id string) error {
-	_, err := s.db.ExecContext(ctx, s.rebind(`DELETE FROM instances WHERE id = $1`), id)
+// DeleteAgentInstance 删除 Agent 实例
+func (s *Store) DeleteAgentInstance(ctx context.Context, id string) error {
+	_, err := s.db.ExecContext(ctx, s.rebind(`DELETE FROM agents WHERE id = $1`), id)
 	return err
 }
 
@@ -107,7 +107,7 @@ func scanInstances(rows *sql.Rows) ([]*model.Instance, error) {
 	for rows.Next() {
 		instance := &model.Instance{}
 		if err := rows.Scan(&instance.ID, &instance.Name, &instance.AccountID, &instance.AgentTypeID,
-			&instance.ContainerName, &instance.NodeID, &instance.Status,
+			&instance.TemplateID, &instance.ContainerName, &instance.NodeID, &instance.Status,
 			&instance.CreatedAt, &instance.UpdatedAt); err != nil {
 			return nil, err
 		}

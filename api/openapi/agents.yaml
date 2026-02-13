@@ -1,0 +1,327 @@
+openapi: 3.0.3
+info:
+  title: Agents API
+  version: 1.0.0
+
+# Agent 智能体管理 API（Agent CRUD + 生命周期 + Runtime 子资源）
+# 替代旧的 instances.yaml（容器实例管理）
+#
+# Agent = 业务实体（模板、账号、记忆、状态）
+# Runtime = 基础设施环境（容器/VM/主机进程）
+# Runner = Agent + Runtime（可执行任务的完整单元）
+
+paths:
+  /api/v1/agents:
+    get:
+      tags: [Agents]
+      operationId: listAgents
+      summary: 列出智能体
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, starting, running, idle, busy, stopping, stopped, error]
+          description: 按状态过滤
+        - name: type
+          in: query
+          schema:
+            type: string
+          description: 按模型类型过滤（claude/gemini/qwen/codex/custom）
+        - name: node_id
+          in: query
+          schema:
+            type: string
+          description: 按节点过滤
+      responses:
+        '200':
+          description: Agent 列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agents:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Agent'
+    post:
+      tags: [Agents]
+      operationId: createAgent
+      summary: 创建智能体
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAgentRequest'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+
+  /api/v1/agents/{id}:
+    get:
+      tags: [Agents]
+      operationId: getAgent
+      summary: 获取智能体详情
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Agent 详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+    put:
+      tags: [Agents]
+      operationId: updateAgent
+      summary: 更新智能体配置
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAgentRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+    delete:
+      tags: [Agents]
+      operationId: deleteAgent
+      summary: 删除智能体
+      description: 删除 Agent 并级联销毁关联的 Runtime
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '204':
+          description: 删除成功
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+  /api/v1/agents/{id}/start:
+    post:
+      tags: [Agents]
+      operationId: startAgent
+      summary: 启动智能体
+      description: 触发 runtime_create Operation，创建运行时环境并启动 Agent
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                node_id:
+                  type: string
+                  description: 指定运行节点（可选，默认由调度器选择）
+      responses:
+        '200':
+          description: 启动请求已接受
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+  /api/v1/agents/{id}/stop:
+    post:
+      tags: [Agents]
+      operationId: stopAgent
+      summary: 停止智能体
+      description: 触发 runtime_stop Operation，停止运行时环境
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: 停止请求已接受
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+  /api/v1/agents/{id}/runtime:
+    get:
+      tags: [Agents]
+      operationId: getAgentRuntime
+      summary: 获取智能体的运行时详情
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Runtime 详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Runtime'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+components:
+  schemas:
+    Agent:
+      type: object
+      required: [id, name, type, status]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        template_id:
+          type: string
+          description: 关联的 AgentTemplate ID
+        type:
+          type: string
+          enum: [claude, gemini, qwen, codex, custom]
+          description: 模型类型
+          x-go-type-name: AgentModelType
+        account_id:
+          type: string
+          description: 绑定的认证账号 ID
+        runtime_id:
+          type: string
+          description: 关联的 Runtime ID（运行中时填充）
+        node_id:
+          type: string
+          description: 所在节点 ID
+        status:
+          type: string
+          enum: [pending, starting, running, idle, busy, stopping, stopped, error]
+        current_task_id:
+          type: string
+          description: 当前执行的任务 ID
+        config_overrides:
+          type: object
+          description: 配置覆盖（覆盖模板中的配置）
+        security_policy_id:
+          type: string
+          description: 安全策略 ID
+        memory_enabled:
+          type: boolean
+          description: 是否启用记忆
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        last_active_at:
+          type: string
+          format: date-time
+
+    Runtime:
+      type: object
+      required: [id, type, status, agent_id, node_id]
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [container, vm, microvm, host]
+          description: 运行时类型
+        status:
+          type: string
+          enum: [creating, ready, running, stopping, stopped, error, destroyed]
+        agent_id:
+          type: string
+          description: 关联的 Agent ID
+        node_id:
+          type: string
+          description: 所在节点 ID
+        container_id:
+          type: string
+          description: Docker 容器 ID（容器类型时填充）
+        container_name:
+          type: string
+          description: Docker 容器名称
+        image:
+          type: string
+          description: 容器镜像
+        workspace_path:
+          type: string
+          description: 工作空间路径
+        ip_address:
+          type: string
+          description: IP 地址
+        ports:
+          type: object
+          description: 端口映射
+        resources:
+          type: object
+          description: 资源配置（CPU/内存限制）
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        started_at:
+          type: string
+          format: date-time
+        stopped_at:
+          type: string
+          format: date-time
+
+    CreateAgentRequest:
+      type: object
+      required: [name, type, account_id]
+      properties:
+        name:
+          type: string
+          description: Agent 名称
+        template_id:
+          type: string
+          description: 基于哪个 AgentTemplate 创建（可选）
+        type:
+          type: string
+          enum: [claude, gemini, qwen, codex, custom]
+          description: 模型类型
+          x-go-type-name: AgentModelType
+        account_id:
+          type: string
+          description: 绑定的认证账号 ID
+        config_overrides:
+          type: object
+          description: 配置覆盖
+        security_policy_id:
+          type: string
+          description: 安全策略 ID
+        memory_enabled:
+          type: boolean
+          description: 是否启用记忆（默认 false）
+
+    UpdateAgentRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        config_overrides:
+          type: object
+        security_policy_id:
+          type: string
+        memory_enabled:
+          type: boolean

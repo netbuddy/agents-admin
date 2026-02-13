@@ -1,5 +1,12 @@
+openapi: 3.0.3
+info:
+  title: Common Types
+  version: 1.0.0
+
 # 公共定义：参数、响应、基础模型
 # 被其他规范文件引用
+
+paths: {}
 
 components:
   parameters:

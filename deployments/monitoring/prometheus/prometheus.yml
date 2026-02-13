@@ -25,6 +25,9 @@ scrape_configs:
 
   # API Server 指标
   - job_name: 'api-server'
+    scheme: https
+    tls_config:
+      ca_file: /etc/prometheus/certs/ca.pem
     static_configs:
       - targets: ['host.docker.internal:8080']
     metrics_path: /metrics

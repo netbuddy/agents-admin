@@ -1,0 +1,102 @@
+{
+  "nav": {
+    "taskBoard": "Task Board",
+    "monitor": "Workflow Monitor",
+    "accounts": "Accounts",
+    "agents": "Agents",
+    "instances": "Instances",
+    "nodes": "Nodes",
+    "proxies": "Proxies",
+    "settings": "Settings",
+    "runners": "Runners"
+  },
+  "action": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "refresh": "Refresh",
+    "confirm": "Confirm",
+    "goBack": "Go Back",
+    "close": "Close",
+    "viewDetail": "View Details",
+    "start": "Start",
+    "stop": "Stop",
+    "test": "Test",
+    "search": "Search",
+    "saving": "Saving...",
+    "creating": "Creating...",
+    "loading": "Loading...",
+    "nextStep": "Next",
+    "prevStep": "Previous",
+    "loadMore": "Load More"
+  },
+  "status": {
+    "pending": "Pending",
+    "running": "Running",
+    "completed": "Completed",
+    "failed": "Failed",
+    "cancelled": "Cancelled",
+    "online": "Online",
+    "offline": "Offline",
+    "idle": "Idle",
+    "busy": "Busy",
+    "active": "Active",
+    "expired": "Expired",
+    "disabled": "Disabled",
+    "stopped": "Stopped",
+    "stopping": "Stopping...",
+    "creating": "Creating...",
+    "waiting": "Waiting",
+    "authenticated": "Authenticated",
+    "error": "Error",
+    "unknown": "Unknown",
+    "loggedIn": "Logged In",
+    "notLoggedIn": "Not Logged In"
+  },
+  "error": {
+    "notFound": "Not Found",
+    "unknown": "Unknown Error",
+    "networkError": "Network Error",
+    "terminalError": "Cannot open terminal",
+    "terminalTimeout": "Terminal failed to start or timed out, please retry"
+  },
+  "time": {
+    "justNow": "Just now",
+    "minutesAgo": "{{count}} min ago",
+    "hoursAgo": "{{count}} hr ago",
+    "daysAgo": "{{count}} days ago",
+    "createdAt": "Created",
+    "lastUsed": "Last used",
+    "lastHeartbeat": "Last heartbeat",
+    "executionTime": "Execution time",
+    "neverReported": "Never reported",
+    "startTime": "Start time",
+    "duration": "Duration"
+  },
+  "confirm": {
+    "deleteTitle": "Confirm Delete",
+    "deleteMessage": "Are you sure? This action cannot be undone."
+  },
+  "header": {
+    "refresh": "Refresh",
+    "notifications": "Notifications",
+    "openMenu": "Open Menu",
+    "profileSettings": "Profile Settings",
+    "logout": "Logout"
+  },
+  "label": {
+    "type": "Type",
+    "account": "Account",
+    "node": "Node",
+    "name": "Name",
+    "description": "Description",
+    "version": "Version",
+    "total": "Total",
+    "noData": "No data",
+    "progress": "Progress",
+    "metadata": "Metadata",
+    "terminal": "Terminal"
+  }
+}

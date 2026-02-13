@@ -2,6 +2,8 @@
 
 import { Bell, Menu, RefreshCw, User } from 'lucide-react'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import LanguageSwitcher from '@/components/LanguageSwitcher'
 
 interface HeaderProps {
   title?: string
@@ -12,6 +14,7 @@ interface HeaderProps {
 
 export default function Header({ title, onRefresh, loading, onMenuToggle }: HeaderProps) {
   const [showUserMenu, setShowUserMenu] = useState(false)
+  const { t } = useTranslation()
 
   return (
     <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-3 sm:px-6">
@@ -21,7 +24,7 @@ export default function Header({ title, onRefresh, loading, onMenuToggle }: Head
         <button
           onClick={onMenuToggle}
           className="p-2 rounded-lg hover:bg-gray-100 lg:hidden flex-shrink-0"
-          aria-label="打开菜单"
+          aria-label={t('header.openMenu')}
         >
           <Menu className="w-5 h-5" />
         </button>
@@ -35,13 +38,13 @@ export default function Header({ title, onRefresh, loading, onMenuToggle }: Head
             onClick={onRefresh}
             disabled={loading}
             className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-50"
-            title="刷新"
+            title={t('header.refresh')}
           >
             <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
           </button>
         )}
 
-        <button className="p-2 rounded-lg hover:bg-gray-100 relative hidden sm:block" title="通知">
+        <button className="p-2 rounded-lg hover:bg-gray-100 relative hidden sm:block" title={t('header.notifications')}>
           <Bell className="w-5 h-5" />
           <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
         </button>
@@ -65,15 +68,17 @@ export default function Header({ title, onRefresh, loading, onMenuToggle }: Head
                   <p className="text-xs text-gray-500">admin@localhost</p>
                 </div>
                 <button className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100">
-                  个人设置
+                  {t('header.profileSettings')}
                 </button>
                 <button className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100">
-                  退出登录
+                  {t('header.logout')}
                 </button>
               </div>
             </>
           )}
         </div>
+
+        <LanguageSwitcher />
       </div>
     </header>
   )

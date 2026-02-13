@@ -19,6 +19,7 @@ import (
 	"net/http"
 
 	"agents-admin/internal/apiserver/operation/auth"
+	objstore "agents-admin/internal/shared/minio"
 	"agents-admin/internal/shared/storage"
 )
 
@@ -34,6 +35,11 @@ func NewHandler(store storage.PersistentStore) *Handler {
 		store:       store,
 		authHandler: auth.NewHandler(store),
 	}
+}
+
+// SetMinIOClient 设置 MinIO 客户端（传递给 auth 子处理器）
+func (h *Handler) SetMinIOClient(mc *objstore.Client) {
+	h.authHandler.SetMinIOClient(mc)
 }
 
 // RegisterRoutes 注册系统操作相关路由

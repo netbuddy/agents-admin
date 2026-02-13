@@ -144,19 +144,16 @@ func (m *mockStore) ListAccounts(_ context.Context) ([]*model.Account, error) {
 	return result, nil
 }
 
-func (m *mockStore) ListAccountsByNode(_ context.Context, nodeID string) ([]*model.Account, error) {
-	var result []*model.Account
-	for _, a := range m.accounts {
-		if a.NodeID == nodeID {
-			result = append(result, a)
-		}
-	}
-	return result, nil
-}
-
 func (m *mockStore) UpdateAccountStatus(_ context.Context, id string, status model.AccountStatus) error {
 	if a, ok := m.accounts[id]; ok {
 		a.Status = status
+	}
+	return nil
+}
+
+func (m *mockStore) UpdateAccountVolumeArchive(_ context.Context, id string, archiveKey string) error {
+	if a, ok := m.accounts[id]; ok {
+		a.VolumeArchiveKey = &archiveKey
 	}
 	return nil
 }
@@ -192,6 +189,21 @@ func (m *mockStore) GetNode(_ context.Context, id string) (*model.Node, error) {
 func (m *mockStore) ListAllNodes(_ context.Context) ([]*model.Node, error)    { return nil, nil }
 func (m *mockStore) ListOnlineNodes(_ context.Context) ([]*model.Node, error) { return nil, nil }
 func (m *mockStore) DeleteNode(_ context.Context, id string) error            { return nil }
+func (m *mockStore) DeactivateStaleNodes(_ context.Context, _ string, _ string) error {
+	return nil
+}
+func (m *mockStore) CreateNodeProvision(_ context.Context, _ *model.NodeProvision) error {
+	return nil
+}
+func (m *mockStore) UpdateNodeProvision(_ context.Context, _ *model.NodeProvision) error {
+	return nil
+}
+func (m *mockStore) GetNodeProvision(_ context.Context, _ string) (*model.NodeProvision, error) {
+	return nil, nil
+}
+func (m *mockStore) ListNodeProvisions(_ context.Context) ([]*model.NodeProvision, error) {
+	return nil, nil
+}
 
 // --- 以下为 PersistentStore 接口中其他 Store 的空实现（满足接口） ---
 
@@ -284,22 +296,24 @@ func (m *mockStore) SetDefaultProxy(_ context.Context, _ string) error          
 func (m *mockStore) ClearDefaultProxy(_ context.Context) error                  { return nil }
 func (m *mockStore) DeleteProxy(_ context.Context, _ string) error              { return nil }
 
-// InstanceStore
-func (m *mockStore) CreateInstance(_ context.Context, _ *model.Instance) error { return nil }
-func (m *mockStore) GetInstance(_ context.Context, _ string) (*model.Instance, error) {
+// AgentInstanceStore
+func (m *mockStore) CreateAgentInstance(_ context.Context, _ *model.Instance) error { return nil }
+func (m *mockStore) GetAgentInstance(_ context.Context, _ string) (*model.Instance, error) {
 	return nil, nil
 }
-func (m *mockStore) ListInstances(_ context.Context) ([]*model.Instance, error) { return nil, nil }
-func (m *mockStore) ListInstancesByNode(_ context.Context, _ string) ([]*model.Instance, error) {
+func (m *mockStore) ListAgentInstances(_ context.Context) ([]*model.Instance, error) {
 	return nil, nil
 }
-func (m *mockStore) ListPendingInstances(_ context.Context, _ string) ([]*model.Instance, error) {
+func (m *mockStore) ListAgentInstancesByNode(_ context.Context, _ string) ([]*model.Instance, error) {
 	return nil, nil
 }
-func (m *mockStore) UpdateInstance(_ context.Context, _ string, _ model.InstanceStatus, _ *string) error {
+func (m *mockStore) ListPendingAgentInstances(_ context.Context, _ string) ([]*model.Instance, error) {
+	return nil, nil
+}
+func (m *mockStore) UpdateAgentInstance(_ context.Context, _ string, _ model.InstanceStatus, _ *string) error {
 	return nil
 }
-func (m *mockStore) DeleteInstance(_ context.Context, _ string) error { return nil }
+func (m *mockStore) DeleteAgentInstance(_ context.Context, _ string) error { return nil }
 
 // TerminalSessionStore
 func (m *mockStore) CreateTerminalSession(_ context.Context, _ *model.TerminalSession) error {
@@ -413,3 +427,15 @@ func (m *mockStore) ListSecurityPolicies(_ context.Context, _ string) ([]*model.
 	return nil, nil
 }
 func (m *mockStore) DeleteSecurityPolicy(_ context.Context, _ string) error { return nil }
+
+// UserStore
+func (m *mockStore) CreateUser(_ context.Context, _ *model.User) error { return nil }
+func (m *mockStore) GetUserByEmail(_ context.Context, _ string) (*model.User, error) {
+	return nil, nil
+}
+func (m *mockStore) GetUserByID(_ context.Context, _ string) (*model.User, error) { return nil, nil }
+func (m *mockStore) UpdateUserPassword(_ context.Context, _, _ string) error      { return nil }
+func (m *mockStore) ListUsers(_ context.Context) ([]*model.User, error)           { return nil, nil }
+
+// UpdateAgentTemplate
+func (m *mockStore) UpdateAgentTemplate(_ context.Context, _ *model.AgentTemplate) error { return nil }

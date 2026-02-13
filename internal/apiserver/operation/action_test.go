@@ -265,6 +265,45 @@ func TestUpdateAction_AlreadyTerminal(t *testing.T) {
 	}
 }
 
+// TestUpdateAction_Success_HyphenatedName 回归测试：带连字符的名称必须生成正确的账号 ID
+// 修复前 sanitizeName 不替换 "-"，导致 API Server 生成 "qwen-code_test-free-net"
+// 而 Node Manager 生成 "qwen-code_test_free_net"，ID 不匹配
+func TestUpdateAction_Success_HyphenatedName(t *testing.T) {
+	store := newMockStore()
+	now := time.Now()
+	store.operations["op-1"] = &model.Operation{
+		ID: "op-1", Type: model.OperationTypeOAuth, Status: model.OperationStatusInProgress,
+		Config: json.RawMessage(`{"name":"test-free-net","agent_type":"qwen-code"}`), NodeID: "node-001",
+		CreatedAt: now, UpdatedAt: now,
+	}
+	store.actions["act-1"] = &model.Action{
+		ID: "act-1", OperationID: "op-1", Status: model.ActionStatusWaiting,
+		CreatedAt: now,
+	}
+	h := NewHandler(store)
+
+	body := `{"status":"success","progress":100,"result":{"volume_name":"qwen-code_test_free_net_vol"}}`
+	req := httptest.NewRequest("PATCH", "/api/v1/actions/act-1", strings.NewReader(body))
+	req.SetPathValue("id", "act-1")
+	w := httptest.NewRecorder()
+	h.UpdateAction(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// 账号 ID 必须是 "qwen-code_test_free_net"（连字符被替换为下划线）
+	// 与 Node Manager 的 sanitizeForVolume 保持一致
+	expectedID := "qwen-code_test_free_net"
+	acc := store.accounts[expectedID]
+	if acc == nil {
+		t.Fatalf("expected account %q to be created, got accounts: %v", expectedID, store.accounts)
+	}
+	if acc.Status != model.AccountStatusAuthenticated {
+		t.Errorf("expected status=authenticated, got %s", acc.Status)
+	}
+}
+
 func TestUpdateAction_Success_UpdatesExistingAccount(t *testing.T) {
 	store := newMockStore()
 	now := time.Now()
@@ -272,7 +311,7 @@ func TestUpdateAction_Success_UpdatesExistingAccount(t *testing.T) {
 	// 已存在的 Account（之前认证过）
 	store.accounts["qwen-code_test"] = &model.Account{
 		ID: "qwen-code_test", Name: "test", AgentTypeID: "qwen-code",
-		NodeID: "node-001", Status: model.AccountStatusExpired,
+		Status:    model.AccountStatusExpired,
 		CreatedAt: now, UpdatedAt: now,
 	}
 

@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { Plus, Trash2, Play, Square, Terminal, Server, CheckCircle, Clock, AlertCircle, X } from 'lucide-react'
 import { AdminLayout } from '@/components/layout'
+import { useTranslation } from 'react-i18next'
 
 interface AgentType {
   id: string
@@ -36,6 +37,7 @@ interface TerminalSession {
 }
 
 export default function InstancesPage() {
+  const { t } = useTranslation('instances')
   const [instances, setInstances] = useState<Instance[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
   const [agentTypes, setAgentTypes] = useState<AgentType[]>([])
@@ -55,13 +57,13 @@ export default function InstancesPage() {
   const fetchData = useCallback(async () => {
     try {
       const [instancesRes, accountsRes, typesRes] = await Promise.all([
-        fetch('/api/v1/instances'),
+        fetch('/api/v1/agents'),
         fetch('/api/v1/accounts'),
         fetch('/api/v1/agent-types')
       ])
       if (instancesRes.ok) {
         const data = await instancesRes.json()
-        setInstances(data.instances || [])
+        setInstances(data.agents || [])
       }
       if (accountsRes.ok) {
         const data = await accountsRes.json()
@@ -86,7 +88,7 @@ export default function InstancesPage() {
 
   const createInstance = async (accountId: string, name: string) => {
     try {
-      const res = await fetch('/api/v1/instances', {
+      const res = await fetch('/api/v1/agents', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ account_id: accountId, name }),
@@ -102,7 +104,7 @@ export default function InstancesPage() {
 
   const startInstance = async (instanceId: string) => {
     try {
-      await fetch(`/api/v1/instances/${instanceId}/start`, { method: 'POST' })
+      await fetch(`/api/v1/agents/${instanceId}/start`, { method: 'POST' })
       fetchData()
     } catch (err) {
       console.error('Failed to start instance:', err)
@@ -111,7 +113,7 @@ export default function InstancesPage() {
 
   const stopInstance = async (instanceId: string) => {
     try {
-      await fetch(`/api/v1/instances/${instanceId}/stop`, { method: 'POST' })
+      await fetch(`/api/v1/agents/${instanceId}/stop`, { method: 'POST' })
       fetchData()
     } catch (err) {
       console.error('Failed to stop instance:', err)
@@ -119,9 +121,9 @@ export default function InstancesPage() {
   }
 
   const deleteInstance = async (instanceId: string) => {
-    if (!confirm('确定删除此实例？')) return
+    if (!confirm(t('confirmDelete'))) return
     try {
-      await fetch(`/api/v1/instances/${instanceId}`, { method: 'DELETE' })
+      await fetch(`/api/v1/agents/${instanceId}`, { method: 'DELETE' })
       fetchData()
     } catch (err) {
       console.error('Failed to delete instance:', err)
@@ -184,11 +186,11 @@ export default function InstancesPage() {
 
         throw new Error('terminal timeout')
       } else {
-        alert('无法打开终端')
+        alert(t('terminalError'))
       }
     } catch (err) {
       console.error('Failed to open terminal:', err)
-      alert('终端启动失败或超时，请重试')
+      alert(t('terminalTimeout'))
       setTerminalSession(null)
     }
   }
@@ -228,16 +230,16 @@ export default function InstancesPage() {
   }
 
   return (
-    <AdminLayout title="实例管理" onRefresh={fetchData} loading={loading}>
+    <AdminLayout title={t('title')} onRefresh={fetchData} loading={loading}>
       {/* Actions bar */}
       <div className="mb-4 flex items-center justify-between">
-        <p className="text-sm text-gray-500">管理 AI Agent 运行实例</p>
+        <p className="text-sm text-gray-500">{t('subtitle')}</p>
         <button
           onClick={() => setShowCreateWizard(true)}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
         >
           <Plus className="w-4 h-4" />
-          创建实例
+          {t('createInstance')}
         </button>
       </div>
 
@@ -248,13 +250,13 @@ export default function InstancesPage() {
         ) : instances.length === 0 ? (
           <div className="bg-white rounded-lg border p-8 text-center">
             <Server className="w-12 h-12 mx-auto text-gray-400 mb-4" />
-            <h3 className="text-lg font-medium mb-2">暂无实例</h3>
-            <p className="text-gray-500 mb-4">创建一个 Agent 实例开始使用</p>
+            <h3 className="text-lg font-medium mb-2">{t('noInstances')}</h3>
+            <p className="text-gray-500 mb-4">{t('noInstancesHint')}</p>
             <button
               onClick={() => setShowCreateWizard(true)}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
             >
-              创建实例
+              {t('createInstance')}
             </button>
           </div>
         ) : (
@@ -278,9 +280,9 @@ export default function InstancesPage() {
                 </div>
 
                 <div className="space-y-1 text-sm text-gray-600 mb-3">
-                  <p><span className="text-gray-400">类型:</span> {getAgentTypeName(instance.agent_type_id)}</p>
-                  <p><span className="text-gray-400">账号:</span> {getAccountName(instance.account_id)}</p>
-                  <p><span className="text-gray-400">节点:</span> {instance.node_id || '-'}</p>
+                  <p><span className="text-gray-400">{t('type')}:</span> {getAgentTypeName(instance.agent_type_id)}</p>
+                  <p><span className="text-gray-400">{t('account')}:</span> {getAccountName(instance.account_id)}</p>
+                  <p><span className="text-gray-400">{t('node')}:</span> {instance.node_id || '-'}</p>
                 </div>
 
                 <div className="flex items-center gap-2 text-sm mb-3">
@@ -290,11 +292,11 @@ export default function InstancesPage() {
                     instance.status === 'pending' || instance.status === 'creating' ? 'bg-blue-100 text-blue-800' :
                     'bg-gray-100 text-gray-800'
                   }`}>
-                    {instance.status === 'running' ? '运行中' : 
-                     instance.status === 'stopped' ? '已停止' : 
-                     instance.status === 'stopping' ? '停止中...' :
-                     instance.status === 'pending' ? '等待创建...' :
-                     instance.status === 'creating' ? '创建中...' :
+                    {instance.status === 'running' ? t('statusRunning') : 
+                     instance.status === 'stopped' ? t('statusStopped') : 
+                     instance.status === 'stopping' ? t('statusStopping') :
+                     instance.status === 'pending' ? t('statusPending') :
+                     instance.status === 'creating' ? t('statusCreating') :
                      instance.status}
                   </span>
                 </div>
@@ -307,14 +309,14 @@ export default function InstancesPage() {
                         className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100"
                       >
                         <Terminal className="w-4 h-4" />
-                        终端
+                        {t('terminal')}
                       </button>
                       <button
                         onClick={() => stopInstance(instance.id)}
                         className="flex items-center justify-center gap-1 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
                       >
                         <Square className="w-4 h-4" />
-                        停止
+                        {t('stop')}
                       </button>
                     </>
                   ) : (
@@ -323,7 +325,7 @@ export default function InstancesPage() {
                       className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100"
                     >
                       <Play className="w-4 h-4" />
-                      启动
+                      {t('start')}
                     </button>
                   )}
                 </div>
@@ -369,6 +371,7 @@ function CreateInstanceWizard({
   onClose: () => void
   onCreate: (accountId: string, name: string) => void
 }) {
+  const { t } = useTranslation('instances')
   const [mode, setMode] = useState<'select' | 'generic' | 'template'>('select')
   const [step, setStep] = useState(1)
   const [selectedType, setSelectedType] = useState('')
@@ -392,7 +395,7 @@ function CreateInstanceWizard({
   )
 
   const totalSteps = mode === 'select' ? 0 : 3
-  const displayStep = mode === 'select' ? '' : `步骤 ${step}/${totalSteps}`
+  const displayStep = mode === 'select' ? '' : t('create.step', { current: step, total: totalSteps })
 
   const handleBack = () => {
     if (step > 1) {
@@ -418,7 +421,7 @@ function CreateInstanceWizard({
     <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50">
       <div className="bg-white rounded-t-2xl sm:rounded-lg w-full sm:max-w-lg p-4 sm:p-6 max-h-[90vh] overflow-y-auto touch-scroll">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-semibold">创建智能体</h2>
+          <h2 className="text-lg font-semibold">{t('create.title')}</h2>
           <div className="flex items-center gap-2">
             {displayStep && <span className="text-sm text-gray-500">{displayStep}</span>}
             <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded">
@@ -430,7 +433,7 @@ function CreateInstanceWizard({
         {/* 模式选择 */}
         {mode === 'select' && (
           <div>
-            <p className="text-sm text-gray-600 mb-4">选择创建方式：</p>
+            <p className="text-sm text-gray-600 mb-4">{t('create.selectMode')}</p>
             <div className="space-y-3">
               <button
                 onClick={() => { setMode('generic'); setStep(1) }}
@@ -441,8 +444,8 @@ function CreateInstanceWizard({
                     <Server className="w-5 h-5 text-blue-600" />
                   </div>
                   <div>
-                    <p className="font-medium group-hover:text-blue-700">通用智能体</p>
-                    <p className="text-xs text-gray-500 mt-0.5">直接选择 Agent 类型和账号创建实例</p>
+                    <p className="font-medium group-hover:text-blue-700">{t('create.genericAgent')}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{t('create.genericDesc')}</p>
                   </div>
                 </div>
               </button>
@@ -455,8 +458,8 @@ function CreateInstanceWizard({
                     <Plus className="w-5 h-5 text-purple-600" />
                   </div>
                   <div>
-                    <p className="font-medium group-hover:text-purple-700">从模板创建</p>
-                    <p className="text-xs text-gray-500 mt-0.5">基于预配置的模板快速创建，包含技能和指令</p>
+                    <p className="font-medium group-hover:text-purple-700">{t('create.fromTemplate')}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{t('create.templateDesc')}</p>
                   </div>
                 </div>
               </button>
@@ -469,7 +472,7 @@ function CreateInstanceWizard({
           <div>
             {mode === 'generic' ? (
               <>
-                <p className="text-sm text-gray-600 mb-4">选择 Agent 类型：</p>
+                <p className="text-sm text-gray-600 mb-4">{t('create.selectType')}</p>
                 <div className="grid grid-cols-2 gap-3">
                   {agentTypes.map(t => (
                     <button
@@ -489,12 +492,12 @@ function CreateInstanceWizard({
               </>
             ) : (
               <>
-                <p className="text-sm text-gray-600 mb-4">选择模板：</p>
+                <p className="text-sm text-gray-600 mb-4">{t('create.selectTemplate')}</p>
                 {templates.length === 0 ? (
                   <div className="text-center py-8">
-                    <p className="text-gray-500 mb-4">暂无可用模板</p>
+                    <p className="text-gray-500 mb-4">{t('create.noTemplates')}</p>
                     <a href="/agents" className="text-blue-600 hover:underline">
-                      前往创建模板 →
+                      {t('create.goCreateTemplate')}
                     </a>
                   </div>
                 ) : (
@@ -529,13 +532,13 @@ function CreateInstanceWizard({
         {mode !== 'select' && step === 2 && (
           <div>
             <p className="text-sm text-gray-600 mb-4">
-              选择账号（{mode === 'template' ? selectedTemplate?.name : agentTypes.find(t => t.id === selectedType)?.name}）：
+              {t('create.selectAccount')} ({mode === 'template' ? selectedTemplate?.name : agentTypes.find(at => at.id === selectedType)?.name}):
             </p>
             {filteredAccounts.length === 0 ? (
               <div className="text-center py-8">
-                <p className="text-gray-500 mb-4">没有可用的已认证账号</p>
+                <p className="text-gray-500 mb-4">{t('create.noAuthAccounts')}</p>
                 <a href="/accounts" className="text-blue-600 hover:underline">
-                  前往添加账号 →
+                  {t('create.goAddAccount')}
                 </a>
               </div>
             ) : (
@@ -551,7 +554,7 @@ function CreateInstanceWizard({
                     }`}
                   >
                     <p className="font-medium">{acc.name}</p>
-                    <p className="text-xs text-gray-500">已认证</p>
+                    <p className="text-xs text-gray-500">{t('create.authenticated')}</p>
                   </button>
                 ))}
               </div>
@@ -562,24 +565,24 @@ function CreateInstanceWizard({
         {/* 步骤 3：配置 */}
         {mode !== 'select' && step === 3 && (
           <div>
-            <p className="text-sm text-gray-600 mb-4">配置实例：</p>
+            <p className="text-sm text-gray-600 mb-4">{t('create.configInstance')}</p>
             <div>
-              <label className="block text-sm font-medium mb-1">实例名称（可选）</label>
+              <label className="block text-sm font-medium mb-1">{t('create.instanceName')}</label>
               <input
                 type="text"
                 value={instanceName}
                 onChange={e => setInstanceName(e.target.value)}
                 className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="留空将自动生成"
+                placeholder={t('create.autoGenerate')}
               />
             </div>
             <div className="mt-4 p-3 bg-gray-50 rounded-lg text-sm space-y-1">
-              <p><span className="text-gray-500">创建方式:</span> {mode === 'generic' ? '通用智能体' : '从模板创建'}</p>
+              <p><span className="text-gray-500">{t('create.createMethod')}:</span> {mode === 'generic' ? t('create.genericAgent') : t('create.fromTemplate')}</p>
               {mode === 'template' && selectedTemplate && (
-                <p><span className="text-gray-500">模板:</span> {selectedTemplate.name}</p>
+                <p><span className="text-gray-500">{t('create.template')}:</span> {selectedTemplate.name}</p>
               )}
-              <p><span className="text-gray-500">Agent 类型:</span> {agentTypes.find(t => t.id === effectiveType)?.name || effectiveType}</p>
-              <p><span className="text-gray-500">使用账号:</span> {accounts.find(a => a.id === selectedAccount)?.name}</p>
+              <p><span className="text-gray-500">{t('create.agentType')}:</span> {agentTypes.find(at => at.id === effectiveType)?.name || effectiveType}</p>
+              <p><span className="text-gray-500">{t('create.useAccount')}:</span> {accounts.find(a => a.id === selectedAccount)?.name}</p>
             </div>
           </div>
         )}
@@ -591,7 +594,7 @@ function CreateInstanceWizard({
               onClick={handleBack}
               className="px-4 py-2 border rounded-lg hover:bg-gray-100"
             >
-              上一步
+              {t('action.prevStep', { ns: 'common' })}
             </button>
             {step < 3 ? (
               <button
@@ -599,14 +602,14 @@ function CreateInstanceWizard({
                 disabled={!canNext()}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
               >
-                下一步
+                {t('action.nextStep', { ns: 'common' })}
               </button>
             ) : (
               <button
                 onClick={() => onCreate(selectedAccount, instanceName)}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
               >
-                创建实例
+                {t('createInstance')}
               </button>
             )}
           </div>
@@ -617,6 +620,7 @@ function CreateInstanceWizard({
 }
 
 function TerminalModal({ session, onClose }: { session: TerminalSession, onClose: () => void }) {
+  const { t } = useTranslation('instances')
   const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost'
   const ready = session.status === 'running' && !!session.port
   const iframeUrl = ready ? `http://${host}:${session.port}/` : 'about:blank'
@@ -627,11 +631,11 @@ function TerminalModal({ session, onClose }: { session: TerminalSession, onClose
         <div className="flex items-center justify-between px-4 py-2 border-b border-gray-700">
           <div className="flex items-center gap-2 text-white">
             <Terminal className="w-5 h-5" />
-            <span className="font-medium">终端</span>
+            <span className="font-medium">{t('terminalTitle')}</span>
           </div>
           <button
             onClick={onClose}
-            aria-label="关闭终端"
+            aria-label={t('closeTerminal')}
             className="p-1 text-gray-400 hover:text-white hover:bg-gray-700 rounded"
           >
             <X className="w-5 h-5" />
@@ -641,7 +645,7 @@ function TerminalModal({ session, onClose }: { session: TerminalSession, onClose
           {!ready && (
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="text-gray-200 text-sm">
-                终端启动中…（{session.status || 'pending'}）
+                {t('terminalStarting')}({session.status || 'pending'})
               </div>
             </div>
           )}

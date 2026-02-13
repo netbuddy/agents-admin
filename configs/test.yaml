@@ -1,27 +1,28 @@
 # 测试环境配置（集成测试 + E2E 测试共用）
-# 公共配置见 common.yaml
+# 默认值硬编码在 config.go 中，此文件仅覆盖测试环境特有项
+#
+# 与 Docker Compose 共享的配置（port/name/password）统一从 .env.test 读取。
 
-server:
-  port: 8081
+api_server:
+  port: "8081"
 
 database:
+  driver: postgres
   host: localhost
-  port: 5432
-  user: agents
-  name: agents_admin_test
   sslmode: disable
+  # port/name/user/password 从 .env.test 读取
 
 redis:
   host: localhost
-  port: 6380
   db: 1
+  # port/password 从 .env.test 读取
 
-etcd:
-  endpoints:
-    - localhost:2379
-  prefix: /agents-test
+minio:
+  endpoint: localhost:9010
+  use_ssl: false
+  # access_key/secret_key 从 .env.test 读取
 
-# 调度器配置（测试环境使用更短的超时）
+# 调度器（测试环境使用更短的超时）
 scheduler:
   node_id: test-scheduler
   redis:

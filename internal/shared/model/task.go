@@ -39,63 +39,63 @@ type TaskTemplate struct {
 	// === 基础字段 ===
 
 	// ID 唯一标识
-	ID string `json:"id" db:"id"`
+	ID string `json:"id" bson:"_id" db:"id"`
 
 	// Name 模板名称
-	Name string `json:"name" db:"name"`
+	Name string `json:"name" bson:"name" db:"name"`
 
 	// Description 模板描述
-	Description string `json:"description,omitempty" db:"description"`
+	Description string `json:"description,omitempty" bson:"description,omitempty" db:"description"`
 
 	// Type 任务类型
-	Type TaskType `json:"type" db:"type"`
+	Type TaskType `json:"type" bson:"type" db:"type"`
 
 	// === 提示词配置 ===
 
 	// PromptTemplate 提示词模板（支持变量插值）
 	// 可以直接内嵌内容，或引用 PromptTemplate ID
-	PromptTemplate *PromptTemplate `json:"prompt_template,omitempty" db:"prompt_template"`
+	PromptTemplate *PromptTemplate `json:"prompt_template,omitempty" bson:"prompt_template,omitempty" db:"prompt_template"`
 
 	// PromptTemplateID 引用的提示词模板 ID（与 PromptTemplate 二选一）
-	PromptTemplateID *string `json:"prompt_template_id,omitempty" db:"prompt_template_id"`
+	PromptTemplateID *string `json:"prompt_template_id,omitempty" bson:"prompt_template_id,omitempty" db:"prompt_template_id"`
 
 	// === 默认配置 ===
 
 	// DefaultWorkspace 默认工作空间配置
-	DefaultWorkspace *WorkspaceConfig `json:"default_workspace,omitempty" db:"default_workspace"`
+	DefaultWorkspace *WorkspaceConfig `json:"default_workspace,omitempty" bson:"default_workspace,omitempty" db:"default_workspace"`
 
 	// DefaultSecurity 默认安全配置
-	DefaultSecurity *SecurityConfig `json:"default_security,omitempty" db:"default_security"`
+	DefaultSecurity *SecurityConfig `json:"default_security,omitempty" bson:"default_security,omitempty" db:"default_security"`
 
 	// DefaultLabels 默认标签
-	DefaultLabels map[string]string `json:"default_labels,omitempty" db:"default_labels"`
+	DefaultLabels map[string]string `json:"default_labels,omitempty" bson:"default_labels,omitempty" db:"default_labels"`
 
 	// === 变量定义 ===
 
 	// Variables 模板变量定义（用于 PromptTemplate 中的变量）
-	Variables []TemplateVariable `json:"variables,omitempty" db:"variables"`
+	Variables []TemplateVariable `json:"variables,omitempty" bson:"variables,omitempty" db:"variables"`
 
 	// === 元数据 ===
 
 	// IsBuiltin 是否内置模板
-	IsBuiltin bool `json:"is_builtin" db:"is_builtin"`
+	IsBuiltin bool `json:"is_builtin" bson:"is_builtin" db:"is_builtin"`
 
 	// Category 分类（如 development, testing, documentation）
-	Category string `json:"category,omitempty" db:"category"`
+	Category string `json:"category,omitempty" bson:"category,omitempty" db:"category"`
 
 	// Tags 标签
-	Tags []string `json:"tags,omitempty" db:"tags"`
+	Tags []string `json:"tags,omitempty" bson:"tags,omitempty" db:"tags"`
 
 	// Source 来源（builtin/custom/shared）
-	Source string `json:"source,omitempty" db:"source"`
+	Source string `json:"source,omitempty" bson:"source,omitempty" db:"source"`
 
 	// === 时间戳 ===
 
 	// CreatedAt 创建时间
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	CreatedAt time.Time `json:"created_at" bson:"created_at" db:"created_at"`
 
 	// UpdatedAt 更新时间
-	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+	UpdatedAt time.Time `json:"updated_at" bson:"updated_at" db:"updated_at"`
 }
 
 // ============================================================================
@@ -417,60 +417,60 @@ type Task struct {
 	// === 基础字段 ===
 
 	// ID 任务唯一标识
-	ID string `json:"id" db:"id"`
+	ID string `json:"id" bson:"_id" db:"id"`
 
 	// Name 任务名称（可从模板继承）
-	Name string `json:"name" db:"name"`
+	Name string `json:"name" bson:"name" db:"name"`
 
 	// Description 任务描述（可从模板继承）
-	Description string `json:"description,omitempty" db:"description"`
+	Description string `json:"description,omitempty" bson:"description,omitempty" db:"description"`
 
 	// Status 任务状态（纯运行时字段）
-	Status TaskStatus `json:"status" db:"status"`
+	Status TaskStatus `json:"status" bson:"status" db:"status"`
 
 	// Type 任务类型（冗余字段，从 TaskTemplate 派生）
 	// 注意：Type 的主定义在 TaskTemplate 中，此处仅用于查询优化和向后兼容
 	// 创建 Task 时，如果有 TemplateID，应从模板复制 Type
-	Type TaskType `json:"type" db:"type"`
+	Type TaskType `json:"type" bson:"type" db:"type"`
 
 	// === 核心内容（纯运行时字段）===
 
 	// Prompt 任务提示词（结构化类型，从 PromptTemplate 实例化）
 	// 包含：Content（内容）、Description（说明）、Variables（变量）、ContextStrategy（上下文策略）
-	Prompt *Prompt `json:"prompt,omitempty" db:"prompt"`
+	Prompt *Prompt `json:"prompt,omitempty" bson:"prompt,omitempty" db:"prompt"`
 
 	// Context 任务上下文（纯运行时字段）
-	Context *TaskContext `json:"context,omitempty" db:"context"`
+	Context *TaskContext `json:"context,omitempty" bson:"context,omitempty" db:"context"`
 
 	// === 配置字段（可从模板继承，也可覆盖）===
 
 	// Workspace 工作空间配置（未设置时使用模板的 DefaultWorkspace）
-	Workspace *WorkspaceConfig `json:"workspace,omitempty" db:"workspace"`
+	Workspace *WorkspaceConfig `json:"workspace,omitempty" bson:"workspace,omitempty" db:"workspace"`
 
 	// Security 安全约束配置（未设置时使用模板的 DefaultSecurity）
-	Security *SecurityConfig `json:"security,omitempty" db:"security"`
+	Security *SecurityConfig `json:"security,omitempty" bson:"security,omitempty" db:"security"`
 
 	// Labels 任务标签（与模板的 DefaultLabels 合并）
-	Labels map[string]string `json:"labels,omitempty" db:"labels"`
+	Labels map[string]string `json:"labels,omitempty" bson:"labels,omitempty" db:"labels"`
 
 	// === 关联字段 ===
 
 	// TemplateID 关联的任务模板 ID（通过模板获取 Type 和默认配置）
-	TemplateID *string `json:"template_id,omitempty" db:"template_id"`
+	TemplateID *string `json:"template_id,omitempty" bson:"template_id,omitempty" db:"template_id"`
 
 	// AgentID 执行 Agent ID
-	AgentID *string `json:"agent_id,omitempty" db:"agent_id"`
+	AgentID *string `json:"agent_id,omitempty" bson:"agent_id,omitempty" db:"agent_id"`
 
 	// ParentID 父任务 ID（顶层任务为空）
-	ParentID *string `json:"parent_id,omitempty" db:"parent_id"`
+	ParentID *string `json:"parent_id,omitempty" bson:"parent_id,omitempty" db:"parent_id"`
 
 	// === 时间戳 ===
 
 	// CreatedAt 创建时间
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	CreatedAt time.Time `json:"created_at" bson:"created_at" db:"created_at"`
 
 	// UpdatedAt 更新时间
-	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+	UpdatedAt time.Time `json:"updated_at" bson:"updated_at" db:"updated_at"`
 }
 
 // ============================================================================

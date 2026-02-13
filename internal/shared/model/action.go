@@ -153,26 +153,26 @@ const (
 // 数据库表：actions
 type Action struct {
 	// 基本字段
-	ID          string       `json:"id" db:"id"`                     // 唯一标识，格式：act-{random}
-	OperationID string       `json:"operation_id" db:"operation_id"` // 关联的 Operation ID
-	Status      ActionStatus `json:"status" db:"status"`             // 生命周期状态
+	ID          string       `json:"id" bson:"_id" db:"id"`                     // 唯一标识，格式：act-{random}
+	OperationID string       `json:"operation_id" bson:"operation_id" db:"operation_id"` // 关联的 Operation ID
+	Status      ActionStatus `json:"status" bson:"status" db:"status"`             // 生命周期状态
 
 	// 语义状态（Kubernetes Phase + Reason + Message 模式）
-	Phase   ActionPhase `json:"phase,omitempty" db:"phase"`     // 当前语义阶段
-	Message string      `json:"message,omitempty" db:"message"` // 人类可读状态描述
+	Phase   ActionPhase `json:"phase,omitempty" bson:"phase,omitempty" db:"phase"`     // 当前语义阶段
+	Message string      `json:"message,omitempty" bson:"message,omitempty" db:"message"` // 人类可读状态描述
 
 	// 执行信息
-	Progress int             `json:"progress" db:"progress"`       // 执行进度 (0-100)
-	Result   json.RawMessage `json:"result,omitempty" db:"result"` // 执行结果（JSON）
-	Error    string          `json:"error,omitempty" db:"error"`   // 错误信息
+	Progress int             `json:"progress" bson:"progress" db:"progress"`       // 执行进度 (0-100)
+	Result   json.RawMessage `json:"result,omitempty" bson:"result,omitempty" db:"result"` // 执行结果（JSON）
+	Error    string          `json:"error,omitempty" bson:"error,omitempty" db:"error"`   // 错误信息
 
 	// 时间字段
-	CreatedAt  time.Time  `json:"created_at" db:"created_at"`
-	StartedAt  *time.Time `json:"started_at,omitempty" db:"started_at"`
-	FinishedAt *time.Time `json:"finished_at,omitempty" db:"finished_at"`
+	CreatedAt  time.Time  `json:"created_at" bson:"created_at" db:"created_at"`
+	StartedAt  *time.Time `json:"started_at,omitempty" bson:"started_at,omitempty" db:"started_at"`
+	FinishedAt *time.Time `json:"finished_at,omitempty" bson:"finished_at,omitempty" db:"finished_at"`
 
 	// 关联数据（非数据库字段）
-	Operation *Operation `json:"operation,omitempty" db:"-"` // 关联的 Operation
+	Operation *Operation `json:"operation,omitempty" bson:"operation,omitempty" db:"-"` // 关联的 Operation
 }
 
 // ============================================================================

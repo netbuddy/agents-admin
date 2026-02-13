@@ -6,54 +6,47 @@ import (
 	"strings"
 )
 
-// 免认证路由白名单（前缀匹配）
+// 公开路由前缀（无需任何认证）
 var publicPrefixes = []string{
 	"/api/v1/auth/register",
 	"/api/v1/auth/login",
 	"/api/v1/auth/refresh",
+	"/api/v1/node-bootstrap",
 	"/health",
 	"/metrics",
 	"/ws/",
 }
 
-// 免认证路由精确匹配
-var publicExact = map[string]bool{
-	"POST /api/v1/nodes/heartbeat": true,
-}
-
-// 节点通信路由前缀（node-manager 调用，不走 JWT）
-var nodePrefixes = []string{
-	"/api/v1/nodes/heartbeat",
-	"/api/v1/runs/",
-	"/api/v1/actions/",
-}
-
+// isPublicRoute 判断是否为完全公开的路由（无需任何认证）
 func isPublicRoute(method, path string) bool {
 	for _, prefix := range publicPrefixes {
 		if strings.HasPrefix(path, prefix) {
 			return true
 		}
 	}
-	if publicExact[method+" "+path] {
-		return true
-	}
-	// 节点通信路由：POST events, PATCH actions, GET nodes/{id}/runs 等
-	if strings.HasPrefix(path, "/api/v1/nodes/") && (strings.HasSuffix(path, "/runs") ||
-		strings.HasSuffix(path, "/actions") ||
-		strings.HasSuffix(path, "/instances") ||
-		strings.Contains(path, "/env-config")) {
-		return true
-	}
-	if method == "POST" && strings.HasSuffix(path, "/events") {
-		return true
-	}
-	if method == "PATCH" && strings.HasPrefix(path, "/api/v1/actions/") {
+	// 心跳是 NodeManager 注册的第一个请求，必须公开
+	if method == "POST" && path == "/api/v1/nodes/heartbeat" {
 		return true
 	}
 	return false
 }
 
-// Middleware 创建 JWT 认证中间件
+// isValidNodeToken 检查请求中的 X-Node-Token 是否有效
+func isValidNodeToken(r *http.Request, nodeToken string) bool {
+	if nodeToken == "" {
+		return false
+	}
+	token := r.Header.Get("X-Node-Token")
+	return token != "" && token == nodeToken
+}
+
+// Middleware 创建认证中间件
+//
+// 认证策略（优先级从高到低）：
+//  1. 公开路由（login/register/health/heartbeat）：直接放行
+//  2. X-Node-Token header：NodeManager 共享密钥认证，匹配则放行
+//  3. JWT（Bearer token 或 Cookie）：用户认证
+//
 // 如果 cfg.Enabled() == false，直接放行所有请求（无认证模式）
 func Middleware(cfg Config) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -76,20 +69,33 @@ func Middleware(cfg Config) func(http.Handler) http.Handler {
 				return
 			}
 
-			// 提取 Bearer Token
-			authHeader := r.Header.Get("Authorization")
-			if authHeader == "" {
-				http.Error(w, `{"error":"missing authorization header"}`, http.StatusUnauthorized)
+			// NodeManager Token 认证：X-Node-Token header 匹配则放行
+			if isValidNodeToken(r, cfg.NodeToken) {
+				next.ServeHTTP(w, r)
 				return
 			}
-			parts := strings.SplitN(authHeader, " ", 2)
-			if len(parts) != 2 || !strings.EqualFold(parts[0], "bearer") {
-				http.Error(w, `{"error":"invalid authorization header"}`, http.StatusUnauthorized)
+
+			// 提取 Bearer Token（优先 Authorization header，回退 Cookie）
+			tokenString := ""
+			authHeader := r.Header.Get("Authorization")
+			if authHeader != "" {
+				parts := strings.SplitN(authHeader, " ", 2)
+				if len(parts) == 2 && strings.EqualFold(parts[0], "bearer") {
+					tokenString = parts[1]
+				}
+			}
+			if tokenString == "" {
+				if c, err := r.Cookie("access_token"); err == nil && c.Value != "" {
+					tokenString = c.Value
+				}
+			}
+			if tokenString == "" {
+				http.Error(w, `{"error":"missing authorization header"}`, http.StatusUnauthorized)
 				return
 			}
 
 			// 解析 JWT
-			claims, err := ParseToken(cfg, parts[1])
+			claims, err := ParseToken(cfg, tokenString)
 			if err != nil {
 				log.Printf("[auth] token parse error: %v", err)
 				http.Error(w, `{"error":"invalid or expired token"}`, http.StatusUnauthorized)
