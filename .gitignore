@@ -54,4 +54,5 @@ out/
 go.work
 go.work.sum
 
-docs
+internal-docs
+certs

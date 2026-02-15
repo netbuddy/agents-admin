@@ -58,10 +58,45 @@ services:
       timeout: 5s
       retries: 5
 
+  # ---- 开发工具（可视化管理） ----
+
+  redisinsight:
+    image: redis/redisinsight:latest
+    container_name: agents-redisinsight
+    restart: unless-stopped
+    ports:
+      - "${REDISINSIGHT_PORT:-5540}:5540"
+    volumes:
+      - redisinsight_data:/data
+    profiles:
+      - tools
+
+  dbgate:
+    image: dbgate/dbgate:latest
+    container_name: agents-dbgate
+    restart: unless-stopped
+    environment:
+      CONNECTIONS: con1
+      LABEL_con1: agents-mongo
+      SERVER_con1: mongodb
+      PORT_con1: 27017
+      USER_con1: ${MONGO_ROOT_USERNAME}
+      PASSWORD_con1: ${MONGO_ROOT_PASSWORD}
+      DATABASE_con1: ${MONGO_DB_NAME}
+      ENGINE_con1: mongo@dbgate-plugin-mongo
+    ports:
+      - "${DBGATE_PORT:-3100}:3000"
+    volumes:
+      - dbgate_data:/root/.dbgate
+    profiles:
+      - tools
+
 volumes:
   mongo_data:
   redis_data:
   minio_data:
+  redisinsight_data:
+  dbgate_data:
 
 networks:
   default:

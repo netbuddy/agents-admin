@@ -70,17 +70,13 @@ type NodeManager struct {
 
 // NewNodeManager 创建节点管理器实例
 func NewNodeManager(cfg Config) (*NodeManager, error) {
-	authController, err := NewAuthControllerV2(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create auth controller: %w", err)
-	}
-
 	httpClient := cfg.HTTPClient
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 30 * time.Second}
 	}
 
 	// 注入 X-Node-Token header（如果配置了 NodeToken）
+	// 必须在创建 AuthController 等子组件之前完成，确保所有组件共享同一个带 token 的 httpClient
 	if cfg.NodeToken != "" {
 		base := httpClient.Transport
 		if base == nil {
@@ -92,6 +88,11 @@ func NewNodeManager(cfg Config) (*NodeManager, error) {
 			Transport: &nodeTokenTransport{base: base, token: cfg.NodeToken},
 		}
 		cfg.HTTPClient = httpClient
+	}
+
+	authController, err := NewAuthControllerV2(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create auth controller: %w", err)
 	}
 
 	return &NodeManager{

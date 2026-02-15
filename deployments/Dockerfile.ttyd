@@ -1,12 +1,15 @@
-# ttyd 独立容器镜像
-# 
+# ttyd 工具镜像
+#
 # 用途：提供 Web 终端服务，按需启动
 # 通过 docker exec 连接到目标 Agent 容器
 #
-# 构建: docker build -f Dockerfile.ttyd -t tools/ttyd:latest .
+# 构建: docker build -f deployments/Dockerfile.ttyd -t tools/ttyd:latest .
 # 运行: docker run -d -p 7681:7681 -v /var/run/docker.sock:/var/run/docker.sock tools/ttyd:latest
+#
+# 注意：Go 代码会通过 --entrypoint ttyd 覆盖入口点（见 container_terminal.go）
+# 需要挂载 /var/run/docker.sock，确保容器有权限访问（root 或 docker 组）
 
-FROM alpine:3.19
+FROM alpine:3.21
 
 # 安装 ttyd 和 docker-cli
 RUN apk add --no-cache \
@@ -15,24 +18,20 @@ RUN apk add --no-cache \
     bash \
     curl
 
-# 创建非 root 用户
-RUN adduser -D -s /bin/bash ttyd && \
-    addgroup ttyd docker || true
-
-# ttyd 需要访问 docker.sock，因此需要 docker 组权限
-# 实际运行时需要挂载 /var/run/docker.sock
-
-USER ttyd
-WORKDIR /home/ttyd
+# 创建 ttyd 用户并加入 docker 组（兼容非 root 运行场景）
+# 如果 docker.sock GID 不匹配，可以用 root 运行或 --group-add
+RUN addgroup -S docker 2>/dev/null || true && \
+    adduser -S -G docker ttyd
 
 # 默认端口
 EXPOSE 7681
 
 # 健康检查
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:7681/ || exit 1
+HEALTHCHECK --interval=10s --timeout=3s --start-period=3s --retries=3 \
+    CMD curl -sf http://localhost:7681/ || exit 1
 
-# 入口点：启动 ttyd 提供 bash shell
-# 实际使用时会通过命令参数指定连接目标容器
+# 默认以 ttyd 用户运行（可被 docker run --user root 覆盖）
+USER ttyd
+
 ENTRYPOINT ["ttyd"]
 CMD ["-W", "-p", "7681", "bash"]

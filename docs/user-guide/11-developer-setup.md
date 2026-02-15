@@ -84,14 +84,46 @@ docker compose -f deployments/docker-compose.infra.yml --env-file .env.dev ps
 | MinIO API | 9000 |
 | MinIO Console | 9001 |
 
+### 可选：启动可视化管理工具
+
+开发环境提供了 Redis 和 MongoDB 的可视化管理工具，通过 Docker Compose `tools` profile 启动：
+
+```bash
+make dev-tools-up
+```
+
+| 工具 | 端口 | 用途 |
+|------|------|------|
+| [RedisInsight](https://hub.docker.com/r/redis/redisinsight) | [http://localhost:5540](http://localhost:5540) | Redis 可视化管理 |
+| [dbgate](https://hub.docker.com/r/dbgate/dbgate) | [http://localhost:3100](http://localhost:3100) | MongoDB 可视化管理（已预配连接） |
+
+> **提示**：dbgate 启动后已自动配置好 MongoDB 连接（使用 `.env.dev` 中的凭据），无需手动添加。
+> RedisInsight 首次使用需手动添加连接：Host=`localhost`，Port=`6380`，Password=`.env.dev` 中的 `REDIS_PASSWORD`。
+
+停止可视化工具：
+
+```bash
+make dev-tools-down
+```
+
+### 可选：构建 ttyd 工具镜像
+
+NodeManager 的 Web 终端功能需要 `tools/ttyd:latest` 镜像（用于通过浏览器远程访问 Agent 容器终端）：
+
+```bash
+docker build -f deployments/Dockerfile.ttyd -t tools/ttyd:latest .
+```
+
+> 该镜像包含 `ttyd` + `docker-cli` + `bash` + `curl`，NodeManager 会按需启动该容器，通过 `docker exec` 连接到目标 Agent 容器。
+
 ## 步骤 4：安装后端依赖
 
 ```bash
 # Go modules 自动下载依赖
 go mod download
 
-# 验证编译
-go build ./...
+# 验证编译（开发模式需要 -tags dev 跳过前端静态文件嵌入）
+go build -tags dev ./...
 ```
 
 Go 依赖由 `go.mod` / `go.sum` 管理，`go mod download` 会下载所有依赖到 `$GOPATH/pkg/mod`。
@@ -195,8 +227,18 @@ agents-admin/
 | `make test` | 运行单元测试 |
 | `make generate-api` | 重新生成 OpenAPI 代码 |
 | `make generate-api-force` | 强制重新生成全部代码 |
+| `make dev-tools-up` | 启动可视化工具（RedisInsight、dbgate） |
+| `make dev-tools-down` | 停止可视化工具 |
 
 ## 常见问题
+
+### Q: `go build` 报错 `pattern all:out: no matching files found`？
+
+开发模式下需要使用 `-tags dev` 跳过前端静态文件嵌入：
+
+```bash
+go build -tags dev ./...
+```
 
 ### Q: `go build` 报错找不到依赖？
 
@@ -207,7 +249,7 @@ go mod download
 
 ### Q: 前端 `npm install` 失败？
 
-确保 Node.js 版本 ≥ 20，清除缓存重试：
+确保 Node.js 版本 ≥ 22，清除缓存重试：
 
 ```bash
 cd web && rm -rf node_modules package-lock.json && npm install

@@ -29,7 +29,7 @@ generate-api-force:
 all: lint test build
 
 # 构建（自动检查 OpenAPI 是否需要重新生成）
-build: generate-api
+build: web-build generate-api
 	@echo "Building API Server..."
 	CGO_ENABLED=0 go build -o bin/api-server ./cmd/api-server
 	@echo "Building NodeManager..."
@@ -104,6 +104,15 @@ dev-down:
 
 dev-logs:
 	docker compose -f deployments/docker-compose.infra.yml --env-file .env.dev logs -f
+
+dev-tools-up: ## 启动开发可视化工具（RedisInsight、dbgate）
+	docker compose -f deployments/docker-compose.infra.yml --env-file .env.dev --profile tools up -d
+	@echo "Dev tools started:"
+	@echo "  RedisInsight: http://localhost:5540"
+	@echo "  dbgate:       http://localhost:3100"
+
+dev-tools-down: ## 停止开发可视化工具
+	docker compose -f deployments/docker-compose.infra.yml --env-file .env.dev --profile tools down
 
 # 运行（开发模式）
 run-api:

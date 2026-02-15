@@ -1,6 +1,5 @@
 import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
-import LanguageDetector from 'i18next-browser-languagedetector'
 
 // 静态引入所有翻译 JSON（打包进 JS bundle，无额外请求）
 import zhCommon from './locales/zh/common.json'
@@ -30,16 +29,22 @@ import enAuth from './locales/en/auth.json'
 export const supportedLngs = ['zh', 'en'] as const
 export type SupportedLng = (typeof supportedLngs)[number]
 export const defaultLng: SupportedLng = 'zh'
+export const LANG_STORAGE_KEY = 'i18n-lang'
 
 export const namespaces = [
   'common', 'tasks', 'agents', 'accounts', 'instances',
   'monitor', 'runners', 'nodes', 'proxies', 'settings', 'auth',
 ] as const
 
+// 初始化时使用固定语言（defaultLng），避免 SSR / 客户端 hydration 不一致。
+// Node.js 22+ 新增全局 navigator，导致 i18next-browser-languagedetector
+// 在 SSR 时检测到系统 locale（如 en-US），而浏览器检测到用户 locale（如 zh-CN），
+// 引发 React hydration mismatch。
+// 语言检测改由 I18nProvider 在 useEffect 中完成（hydration 后执行）。
 i18n
-  .use(LanguageDetector)
   .use(initReactI18next)
   .init({
+    lng: defaultLng,
     resources: {
       zh: {
         common: zhCommon,
@@ -74,11 +79,6 @@ i18n
     ns: namespaces as unknown as string[],
     interpolation: {
       escapeValue: false, // React 已自动转义
-    },
-    detection: {
-      order: ['localStorage', 'navigator'],
-      lookupLocalStorage: 'i18n-lang',
-      caches: ['localStorage'],
     },
   })
 
